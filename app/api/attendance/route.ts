@@ -1,14 +1,17 @@
 import { eq, and, sql, desc } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { attendance, employees } from "../../../db/schema";
+import { attendance, employees, branches } from "../../../db/schema";
 import { putFile, deleteFile } from "../../../lib/storage";
-import { requireApiRole } from "../../authz";
+import { getAppIdentity } from "../../authz";
+import { findNearestBranch } from "../../../lib/geo-utils";
 
 const allowedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export async function GET() {
-  const auth = await requireApiRole("admin");
-  if ("error" in auth) return auth.error;
+  const identity = await getAppIdentity();
+  if (!identity || identity.role !== "admin") {
+    return Response.json({ error: "Unauthorized." }, { status: 401 });
+  }
 
   const db = getDb();
   const records = db
@@ -31,14 +34,15 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireApiRole("employee");
-  if ("error" in auth) return auth.error;
+  const identity = await getAppIdentity();
+  if (!identity) {
+    return Response.json({ error: "Not authenticated." }, { status: 401 });
+  }
 
   const form = await request.formData();
   const photo = form.get("photo");
-  const employeeId = auth.identity.employeeId;
+  const employeeId = identity.employeeId;
   const punchType = form.get("punchType") === "OUT" ? "OUT" : "IN";
-  const office = String(form.get("office") || "Airoli Office").slice(0, 100);
 
   if (!employeeId || !(photo instanceof File)) {
     return Response.json(
@@ -67,6 +71,49 @@ export async function POST(request: Request) {
     );
   }
 
+  // --- Geo-fence validation ---
+  const latitude = form.get("latitude") as string | null;
+  const longitude = form.get("longitude") as string | null;
+
+  if (!latitude || !longitude) {
+    return Response.json(
+      { error: "Location access is required to mark attendance. Please enable GPS and try again." },
+      { status: 400 },
+    );
+  }
+
+  const empLat = parseFloat(latitude);
+  const empLon = parseFloat(longitude);
+  if (isNaN(empLat) || isNaN(empLon)) {
+    return Response.json(
+      { error: "Invalid GPS coordinates received." },
+      { status: 400 },
+    );
+  }
+
+  const activeBranches = db
+    .select({ id: branches.id, name: branches.name, latitude: branches.latitude, longitude: branches.longitude })
+    .from(branches)
+    .where(eq(branches.active, true))
+    .all();
+
+  if (activeBranches.length === 0) {
+    return Response.json(
+      { error: "No office branches are configured. Please contact your administrator." },
+      { status: 503 },
+    );
+  }
+
+  const matchedBranch = findNearestBranch(empLat, empLon, activeBranches);
+  if (!matchedBranch) {
+    return Response.json(
+      { error: "You are not within 200 meters of any registered office. Please move closer to your office and try again." },
+      { status: 403 },
+    );
+  }
+
+  const office = matchedBranch.name;
+
   const today = new Date().toISOString().slice(0, 10);
   const duplicate = db
     .select({ id: attendance.id })
@@ -89,6 +136,28 @@ export async function POST(request: Request) {
     );
   }
 
+  // Punch OUT requires a prior punch IN today
+  if (punchType === "OUT") {
+    const hasPunchIn = db
+      .select({ id: attendance.id })
+      .from(attendance)
+      .where(
+        and(
+          eq(attendance.employeeId, employeeId),
+          eq(attendance.punchType, "IN"),
+          sql`date(${attendance.serverTimestamp}) = ${today}`,
+        ),
+      )
+      .limit(1)
+      .get();
+    if (!hasPunchIn) {
+      return Response.json(
+        { error: "You must punch in before punching out." },
+        { status: 400 },
+      );
+    }
+  }
+
   const id = crypto.randomUUID();
   const photoKey = `attendance/${today}/${employeeId}/${id}.jpg`;
 
@@ -103,8 +172,8 @@ export async function POST(request: Request) {
         photoKey,
         contentType: photo.type,
         office,
-        latitude: (form.get("latitude") as string) || null,
-        longitude: (form.get("longitude") as string) || null,
+        latitude,
+        longitude,
         userAgent:
           request.headers.get("user-agent")?.slice(0, 300) || null,
       })

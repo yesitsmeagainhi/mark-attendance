@@ -15,8 +15,13 @@ export async function GET() {
       name: employees.name,
       email: employees.email,
       role: employees.role,
+      jobRole: employees.jobRole,
+      mobileNumber: employees.mobileNumber,
+      workStartTime: employees.workStartTime,
+      workEndTime: employees.workEndTime,
       office: employees.office,
       active: employees.active,
+      monthlySalary: employees.monthlySalary,
       createdAt: employees.createdAt,
     })
     .from(employees)
@@ -24,6 +29,35 @@ export async function GET() {
     .all();
 
   return Response.json({ employees: records });
+}
+
+export async function PATCH(request: Request) {
+  const auth = await requireApiRole("admin");
+  if ("error" in auth) return auth.error;
+
+  let body: { id?: string; monthlySalary?: number };
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  if (!body.id) {
+    return Response.json({ error: "Employee ID is required." }, { status: 400 });
+  }
+
+  const db = getDb();
+  const emp = db.select({ id: employees.id }).from(employees).where(eq(employees.id, body.id)).get();
+  if (!emp) {
+    return Response.json({ error: "Employee not found." }, { status: 404 });
+  }
+
+  if (body.monthlySalary !== undefined) {
+    const salary = Math.max(0, Math.round(Number(body.monthlySalary) || 0));
+    db.update(employees).set({ monthlySalary: salary }).where(eq(employees.id, body.id)).run();
+  }
+
+  return Response.json({ ok: true });
 }
 
 export async function POST(request: Request) {
@@ -35,6 +69,10 @@ export async function POST(request: Request) {
     email?: string;
     password?: string;
     role?: string;
+    jobRole?: string;
+    mobileNumber?: string;
+    workStartTime?: string;
+    workEndTime?: string;
     office?: string;
   };
   try {
@@ -47,7 +85,11 @@ export async function POST(request: Request) {
   const email = body.email?.trim().toLowerCase();
   const password = body.password;
   const role = body.role === "admin" ? "admin" : "employee";
-  const office = body.office?.trim() || "Airoli Office";
+  const jobRole = body.jobRole?.trim() || "";
+  const mobileNumber = body.mobileNumber?.replace(/\D/g, "") || "";
+  const workStartTime = body.workStartTime || "09:00";
+  const workEndTime = body.workEndTime || "18:00";
+  const office = body.office?.trim() || "Bhayandar Office";
 
   if (!name) {
     return Response.json({ error: "Name is required." }, { status: 400 });
@@ -103,12 +145,16 @@ export async function POST(request: Request) {
       email,
       password: hashedPassword,
       role,
+      jobRole,
+      mobileNumber,
+      workStartTime,
+      workEndTime,
       office,
     })
     .run();
 
   return Response.json(
-    { id, name, email, role, office },
+    { id, name, email, role, jobRole, mobileNumber, workStartTime, workEndTime, office },
     { status: 201 },
   );
 }

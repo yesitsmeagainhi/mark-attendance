@@ -7,8 +7,13 @@ export const employees = sqliteTable("employees", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   role: text("role").notNull().default("employee"),
-  office: text("office").notNull().default("Airoli Office"),
+  jobRole: text("job_role").notNull().default(""),
+  mobileNumber: text("mobile_number").notNull().default(""),
+  workStartTime: text("work_start_time").notNull().default("09:00"),
+  workEndTime: text("work_end_time").notNull().default("18:00"),
+  office: text("office").notNull().default("Bhayandar Office"),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
+  monthlySalary: integer("monthly_salary").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -23,4 +28,57 @@ export const attendance = sqliteTable("attendance", {
   latitude: text("latitude"),
   longitude: text("longitude"),
   userAgent: text("user_agent"),
+  source: text("source").notNull().default("selfie"),
+});
+
+export const missPunchRequests = sqliteTable("miss_punch_requests", {
+  id: text("id").primaryKey(),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  date: text("date").notNull(),
+  punchType: text("punch_type", { enum: ["IN", "OUT"] }).notNull(),
+  requestedTime: text("requested_time").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status", { enum: ["pending", "approved", "rejected"] }).notNull().default("pending"),
+  adminNote: text("admin_note"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  reviewedAt: text("reviewed_at"),
+});
+
+export const leaveRequests = sqliteTable("leave_requests", {
+  id: text("id").primaryKey(),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  leaveType: text("leave_type", { enum: ["sick", "casual", "earned"] }).notNull(),
+  fromDate: text("from_date").notNull(),
+  toDate: text("to_date").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status", { enum: ["pending", "approved", "rejected"] }).notNull().default("pending"),
+  adminNote: text("admin_note"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  reviewedAt: text("reviewed_at"),
+});
+
+export const holidays = sqliteTable("holidays", {
+  id: text("id").primaryKey(),
+  date: text("date").notNull().unique(),
+  type: text("type").notNull(),
+  note: text("note"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const dailyJournals = sqliteTable("daily_journals", {
+  id: text("id").primaryKey(),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  date: text("date").notNull(),
+  tasks: text("tasks").notNull(),
+  todos: text("todos").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+})
+export const branches = sqliteTable("branches", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  latitude: text("latitude").notNull(),
+  longitude: text("longitude").notNull(),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

@@ -13,3 +13,203 @@
 .modal-overlay{position:fixed;inset:0;background:rgba(23,32,51,.45);z-index:100;display:grid;place-items:center;padding:24px;backdrop-filter:blur(2px)}.modal-card{background:#fff;border-radius:22px;padding:28px;width:min(480px,100%);box-shadow:0 24px 60px rgba(23,32,51,.18);max-height:90vh;overflow-y:auto}.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}.modal-header h2{font-size:20px;margin:0}.modal-close{border:0;background:none;font-size:24px;color:var(--muted);padding:4px 8px;line-height:1}.modal-form label{display:flex;flex-direction:column;gap:6px;margin-bottom:16px;font-size:13px;font-weight:600;color:var(--ink)}.modal-form input,.modal-form select{padding:12px 14px;border:1px solid var(--line);border-radius:10px;font-size:14px;outline:none;transition:border-color .15s;background:#fff}.modal-form input:focus,.modal-form select:focus{border-color:var(--purple);box-shadow:0 0 0 3px #eee9ff}.modal-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}.modal-form .primary{margin-top:8px}
 .title-actions{display:flex;gap:10px}.add-emp-btn{width:auto;padding:13px 20px;font-size:13px}
 @media(max-width:640px){.modal-card{padding:20px}.modal-row{grid-template-columns:1fr}.title-actions{flex-direction:column}.add-emp-btn{width:100%}}
+
+/* Employee status cards */
+.emp-status-grid{display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:16px;margin-bottom:24px}
+.emp-status-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 4px 18px rgba(25,28,39,.04)}
+.emp-status-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.emp-status-header b{font-size:14px}
+.emp-status-dot{width:10px;height:10px;border-radius:50%;background:#d1d5db}
+.emp-status-dot.active{background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,.4)}
+.emp-status-dot.out{background:#6d45e5;box-shadow:0 0 8px rgba(109,69,229,.4)}
+.emp-status-detail{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.emp-status-detail strong{font-size:22px;letter-spacing:-.02em}
+.pending-text{color:var(--muted);font-size:13px}
+
+/* Grace period badges */
+.grace-badge{font-size:10px;padding:4px 10px;border-radius:99px;font-weight:600}
+.grace-badge.on-time{background:#e8f7ef;color:#168052}
+.grace-badge.grace{background:#fff4dc;color:#a86400}
+.grace-badge.late{background:#ffeded;color:#c73333}
+
+/* Duration / progress card */
+.duration-card .emp-status-header{justify-content:space-between}
+.duration-value{font-size:22px;font-weight:800;color:var(--purple);letter-spacing:-.02em}
+.progress-bar-wrap{height:8px;background:#f0f1f5;border-radius:99px;overflow:hidden;margin-bottom:8px}
+.progress-bar{height:100%;background:linear-gradient(90deg,var(--purple),#8b6cf0);border-radius:99px;transition:width .6s ease}
+.progress-labels{display:flex;justify-content:space-between}
+.progress-labels small{font-size:10px;color:var(--muted)}
+.completion-status{margin-top:10px;text-align:center;font-size:11px;font-weight:700;padding:6px 12px;border-radius:10px}
+.completion-status.complete{background:#e8f7ef;color:#168052}
+.completion-status.incomplete{background:#fff4dc;color:#a86400}
+
+/* Punch out button variant */
+.punch-out-btn{background:#ef4444!important}
+.punch-out-btn:hover{background:#dc2626!important}
+.out-icon{background:#ffeded!important;color:#c73333!important}
+
+/* Day complete card */
+.day-complete-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:36px;text-align:center;box-shadow:0 5px 24px rgba(25,28,39,.04)}
+.day-complete-icon{width:56px;height:56px;border-radius:50%;background:#e8f7ef;color:#168052;display:grid;place-items:center;margin:0 auto 16px;font-size:26px;font-weight:800}
+.day-complete-card h2{margin:0 0 12px;font-size:22px}
+.day-complete-card p{margin:0 0 6px;color:var(--muted);font-size:14px;line-height:1.6}
+.day-complete-card b{color:var(--ink)}
+
+/* Mobile sign-out bar (hidden on desktop) */
+.mobile-signout-bar{display:none;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 16px;margin-bottom:18px;font-size:13px}
+.mobile-signout-bar span:nth-child(2){display:flex;flex-direction:column;gap:2px;flex:1}
+.mobile-signout-bar small{color:var(--muted);font-size:10px}
+.mobile-signout-bar .signout{margin-left:auto;background:#ffeded;color:#c73333;border:0;padding:8px 14px;border-radius:10px;font-size:11px;font-weight:700}
+
+@media(max-width:800px){
+  .mobile-signout-bar{display:flex}
+  .emp-status-grid{grid-template-columns:1fr 1fr}
+  .duration-card{grid-column:1/-1}
+}
+@media(max-width:480px){
+  .emp-status-grid{grid-template-columns:1fr}
+  .emp-status-detail strong{font-size:18px}
+}
+
+/* Tab navigation */
+.tab-nav{display:flex;gap:4px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:4px;margin-bottom:24px;overflow-x:auto}
+.tab-nav button{border:0;background:none;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;transition:all .15s}
+.tab-nav button.active{background:#eee9ff;color:var(--purple)}
+.tab-nav button:hover:not(.active){background:#f6f7fb}
+
+/* Request form cards */
+.request-form-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:24px;margin-bottom:20px;box-shadow:0 5px 24px rgba(25,28,39,.04)}
+.request-form-card h3{margin:0 0 18px;font-size:17px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-grid.full{grid-template-columns:1fr}
+.request-form-card label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--ink)}
+.request-form-card input,.request-form-card select,.request-form-card textarea{padding:12px 14px;border:1px solid var(--line);border-radius:10px;font-size:14px;outline:none;font-family:inherit;background:#fff}
+.request-form-card textarea{min-height:80px;resize:vertical}
+.request-form-card input:focus,.request-form-card select:focus,.request-form-card textarea:focus{border-color:var(--purple);box-shadow:0 0 0 3px #eee9ff}
+
+/* Request status badges */
+.badge-pending{background:#fff4dc;color:#a86400;font-size:10px;padding:4px 10px;border-radius:99px;font-weight:600}
+.badge-approved{background:#e8f7ef;color:#168052;font-size:10px;padding:4px 10px;border-radius:99px;font-weight:600}
+.badge-rejected{background:#ffeded;color:#c73333;font-size:10px;padding:4px 10px;border-radius:99px;font-weight:600}
+
+/* Timesheet calendar */
+.timesheet-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.timesheet-header h3{margin:0;font-size:17px}
+.month-nav{display:flex;align-items:center;gap:12px}
+.month-nav button{border:1px solid var(--line);background:#fff;padding:8px 12px;border-radius:8px;font-weight:600;font-size:14px}
+.month-nav span{font-size:15px;font-weight:700;min-width:140px;text-align:center}
+.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;background:var(--line);border-radius:12px;overflow:hidden}
+.calendar-header{background:#f9fafb;padding:8px;text-align:center;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase}
+.calendar-day{background:#fff;padding:8px;min-height:70px;font-size:12px}
+.calendar-day .day-num{font-weight:700;margin-bottom:4px}
+.calendar-day .day-times{font-size:9px;color:var(--muted)}
+.calendar-day.present{background:#f0fdf4}
+.calendar-day.present .day-times{color:#168052}
+.calendar-day.absent{background:#fef2f2}
+.calendar-day.absent .day-times{color:#c73333}
+.calendar-day.leave{background:#eff6ff}
+.calendar-day.leave .day-times{color:#2563eb}
+.calendar-day.holiday{background:#f9fafb}
+.calendar-day.holiday .day-times{color:var(--muted)}
+.calendar-day.uh{background:#fffbeb}
+.calendar-day.uh .day-times{color:#b45309}
+.calendar-day.future{background:#fafafa;color:#ccc}
+.calendar-day.empty{background:#fafafa}
+.timesheet-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:18px}
+
+/* Profile card */
+.profile-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:32px;box-shadow:0 5px 24px rgba(25,28,39,.04)}
+.profile-avatar{width:72px;height:72px;border-radius:50%;background:var(--purple);color:#fff;display:grid;place-items:center;font-size:24px;font-weight:800;margin:0 auto 20px}
+.profile-name{text-align:center;margin-bottom:28px}
+.profile-name h2{margin:0 0 4px;font-size:22px}
+.profile-name p{margin:0;color:var(--muted);font-size:13px}
+.profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.profile-field{display:flex;flex-direction:column;gap:4px}
+.profile-field dt{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.profile-field dd{margin:0;font-size:14px;font-weight:600}
+
+/* Admin review actions */
+.review-actions{display:flex;gap:8px}
+.btn-approve{border:0;background:#e8f7ef;color:#168052;padding:8px 14px;border-radius:8px;font-weight:700;font-size:11px}
+.btn-approve:hover{background:#d1f0e0}
+.btn-reject{border:0;background:#ffeded;color:#c73333;padding:8px 14px;border-radius:8px;font-weight:700;font-size:11px}
+.btn-reject:hover{background:#ffd6d6}
+
+@media(max-width:800px){
+  .tab-nav{gap:2px;padding:3px}
+  .tab-nav button{padding:8px 12px;font-size:11px}
+  .form-grid{grid-template-columns:1fr}
+  .timesheet-summary{grid-template-columns:1fr 1fr}
+  .profile-grid{grid-template-columns:1fr}
+  .calendar-day{min-height:50px;padding:4px}
+  .calendar-day .day-times{font-size:8px}
+}
+@media(max-width:480px){
+  .timesheet-summary{grid-template-columns:1fr}
+  .calendar-day{min-height:42px}
+}
+
+/* Punch selfie photos — compact single-row */
+.punch-photos-row{margin-top:24px}
+.punch-photos-row h3{font-size:15px;margin:0 0 12px;color:var(--ink)}
+.punch-row{display:flex;align-items:center;gap:18px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 20px;box-shadow:0 4px 18px rgba(25,28,39,.04)}
+.punch-thumb-wrap{display:flex;align-items:center;gap:14px;flex:1;min-width:0}
+.punch-thumb{width:56px;height:56px;max-width:56px;max-height:56px;border-radius:10px;object-fit:cover;flex-shrink:0;border:2px solid var(--line)}
+.empty-thumb{width:56px;height:56px;border-radius:10px;background:#f3f4f8;border:1px dashed #c9cbd4;flex-shrink:0}
+.punch-thumb-info{display:flex;flex-direction:column;gap:2px;min-width:0}
+.punch-thumb-info b{font-size:12px}
+.punch-thumb-info span{font-size:13px;font-weight:700;color:var(--purple)}
+.punch-thumb-info small{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.punch-thumb-divider{width:1px;height:40px;background:var(--line);flex-shrink:0}
+@media(max-width:480px){
+  .punch-row{flex-direction:column;gap:12px;align-items:stretch}
+  .punch-thumb-divider{width:100%;height:1px}
+}
+
+/* Admin action buttons (P/A/UH/Undo) */
+.btn-action{border:0;padding:6px 12px;border-radius:8px;font-weight:700;font-size:11px;min-width:32px;cursor:pointer}
+.btn-present{background:#e8f7ef;color:#168052}
+.btn-present:hover{background:#d1f0e0}
+.btn-absent{background:#ffeded;color:#c73333}
+.btn-absent:hover{background:#ffd6d6}
+.btn-uh{background:#fff4dc;color:#a86400}
+.btn-uh:hover{background:#ffe8b3}
+.btn-undo{background:#f3f4f8;color:#667085}
+.btn-undo:hover{background:#e7e9ee}
+
+/* Bulk action bar & date picker row */
+.bulk-actions{display:flex;gap:10px;align-items:center}
+.date-picker-row{display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.date-picker-row input[type="date"],.date-picker-row input[type="month"]{padding:10px 14px;border:1px solid var(--line);border-radius:10px;font-size:14px;outline:none;background:#fff}
+.date-picker-row input:focus{border-color:var(--purple);box-shadow:0 0 0 3px #eee9ff}
+
+/* Source badges */
+.badge-selfie{background:#eee9ff;color:#6d45e5;font-size:10px;padding:4px 10px;border-radius:99px;font-weight:600}
+.badge-admin{background:#f3f4f8;color:#667085;font-size:10px;padding:4px 10px;border-radius:99px;font-weight:600}
+
+/* Photo thumbnails in admin tables */
+.table-thumb{width:48px;height:48px;max-width:48px;max-height:48px;border-radius:8px;object-fit:cover;border:2px solid var(--line);cursor:pointer;transition:transform .15s}
+.table-thumb:hover{transform:scale(1.1);border-color:var(--purple)}
+.table-thumb-empty{width:48px;height:48px;border-radius:8px;background:#f3f4f8;border:1px dashed #c9cbd4}
+/* Fix: prevent global td flex rule from squashing photo/action columns in admin tables */
+.admin-table td{display:table-cell!important}
+.admin-table td:first-child{display:flex!important;align-items:center;gap:10px}
+.admin-table{min-width:1020px}
+/* Photo lightbox overlay */
+.photo-overlay{position:fixed;inset:0;background:rgba(23,32,51,.7);z-index:200;display:grid;place-items:center;padding:24px;backdrop-filter:blur(4px);cursor:pointer}
+.photo-overlay img{max-width:min(480px,90vw);max-height:80vh;border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.4);object-fit:contain}
+
+/* Totals row */
+.totals-row td{font-weight:700!important;background:#f9fafb;border-top:2px solid var(--line)}
+
+/* 3-column metrics for Dashboard tab */
+.metrics-3{grid-template-columns:repeat(3,1fr)}
+
+/* Inline salary edit */
+.salary-input{width:100px;padding:4px 8px;border:1px solid var(--purple);border-radius:6px;font-size:12px;outline:none;text-align:right}
+
+@media(max-width:800px){
+  .metrics-3{grid-template-columns:1fr}
+  .bulk-actions{flex-wrap:wrap}
+  .date-picker-row{flex-wrap:wrap}
+}

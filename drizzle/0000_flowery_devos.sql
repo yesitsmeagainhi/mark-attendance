@@ -18,12 +18,16 @@ CREATE TABLE `employees` (
 	`email` text NOT NULL,
 	`password` text NOT NULL,
 	`role` text DEFAULT 'employee' NOT NULL,
-	`office` text DEFAULT 'Airoli Office' NOT NULL,
+	`job_role` text DEFAULT '' NOT NULL,
+	`mobile_number` text DEFAULT '' NOT NULL,
+	`work_start_time` text DEFAULT '09:00' NOT NULL,
+	`work_end_time` text DEFAULT '18:00' NOT NULL,
+	`office` text DEFAULT 'Bhayandar Office' NOT NULL,
 	`active` integer DEFAULT true NOT NULL,
 	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `employees_email_unique` ON `employees` (`email`);
 --> statement-breakpoint
-INSERT OR IGNORE INTO `employees` (`id`, `name`, `email`, `password`, `role`, `office`, `active`)
-VALUES ('EMP-1007', 'Naresh M.', 'naresh@example.com', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'admin', 'Airoli Office', 1);
+INSERT OR IGNORE INTO `employees` (`id`, `name`, `email`, `password`, `role`, `job_role`, `mobile_number`, `work_start_time`, `work_end_time`, `office`, `active`)
+VALUES ('EMP-1007', 'Naresh M.', 'naresh@example.com', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'admin', 'Administrator', '', '09:00', '18:00', 'Bhayandar Office', 1);
