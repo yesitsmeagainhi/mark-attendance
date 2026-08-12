@@ -9,6 +9,7 @@ type PayrollRow = {
   workingDays: number;
   presentDays: number;
   absentDays: number;
+  lateAbsentDays: number;
   lateDays: number;
   leaveDays: number;
   deduction: number;
@@ -109,7 +110,12 @@ export default function PayrollTab() {
                   </td>
                   <td><span className="grace-badge on-time">{r.presentDays}</span></td>
                   <td><span className="grace-badge late">{r.absentDays}</span></td>
-                  <td>{r.lateDays}</td>
+                  <td>
+                    {r.lateDays}
+                    {r.lateAbsentDays > 0 && (
+                      <div style={{ fontSize: 10, color: "#c73333", marginTop: 2 }}>= {r.lateAbsentDays} absent</div>
+                    )}
+                  </td>
                   <td>{r.leaveDays}</td>
                   <td style={{ color: r.deduction > 0 ? "#c73333" : undefined }}>{r.deduction > 0 ? `-${fmt(r.deduction)}` : "\u2014"}</td>
                   <td><b>{fmt(r.netPay)}</b></td>

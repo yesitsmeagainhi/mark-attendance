@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { BranchRow } from "./types";
+import AttendanceRulesSection from "./AttendanceRulesSection";
 
 export default function SettingsTab() {
   const [branchList, setBranchList] = useState<BranchRow[]>([]);
@@ -156,6 +157,8 @@ export default function SettingsTab() {
           </div>
         </div>
       )}
+
+      <AttendanceRulesSection />
     </>
   );
 }

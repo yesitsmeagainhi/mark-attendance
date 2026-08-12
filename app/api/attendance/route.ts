@@ -1,9 +1,10 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, asc } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { attendance, employees, branches } from "../../../db/schema";
 import { putFile, deleteFile } from "../../../lib/storage";
 import { getAppIdentity } from "../../authz";
 import { findNearestBranch } from "../../../lib/geo-utils";
+import { getEffectiveRules } from "../../../lib/rules";
 
 const allowedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -114,48 +115,66 @@ export async function POST(request: Request) {
 
   const office = matchedBranch.name;
 
+  // Multi-cycle punch state machine
   const today = new Date().toISOString().slice(0, 10);
-  const duplicate = db
-    .select({ id: attendance.id })
+  const todayPunches = db
+    .select({
+      id: attendance.id,
+      punchType: attendance.punchType,
+      serverTimestamp: attendance.serverTimestamp,
+    })
     .from(attendance)
     .where(
       and(
         eq(attendance.employeeId, employeeId),
-        eq(attendance.punchType, punchType as "IN" | "OUT"),
         sql`date(${attendance.serverTimestamp}) = ${today}`,
       ),
     )
-    .limit(1)
-    .get();
-  if (duplicate) {
-    return Response.json(
-      {
-        error: `Today's punch ${punchType.toLowerCase()} is already recorded.`,
-      },
-      { status: 409 },
-    );
-  }
+    .orderBy(asc(attendance.serverTimestamp))
+    .all();
 
-  // Punch OUT requires a prior punch IN today
-  if (punchType === "OUT") {
-    const hasPunchIn = db
-      .select({ id: attendance.id })
-      .from(attendance)
-      .where(
-        and(
-          eq(attendance.employeeId, employeeId),
-          eq(attendance.punchType, "IN"),
-          sql`date(${attendance.serverTimestamp}) = ${today}`,
-        ),
-      )
-      .limit(1)
-      .get();
-    if (!hasPunchIn) {
+  const lastPunch = todayPunches.length > 0 ? todayPunches[todayPunches.length - 1] : null;
+  const firstIn = todayPunches.find((p) => p.punchType === "IN");
+
+  if (punchType === "IN") {
+    if (!lastPunch) {
+      // First punch of the day — allowed
+    } else if (lastPunch.punchType === "OUT") {
+      // Re-entry attempt — check lunch break rules
+      const empRules = getEffectiveRules(employeeId);
+      if (!empRules.lunch_break_enabled) {
+        return Response.json(
+          { error: "Re-entry is not enabled for your account. Contact your administrator." },
+          { status: 403 },
+        );
+      }
+      if (firstIn) {
+        const firstInDate = new Date(firstIn.serverTimestamp.replace(" ", "T") + (firstIn.serverTimestamp.includes("Z") ? "" : "Z"));
+        const hoursSinceFirstIn = (Date.now() - firstInDate.getTime()) / (1000 * 60 * 60);
+        if (hoursSinceFirstIn < empRules.lunch_break_min_hours) {
+          const remainingMin = Math.ceil(empRules.lunch_break_min_hours * 60 - hoursSinceFirstIn * 60);
+          return Response.json(
+            { error: `You must wait at least ${empRules.lunch_break_min_hours} hours after your first punch-in. Please try again in ${remainingMin} minutes.` },
+            { status: 400 },
+          );
+        }
+      }
+    } else {
+      // Last punch was IN — already punched in
       return Response.json(
-        { error: "You must punch in before punching out." },
+        { error: "You are already punched in." },
+        { status: 409 },
+      );
+    }
+  } else {
+    // punchType === "OUT"
+    if (!lastPunch || lastPunch.punchType === "OUT") {
+      return Response.json(
+        { error: lastPunch ? "You are already punched out. Punch in first." : "You must punch in before punching out." },
         { status: 400 },
       );
     }
+    // Last punch was IN — allowed
   }
 
   const id = crypto.randomUUID();

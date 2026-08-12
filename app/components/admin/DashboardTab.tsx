@@ -175,7 +175,7 @@
 //             </thead>
 //             <tbody>
 //               {loading && !data ? (
-//                 <tr><td colSpan={7} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>Loading...</td></tr>
+//                 <tr><td colSpan={8} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>Loading...</td></tr>
 //               ) : data?.employees.map((emp) => {
 //                 const initials = emp.name.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
 //                 const color = ["#7c3aed", "#2563eb", "#059669", "#db2777", "#ea580c"][emp.id.charCodeAt(emp.id.length - 1) % 5];
@@ -228,7 +228,7 @@
 //                 );
 //               })}
 //               {data && data.employees.length === 0 && (
-//                 <tr><td colSpan={7} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No employees registered.</td></tr>
+//                 <tr><td colSpan={8} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No employees registered.</td></tr>
 //               )}
 //             </tbody>
 //           </table>
@@ -258,6 +258,8 @@
 import { useEffect, useState, useCallback } from "react";
 import type { DailyEmployee, BranchRow } from "./types";
 import AddEmployeeModal from "./AddEmployeeModal";
+import JournalsSection from "./JournalsSection";
+import OtpRequestsSection from "./OtpRequestsSection";
 
 type DailyResponse = {
   date: string;
@@ -305,6 +307,10 @@ export default function DashboardTab() {
         `/api/admin/daily-attendance?date=${encodeURIComponent(selectedDate)}`,
         { cache: "no-store" },
       );
+      if (response.status === 401 || response.status === 403) {
+        window.location.href = "/login?mode=admin";
+        return;
+      }
       if (!response.ok) throw new Error(await getApiError(response));
       setData(await response.json());
       setError(null);
@@ -340,6 +346,10 @@ export default function DashboardTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      if (response.status === 401 || response.status === 403) {
+        window.location.href = "/login?mode=admin";
+        return;
+      }
       if (!response.ok) throw new Error(await getApiError(response));
       await fetchData(true);
     } catch (requestError) {
@@ -374,6 +384,13 @@ export default function DashboardTab() {
   function formatTime(ts: string) {
     const d = new Date(ts.replace(" ", "T") + (ts.includes("Z") ? "" : "Z"));
     return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  }
+
+  function formatDuration(minutes: number | null) {
+    if (minutes === null) return "\u2014";
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h}h ${m}m`;
   }
 
   function statusBadge(status: string) {
@@ -452,6 +469,8 @@ export default function DashboardTab() {
         <article><span className="metric-icon red">&times;</span><div><small>Marked Absent</small><strong>{summary.absent}</strong></div></article>
       </section>
 
+      <OtpRequestsSection />
+
       {/* Daily attendance table */}
       <section className="table-card" style={{ marginTop: 22 }}>
         <div className="table-tools">
@@ -486,13 +505,14 @@ export default function DashboardTab() {
                 <th>Photo Out</th>
                 <th>Punch In</th>
                 <th>Punch Out</th>
+                <th>Duration</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading && !data ? (
-                <tr><td colSpan={7} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>Loading...</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>Loading...</td></tr>
               ) : visibleEmployees.map((emp) => {
                 const initials = emp.name.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
                 const color = ["#7c3aed", "#2563eb", "#059669", "#db2777", "#ea580c"][emp.id.charCodeAt(emp.id.length - 1) % 5];
@@ -500,7 +520,7 @@ export default function DashboardTab() {
 
                 return (
                   <tr key={emp.id}>
-                    <td data-label="Employee" className="employee-cell">
+                    <td data-label="Employee" className="employee-cell cell-flex">
                       <span className="person" style={{ background: color }}>{initials}</span>
                       <span><b>{emp.name}</b><small>{emp.id}</small></span>
                     </td>
@@ -536,6 +556,7 @@ export default function DashboardTab() {
                     </td>
                     <td data-label="Punch In">{emp.punchIn ? formatTime(emp.punchIn.time) : "\u2014"}</td>
                     <td data-label="Punch Out">{emp.punchOut ? formatTime(emp.punchOut.time) : "\u2014"}</td>
+                    <td data-label="Duration" style={{ fontWeight: 600, color: emp.durationMinutes !== null ? "#6d45e5" : undefined }}>{formatDuration(emp.durationMinutes)}</td>
                     <td data-label="Status">{statusBadge(emp.status)}</td>
                     <td data-label="Actions">
                       <div className="review-actions" style={{ gap: 4 }}>
@@ -551,7 +572,7 @@ export default function DashboardTab() {
                 );
               })}
               {data && visibleEmployees.length === 0 && (
-                <tr><td colSpan={7} className="attendance-empty">
+                <tr><td colSpan={8} className="attendance-empty">
                   {data.employees.length === 0 ? "No employees registered." : "No employees match these filters."}
                 </td></tr>
               )}
@@ -559,6 +580,8 @@ export default function DashboardTab() {
           </table>
         </div>
       </section>
+
+      <JournalsSection />
 
       {/* Photo lightbox */}
       {viewPhoto && (

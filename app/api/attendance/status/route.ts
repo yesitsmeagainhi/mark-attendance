@@ -2,6 +2,7 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { attendance, employees } from "../../../../db/schema";
 import { getAppIdentity } from "../../../authz";
+import { getEffectiveRules } from "../../../../lib/rules";
 
 export async function GET() {
   const identity = await getAppIdentity();
@@ -50,6 +51,47 @@ export async function GET() {
   const punchOut = records.find((r) => r.punchType === "OUT" && r.source !== "admin")
     || records.find((r) => r.punchType === "OUT");
 
+  // Build ordered punches array for multi-cycle support
+  const orderedPunches = [...records]
+    .sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp))
+    .map((r) => ({
+      type: r.punchType as "IN" | "OUT",
+      time: r.serverTimestamp,
+      office: r.office,
+      photoKey: r.photoKey,
+    }));
+
+  const lastPunch = orderedPunches.length > 0 ? orderedPunches[orderedPunches.length - 1] : null;
+  const empRules = getEffectiveRules(identity.employeeId);
+
+  // Determine next punch type and permissions
+  let nextPunchType: "IN" | "OUT" | null = "IN";
+  let canPunchIn = true;
+  let canPunchOut = false;
+
+  if (lastPunch) {
+    if (lastPunch.type === "IN") {
+      nextPunchType = "OUT";
+      canPunchIn = false;
+      canPunchOut = true;
+    } else {
+      // Last punch is OUT — check if re-entry is allowed
+      if (empRules.lunch_break_enabled) {
+        const firstIn = orderedPunches.find((p) => p.type === "IN");
+        if (firstIn) {
+          const firstInDate = new Date(firstIn.time.replace(" ", "T") + (firstIn.time.includes("Z") ? "" : "Z"));
+          const hoursSinceFirstIn = (Date.now() - firstInDate.getTime()) / (1000 * 60 * 60);
+          canPunchIn = hoursSinceFirstIn >= empRules.lunch_break_min_hours;
+        }
+        nextPunchType = canPunchIn ? "IN" : null;
+      } else {
+        nextPunchType = null;
+        canPunchIn = false;
+      }
+      canPunchOut = false;
+    }
+  }
+
   return Response.json({
     employeeId: identity.employeeId,
     workStartTime: emp?.workStartTime || "09:00",
@@ -61,5 +103,14 @@ export async function GET() {
     punchOut: punchOut
       ? { time: punchOut.serverTimestamp, office: punchOut.office, photoKey: punchOut.photoKey }
       : null,
+    punches: orderedPunches,
+    rules: {
+      gracePeriod: empRules.grace_period,
+      lunchBreakEnabled: empRules.lunch_break_enabled,
+      lunchBreakMinHours: empRules.lunch_break_min_hours,
+    },
+    nextPunchType,
+    canPunchIn,
+    canPunchOut,
   });
 }

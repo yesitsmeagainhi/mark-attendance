@@ -2,6 +2,8 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { attendance, employees, leaveRequests } from "../../../../db/schema";
 import { getAppIdentity } from "../../../authz";
+import { getEffectiveRules } from "../../../../lib/rules";
+import { calculateTotalDuration } from "../../../../lib/time-utils";
 
 export async function GET(request: Request) {
   const identity = await getAppIdentity();
@@ -24,7 +26,8 @@ export async function GET(request: Request) {
   const workStartTime = emp?.workStartTime || "09:00";
   const [startH, startM] = workStartTime.split(":").map(Number);
   const startMinutes = startH * 60 + startM;
-  const graceDeadline = startMinutes + 15;
+  const empRules = getEffectiveRules(identity.employeeId);
+  const graceDeadline = startMinutes + empRules.grace_period;
 
   // Get attendance records for the last N days
   const cutoffDate = new Date();
@@ -36,6 +39,7 @@ export async function GET(request: Request) {
       punchType: attendance.punchType,
       serverTimestamp: attendance.serverTimestamp,
       office: attendance.office,
+      photoKey: attendance.photoKey,
     })
     .from(attendance)
     .where(
@@ -64,16 +68,32 @@ export async function GET(request: Request) {
     )
     .all();
 
-  // Group records by date
-  const byDate: Record<string, { punchIn?: string; punchOut?: string; office?: string }> = {};
+  // Group records by date (store all punches for multi-session support)
+  type DayPunches = { punchIn?: string; punchOut?: string; office?: string; photoKeyIn?: string; photoKeyOut?: string; allPunches: { punchType: string; serverTimestamp: string }[] };
+  const byDate: Record<string, DayPunches> = {};
   for (const r of records) {
     const date = r.serverTimestamp.slice(0, 10);
-    if (!byDate[date]) byDate[date] = {};
-    if (r.punchType === "IN") {
+    if (!byDate[date]) byDate[date] = { allPunches: [] };
+    byDate[date].allPunches.push({ punchType: r.punchType, serverTimestamp: r.serverTimestamp });
+    if (r.punchType === "IN" && !byDate[date].punchIn) {
+      // First IN (since records are ordered DESC, this is actually the latest IN — we need earliest)
       byDate[date].punchIn = r.serverTimestamp;
       byDate[date].office = r.office;
-    } else {
-      byDate[date].punchOut = r.serverTimestamp;
+      byDate[date].photoKeyIn = r.photoKey;
+    } else if (r.punchType === "IN") {
+      // Keep earliest IN
+      if (r.serverTimestamp < byDate[date].punchIn!) {
+        byDate[date].punchIn = r.serverTimestamp;
+        byDate[date].office = r.office;
+        byDate[date].photoKeyIn = r.photoKey;
+      }
+    }
+    if (r.punchType === "OUT") {
+      // Keep latest OUT
+      if (!byDate[date].punchOut || r.serverTimestamp > byDate[date].punchOut!) {
+        byDate[date].punchOut = r.serverTimestamp;
+        byDate[date].photoKeyOut = r.photoKey;
+      }
     }
   }
 
@@ -95,7 +115,10 @@ export async function GET(request: Request) {
     punchOutTime: string | null;
     duration: number | null;
     status: string;
+    lateByMinutes: number | null;
     office: string | null;
+    photoKeyIn: string | null;
+    photoKeyOut: string | null;
   }> = [];
 
   let presentDays = 0;
@@ -114,14 +137,14 @@ export async function GET(request: Request) {
     const isLeave = leaveDates.has(dateStr);
 
     if (isLeave) {
-      result.push({ date: dateStr, punchInTime: null, punchOutTime: null, duration: null, status: "Leave", office: null });
+      result.push({ date: dateStr, punchInTime: null, punchOutTime: null, duration: null, status: "Leave",lateByMinutes:null, office: null, photoKeyIn: null, photoKeyOut: null });
       continue;
     }
 
     if (!dayData?.punchIn) {
       // Only mark absent for past days, not today
       if (dateStr < today) {
-        result.push({ date: dateStr, punchInTime: null, punchOutTime: null, duration: null, status: "Absent", office: null });
+        result.push({ date: dateStr, punchInTime: null, punchOutTime: null, duration: null, status: "Absent", lateByMinutes: null, office: null, photoKeyIn: null, photoKeyOut: null });
       }
       continue;
     }
@@ -131,17 +154,19 @@ export async function GET(request: Request) {
     const punchMinutes = inIST.getHours() * 60 + inIST.getMinutes();
 
     let status = "On time";
+    let lateByMinutes: number | null = null;
     if (punchMinutes > graceDeadline) {
       status = "Late";
+      lateByMinutes = punchMinutes - startMinutes;
       lateDays++;
     }
     presentDays++;
 
+    // Calculate total duration across all IN/OUT pairs
     let duration: number | null = null;
-    if (dayData.punchOut) {
-      const outDate = new Date(dayData.punchOut.replace(" ", "T") + (dayData.punchOut.includes("Z") ? "" : "Z"));
-      duration = Math.floor((outDate.getTime() - inDate.getTime()) / 60000);
-    }
+    const sorted = [...dayData.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
+    const totalDur = calculateTotalDuration(sorted);
+    if (totalDur > 0) duration = totalDur;
 
     result.push({
       date: dateStr,
@@ -149,7 +174,10 @@ export async function GET(request: Request) {
       punchOutTime: dayData.punchOut || null,
       duration,
       status,
+      lateByMinutes,
       office: dayData.office || null,
+      photoKeyIn: dayData.photoKeyIn || null,
+      photoKeyOut: dayData.photoKeyOut || null,
     });
   }
 

@@ -3,13 +3,20 @@
 import { useEffect, useState } from "react";
 import { formatTimeIST, formatDuration } from "../../../lib/time-utils";
 
+function isRealPhoto(key: string | null) {
+  return key && key !== "admin-marked" && key !== "admin/unpaid-holiday";
+}
+
 type HistoryRecord = {
   date: string;
   punchInTime: string | null;
   punchOutTime: string | null;
   duration: number | null;
   status: string;
+  lateByMinutes: number | null;
   office: string | null;
+  photoKeyIn: string | null;
+  photoKeyOut: string | null;
 };
 
 type HistoryData = {
@@ -25,6 +32,7 @@ export default function HistoryTab() {
   const [data, setData] = useState<HistoryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
+  const [viewPhoto, setViewPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -72,6 +80,8 @@ export default function HistoryTab() {
             <thead>
               <tr>
                 <th>Date</th>
+                <th>Photo In</th>
+                <th>Photo Out</th>
                 <th>Punch In</th>
                 <th>Punch Out</th>
                 <th>Duration</th>
@@ -82,19 +92,60 @@ export default function HistoryTab() {
               {data.records.map((r) => (
                 <tr key={r.date}>
                   <td><b>{new Date(r.date).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" })}</b></td>
+                  <td>
+                    {isRealPhoto(r.photoKeyIn) ? (
+                      <img
+                        className="table-thumb"
+                        src={`/api/attendance/photo?key=${encodeURIComponent(r.photoKeyIn!)}`}
+                        alt="In"
+                        style={{ cursor: "pointer" }}
+                        onClick={() => setViewPhoto(`/api/attendance/photo?key=${encodeURIComponent(r.photoKeyIn!)}`)}
+                      />
+                    ) : (
+                      <span style={{ color: "#c9cbd4" }}>{"\u2014"}</span>
+                    )}
+                  </td>
+                  <td>
+                    {isRealPhoto(r.photoKeyOut) ? (
+                      <img
+                        className="table-thumb"
+                        src={`/api/attendance/photo?key=${encodeURIComponent(r.photoKeyOut!)}`}
+                        alt="Out"
+                        style={{ cursor: "pointer" }}
+                        onClick={() => setViewPhoto(`/api/attendance/photo?key=${encodeURIComponent(r.photoKeyOut!)}`)}
+                      />
+                    ) : (
+                      <span style={{ color: "#c9cbd4" }}>{"\u2014"}</span>
+                    )}
+                  </td>
                   <td>{r.punchInTime ? formatTimeIST(r.punchInTime) : "\u2014"}</td>
                   <td>{r.punchOutTime ? formatTimeIST(r.punchOutTime) : "\u2014"}</td>
                   <td>{r.duration !== null ? formatDuration(r.duration) : "\u2014"}</td>
-                  <td><span className={`grace-badge ${statusClass(r.status)}`}>{r.status}</span></td>
+                  <td>
+                    <span className={`grace-badge ${statusClass(r.status)}`}>{r.status}</span>
+                    {r.lateByMinutes !== null && r.lateByMinutes > 0 && (
+                      <small style={{ display: "block", color: "#e67e22", fontSize: 11, marginTop: 2 }}>
+                        by {r.lateByMinutes >= 60
+                          ? `${Math.floor(r.lateByMinutes / 60)}h ${r.lateByMinutes % 60}m`
+                          : `${r.lateByMinutes} mins`}
+                      </small>
+                    )}
+                  </td>
                 </tr>
               ))}
               {data.records.length === 0 && (
-                <tr><td colSpan={5} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No attendance records found.</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No attendance records found.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </section>
+
+      {viewPhoto && (
+        <div className="photo-overlay" onClick={() => setViewPhoto(null)}>
+          <img src={viewPhoto} alt="Attendance selfie" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
     </>
   );
 }

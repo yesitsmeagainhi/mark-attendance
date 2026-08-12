@@ -1,7 +1,104 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import * as faceapi from "face-api.js";
 import { timeToMinutes, formatDuration, formatTimeIST, getIST, getGreeting, getGraceStatus } from "../../../lib/time-utils";
+
+// --- Face detection helpers (module-level, outside component) ---
+
+type FaceEvalStatus = "no-face" | "multiple" | "too-far" | "too-close" | "off-center" | "eyes-closed" | "ready";
+type FaceEvalResult = { status: FaceEvalStatus; guidance: string };
+
+function ptDistance(p1: faceapi.Point, p2: faceapi.Point): number {
+  return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+}
+
+function calculateEAR(eye: faceapi.Point[]): number {
+  const vertical1 = ptDistance(eye[1], eye[5]);
+  const vertical2 = ptDistance(eye[2], eye[4]);
+  const horizontal = ptDistance(eye[0], eye[3]);
+  if (horizontal === 0) return 0;
+  return (vertical1 + vertical2) / (2 * horizontal);
+}
+
+function evaluateDetections(
+  detections: faceapi.WithFaceLandmarks<{ detection: faceapi.FaceDetection }>[],
+  fw: number,
+  fh: number,
+): FaceEvalResult {
+  if (detections.length === 0) return { status: "no-face", guidance: "No face detected. Position your face in the frame." };
+  if (detections.length > 1) return { status: "multiple", guidance: "Multiple faces detected. Only one person should be in frame." };
+
+  const box = detections[0].detection.box;
+  const faceRatio = (box.width * box.height) / (fw * fh);
+  if (faceRatio < 0.04) return { status: "too-far", guidance: "Move closer to the camera." };
+  if (faceRatio > 0.55) return { status: "too-close", guidance: "Move further from the camera." };
+
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+  if (Math.abs(cx - fw / 2) > fw * 0.30 || Math.abs(cy - fh / 2) > fh * 0.30) {
+    return { status: "off-center", guidance: "Center your face in the frame." };
+  }
+
+  const lm = detections[0].landmarks;
+  const avgEAR = (calculateEAR(lm.getLeftEye()) + calculateEAR(lm.getRightEye())) / 2;
+  if (avgEAR < 0.2) return { status: "eyes-closed", guidance: "Please open your eyes." };
+
+  return { status: "ready", guidance: "Looking good! You can capture now." };
+}
+
+function drawFaceOverlay(
+  ctx: CanvasRenderingContext2D,
+  detections: faceapi.WithFaceLandmarks<{ detection: faceapi.FaceDetection }>[],
+  status: FaceEvalStatus,
+  fw: number,
+) {
+  const colorMap: Record<string, string> = {
+    ready: "#22c55e", "eyes-closed": "#eab308", "off-center": "#eab308",
+    "too-far": "#eab308", "too-close": "#eab308", multiple: "#ef4444", "no-face": "#ef4444",
+  };
+  const color = colorMap[status] || "#ef4444";
+
+  for (const det of detections) {
+    const box = det.detection.box;
+    const mx = fw - box.x - box.width; // mirror X since video is CSS-flipped
+    const cornerLen = Math.min(box.width, box.height) * 0.15;
+
+    // Bounding box
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(mx, box.y, box.width, box.height);
+
+    // Corner accents
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    const corners: [number, number, number, number][] = [
+      [mx, box.y, 1, 1], [mx + box.width, box.y, -1, 1],
+      [mx, box.y + box.height, 1, -1], [mx + box.width, box.y + box.height, -1, -1],
+    ];
+    for (const [x, y, dx, dy] of corners) {
+      ctx.beginPath();
+      ctx.moveTo(x, y + cornerLen * dy);
+      ctx.lineTo(x, y);
+      ctx.lineTo(x + cornerLen * dx, y);
+      ctx.stroke();
+    }
+
+    // Eye dots
+    if (status !== "no-face" && status !== "multiple") {
+      const eyeColor = status === "eyes-closed" ? "#ef4444" : "#22c55e";
+      for (const eye of [det.landmarks.getLeftEye(), det.landmarks.getRightEye()]) {
+        const ecx = fw - eye.reduce((s, p) => s + p.x, 0) / eye.length;
+        const ecy = eye.reduce((s, p) => s + p.y, 0) / eye.length;
+        ctx.fillStyle = eyeColor;
+        ctx.beginPath();
+        ctx.arc(ecx, ecy, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+}
+
+type PunchRecord = { type: "IN" | "OUT"; time: string; office: string; photoKey?: string };
 
 type TodayStatus = {
   workStartTime: string;
@@ -9,6 +106,11 @@ type TodayStatus = {
   office: string;
   punchIn: { time: string; office: string; photoKey?: string } | null;
   punchOut: { time: string; office: string; photoKey?: string } | null;
+  punches: PunchRecord[];
+  rules: { gracePeriod: number; lunchBreakEnabled: boolean; lunchBreakMinHours: number };
+  nextPunchType: "IN" | "OUT" | null;
+  canPunchIn: boolean;
+  canPunchOut: boolean;
 };
 
 export default function AttendanceTab({ employeeId, displayName }: { employeeId: string; displayName: string }) {
@@ -26,6 +128,15 @@ export default function AttendanceTab({ employeeId, displayName }: { employeeId:
   const [location, setLocation] = useState<{ latitude: number; longitude: number; accuracy: number } | null>(null);
   const [locationError, setLocationError] = useState("");
   const [locationLoading, setLocationLoading] = useState(false);
+  const [viewPhoto, setViewPhoto] = useState<string | null>(null);
+
+  // Face detection state
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [modelError, setModelError] = useState("");
+  const [faceStatus, setFaceStatus] = useState<FaceEvalStatus>("no-face");
+  const [faceGuidance, setFaceGuidance] = useState("Position your face in the frame");
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const detectionLoopRef = useRef<number | null>(null);
 
   const fetchStatus = useCallback(() => {
     fetch("/api/attendance/status")
@@ -80,23 +191,34 @@ export default function AttendanceTab({ employeeId, displayName }: { employeeId:
     return () => clearInterval(interval);
   }, []);
 
-  // Elapsed duration
+  // Elapsed duration (supports multi-session)
   useEffect(() => {
-    if (!todayStatus?.punchIn) { setElapsed(""); return; }
-    if (todayStatus.punchOut) {
-      const inDate = new Date(todayStatus.punchIn.time.replace(" ", "T") + (todayStatus.punchIn.time.includes("Z") ? "" : "Z"));
-      const outDate = new Date(todayStatus.punchOut.time.replace(" ", "T") + (todayStatus.punchOut.time.includes("Z") ? "" : "Z"));
-      setElapsed(formatDuration(Math.max(0, Math.floor((outDate.getTime() - inDate.getTime()) / 60000))));
-      return;
+    const allPunches = todayStatus?.punches || [];
+    if (allPunches.length === 0) { setElapsed(""); return; }
+
+    function calcTotal() {
+      let total = 0;
+      for (let i = 0; i < allPunches.length; i += 2) {
+        if (allPunches[i]?.type !== "IN") break;
+        const inDate = new Date(allPunches[i].time.replace(" ", "T") + (allPunches[i].time.includes("Z") ? "" : "Z"));
+        if (allPunches[i + 1]?.type === "OUT") {
+          const outDate = new Date(allPunches[i + 1].time.replace(" ", "T") + (allPunches[i + 1].time.includes("Z") ? "" : "Z"));
+          total += Math.max(0, Math.floor((outDate.getTime() - inDate.getTime()) / 60000));
+        } else {
+          // Currently active session
+          total += Math.max(0, Math.floor((Date.now() - inDate.getTime()) / 60000));
+        }
+      }
+      setElapsed(formatDuration(total));
     }
-    function update() {
-      if (!todayStatus?.punchIn) return;
-      const inDate = new Date(todayStatus.punchIn.time.replace(" ", "T") + (todayStatus.punchIn.time.includes("Z") ? "" : "Z"));
-      setElapsed(formatDuration(Math.max(0, Math.floor((Date.now() - inDate.getTime()) / 60000))));
+
+    calcTotal();
+    const lastP = allPunches[allPunches.length - 1];
+    if (lastP?.type === "IN") {
+      // Currently clocked in — update live
+      const interval = setInterval(calcTotal, 30000);
+      return () => clearInterval(interval);
     }
-    update();
-    const interval = setInterval(update, 30000);
-    return () => clearInterval(interval);
   }, [todayStatus]);
 
   // Fetch status on mount
@@ -114,9 +236,94 @@ export default function AttendanceTab({ employeeId, displayName }: { employeeId:
     return () => streamRef.current?.getTracks().forEach((track) => track.stop());
   }, [cameraOpen]);
 
-  function capture() {
+  // Load face detection models (once on mount)
+  useEffect(() => {
+    let cancelled = false;
+    async function loadModels() {
+      try {
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri("/models"),
+          faceapi.nets.faceLandmark68Net.loadFromUri("/models"),
+        ]);
+        if (!cancelled) setModelsLoaded(true);
+      } catch {
+        if (!cancelled) setModelError("Face detection unavailable. You can still capture manually.");
+      }
+    }
+    loadModels();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Sync overlay canvas size with video display size
+  useEffect(() => {
+    if (!cameraOpen || !videoRef.current || !overlayCanvasRef.current) return;
     const video = videoRef.current;
-    if (!video) return;
+    const canvas = overlayCanvasRef.current;
+    function syncSize() {
+      const rect = video.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    }
+    video.addEventListener("loadedmetadata", syncSize);
+    const observer = new ResizeObserver(syncSize);
+    observer.observe(video);
+    syncSize();
+    return () => { video.removeEventListener("loadedmetadata", syncSize); observer.disconnect(); };
+  }, [cameraOpen]);
+
+  // Face detection loop
+  useEffect(() => {
+    if (!cameraOpen || !modelsLoaded || !videoRef.current || !overlayCanvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = overlayCanvasRef.current;
+    let lastTime = 0;
+
+    async function detectLoop(timestamp: number) {
+      if (!video || !canvas || video.paused || video.ended) return;
+      if (timestamp - lastTime >= 200) {
+        lastTime = timestamp;
+        try {
+          const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
+          const detections = await faceapi.detectAllFaces(video, options).withFaceLandmarks();
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          const dw = canvas.width, dh = canvas.height;
+          const resized = faceapi.resizeResults(detections, { width: dw, height: dh });
+          const result = evaluateDetections(resized, dw, dh);
+          setFaceStatus(result.status);
+          setFaceGuidance(result.guidance);
+          if (resized.length > 0) drawFaceOverlay(ctx, resized, result.status, dw);
+        } catch {
+          // Detection error — skip frame
+        }
+      }
+      detectionLoopRef.current = requestAnimationFrame(detectLoop);
+    }
+
+    function start() {
+      if (video.readyState >= 2) {
+        detectionLoopRef.current = requestAnimationFrame(detectLoop);
+      } else {
+        video.addEventListener("playing", () => {
+          detectionLoopRef.current = requestAnimationFrame(detectLoop);
+        }, { once: true });
+      }
+    }
+    start();
+
+    return () => {
+      if (detectionLoopRef.current) { cancelAnimationFrame(detectionLoopRef.current); detectionLoopRef.current = null; }
+      const ctx = canvas.getContext("2d");
+      ctx?.clearRect(0, 0, canvas.width, canvas.height);
+      setFaceStatus("no-face");
+      setFaceGuidance("Position your face in the frame");
+    };
+  }, [cameraOpen, modelsLoaded]);
+
+  function captureFrame(): string | null {
+    const video = videoRef.current;
+    if (!video) return null;
     const canvas = document.createElement("canvas");
     // Cap resolution to 480px max dimension to keep file sizes small (~30-50KB)
     const vw = video.videoWidth || 720;
@@ -125,26 +332,32 @@ export default function AttendanceTab({ employeeId, displayName }: { employeeId:
     canvas.width = Math.round(vw * scale);
     canvas.height = Math.round(vh * scale);
     canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
-    setPhoto(canvas.toDataURL("image/jpeg", .60));
-    setCameraOpen(false);
+    return canvas.toDataURL("image/jpeg", .60);
   }
 
   const hasPunchedIn = !!todayStatus?.punchIn;
-  const hasPunchedOut = !!todayStatus?.punchOut;
-  const dayComplete = hasPunchedIn && hasPunchedOut;
-  const nextPunchType = hasPunchedIn && !hasPunchedOut ? "OUT" : "IN";
+  const punches = todayStatus?.punches || [];
+  const nextPunchType = todayStatus?.nextPunchType ?? "IN";
+  const dayComplete = nextPunchType === null;
+  const lastPunch = punches.length > 0 ? punches[punches.length - 1] : null;
+  const currentlyIn = lastPunch?.type === "IN";
+  const hasPunchedOut = lastPunch?.type === "OUT" && hasPunchedIn;
 
-  async function submitPunch() {
-    if (!photo) return setCameraOpen(true);
+  async function captureAndSubmit() {
+    if (!cameraOpen) return setCameraOpen(true);
     if (!location) {
       setMessage("Waiting for GPS location. Please allow location access and try again.");
       acquireLocation();
       return;
     }
+    const frame = captureFrame();
+    if (!frame) return;
+    setPhoto(frame);
+    setCameraOpen(false);
     setSaving(true);
     setMessage("");
     try {
-      const blob = await (await fetch(photo)).blob();
+      const blob = await (await fetch(frame)).blob();
       const form = new FormData();
       form.append("photo", blob, "selfie.jpg");
       form.append("punchType", nextPunchType);
@@ -157,10 +370,11 @@ export default function AttendanceTab({ employeeId, displayName }: { employeeId:
       setMessage(nextPunchType === "IN" ? "Punch in recorded successfully." : "Punch out recorded. Have a great evening!");
       setPhoto(null);
       setLocation(null);
-      acquireLocation(); // re-acquire for next punch
+      acquireLocation();
       fetchStatus();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not mark attendance.");
+      // Keep photo visible so user can see what was captured on failure
     } finally {
       setSaving(false);
     }
@@ -168,172 +382,160 @@ export default function AttendanceTab({ employeeId, displayName }: { employeeId:
 
   const expectedMinutes = todayStatus ? timeToMinutes(todayStatus.workEndTime) - timeToMinutes(todayStatus.workStartTime) : 0;
   let workedMinutes = 0;
-  if (todayStatus?.punchIn) {
-    const inDate = new Date(todayStatus.punchIn.time.replace(" ", "T") + (todayStatus.punchIn.time.includes("Z") ? "" : "Z"));
-    if (todayStatus.punchOut) {
-      const outDate = new Date(todayStatus.punchOut.time.replace(" ", "T") + (todayStatus.punchOut.time.includes("Z") ? "" : "Z"));
-      workedMinutes = Math.floor((outDate.getTime() - inDate.getTime()) / 60000);
+  for (let i = 0; i < punches.length; i += 2) {
+    if (punches[i]?.type !== "IN") break;
+    const inDate = new Date(punches[i].time.replace(" ", "T") + (punches[i].time.includes("Z") ? "" : "Z"));
+    if (punches[i + 1]?.type === "OUT") {
+      const outDate = new Date(punches[i + 1].time.replace(" ", "T") + (punches[i + 1].time.includes("Z") ? "" : "Z"));
+      workedMinutes += Math.floor((outDate.getTime() - inDate.getTime()) / 60000);
     } else {
-      workedMinutes = Math.floor((Date.now() - inDate.getTime()) / 60000);
+      workedMinutes += Math.floor((Date.now() - inDate.getTime()) / 60000);
     }
   }
   const progressPct = expectedMinutes > 0 ? Math.min(100, Math.round((workedMinutes / expectedMinutes) * 100)) : 0;
-  const graceInfo = todayStatus?.punchIn ? getGraceStatus(todayStatus.punchIn.time, todayStatus.workStartTime) : null;
+  const gracePeriod = todayStatus?.rules?.gracePeriod ?? 15;
+  const graceInfo = todayStatus?.punchIn ? getGraceStatus(todayStatus.punchIn.time, todayStatus.workStartTime, gracePeriod) : null;
   const shiftDisplay = todayStatus ? `${todayStatus.workStartTime} \u2013 ${todayStatus.workEndTime}` : "09:00 \u2013 18:00";
+
+  const ampm = currentTime.timeStr.includes("AM") || currentTime.timeStr.includes("am") ? "AM" : "PM";
+  const timeOnly = currentTime.timeStr.replace(/(am|pm)/i, "").trim();
 
   return (
     <>
-      <section className="welcome">
-        <div>
-          <p className="eyebrow">{currentTime.dateStr}</p>
-          <h1>{getGreeting(currentTime.hours)}, {displayName.split(/\s+/)[0]}</h1>
-          <p>{dayComplete ? "Your workday is complete. See you tomorrow!" : hasPunchedIn ? "You're clocked in. Don't forget to punch out when you leave." : "Ready to start your workday? Take a clear selfie to mark your attendance."}</p>
+      <section className="hero-banner">
+        <div className="hero-content">
+          <p className="hero-date">{currentTime.dateStr}</p>
+          <h1 className="hero-greeting">{getGreeting(currentTime.hours)}, {displayName.split(/\s+/)[0]}</h1>
+          <p className="hero-sub">{dayComplete ? "Your workday is complete. See you tomorrow!" : currentlyIn ? "You're clocked in. Don't forget to punch out." : hasPunchedOut ? "On break. Punch back in when you return." : "Ready to start? Take a selfie to mark attendance."}</p>
         </div>
-        <div className="time-card">
-          <small>Current time</small>
-          <strong>{currentTime.timeStr.replace(/(am|pm)/i, "").trim()}</strong>
-          <span>{currentTime.timeStr.includes("AM") || currentTime.timeStr.includes("am") ? "AM" : "PM"} &middot; IST</span>
+        <div className="hero-clock">
+          <span className="hero-clock-time">{timeOnly}</span>
+          <span className="hero-clock-ampm">{ampm}</span>
+          <span className="hero-clock-zone">IST</span>
         </div>
       </section>
 
-      <section className="emp-status-grid">
-        <article className="emp-status-card">
-          <div className="emp-status-header">
-            <span className={`emp-status-dot ${hasPunchedIn ? "active" : ""}`}></span>
-            <b>Punch In</b>
+      <section className="status-strip">
+        <article className={`status-chip ${hasPunchedIn ? "chip-done" : "chip-waiting"}`}>
+          <span className="chip-icon">{hasPunchedIn ? "\u2713" : "\u2192"}</span>
+          <div className="chip-info">
+            <small>Punch In</small>
+            {hasPunchedIn && todayStatus?.punchIn ? (
+              <b>{formatTimeIST(todayStatus.punchIn.time)}</b>
+            ) : (
+              <b className="chip-pending">Pending</b>
+            )}
           </div>
-          {hasPunchedIn && todayStatus?.punchIn ? (
-            <div className="emp-status-detail">
-              <strong>{formatTimeIST(todayStatus.punchIn.time)}</strong>
-              {graceInfo && <span className={`grace-badge ${graceInfo.className}`}>{graceInfo.label}</span>}
-            </div>
-          ) : (
-            <div className="emp-status-detail"><span className="pending-text">Not yet recorded</span></div>
-          )}
+          {graceInfo && hasPunchedIn && <span className={`grace-badge ${graceInfo.className}`}>{graceInfo.label}</span>}
         </article>
 
-        <article className="emp-status-card">
-          <div className="emp-status-header">
-            <span className={`emp-status-dot ${hasPunchedOut ? "active out" : ""}`}></span>
-            <b>Punch Out</b>
+        <article className={`status-chip ${dayComplete ? "chip-done" : currentlyIn ? "chip-active" : hasPunchedOut ? "chip-active" : "chip-waiting"}`}>
+          <span className="chip-icon">{dayComplete ? "\u2713" : "\u2190"}</span>
+          <div className="chip-info">
+            <small>Punch Out</small>
+            {todayStatus?.punchOut ? (
+              <b>{formatTimeIST(todayStatus.punchOut.time)}</b>
+            ) : (
+              <b className="chip-pending">{currentlyIn ? "Awaiting" : "\u2014"}</b>
+            )}
           </div>
-          {hasPunchedOut && todayStatus?.punchOut ? (
-            <div className="emp-status-detail">
-              <strong>{formatTimeIST(todayStatus.punchOut.time)}</strong>
-              <span className="grace-badge on-time">Completed</span>
-            </div>
-          ) : (
-            <div className="emp-status-detail"><span className="pending-text">{hasPunchedIn ? "Awaiting punch out" : "\u2014"}</span></div>
-          )}
+          {dayComplete && <span className="grace-badge on-time">Done</span>}
+          {hasPunchedOut && !dayComplete && <span className="grace-badge grace">Break</span>}
         </article>
 
-        <article className="emp-status-card duration-card">
-          <div className="emp-status-header">
-            <b>Work Duration</b>
-            <span className="duration-value">{elapsed || "\u2014"}</span>
+        <article className={`status-chip chip-duration ${dayComplete ? "chip-done" : hasPunchedIn ? "chip-active" : "chip-waiting"}`}>
+          <div className="chip-info" style={{ flex: 1 }}>
+            <small>Duration</small>
+            <b>{elapsed || "\u2014"}</b>
           </div>
-          <div className="progress-bar-wrap">
-            <div className="progress-bar" style={{ width: `${progressPct}%` }}></div>
-          </div>
-          <div className="progress-labels">
-            <small>{formatDuration(workedMinutes)} worked</small>
-            <small>{formatDuration(expectedMinutes)} expected</small>
-          </div>
-          {dayComplete && (
-            <div className={`completion-status ${progressPct >= 100 ? "complete" : "incomplete"}`}>
-              {progressPct >= 100 ? "Full day completed" : `${progressPct}% of expected hours`}
+          <div className="chip-progress">
+            <div className="chip-progress-bar">
+              <div className="chip-progress-fill" style={{ width: `${progressPct}%` }}></div>
             </div>
-          )}
+            <span className="chip-progress-label">{progressPct}%</span>
+          </div>
         </article>
       </section>
 
       {!dayComplete && (
-        <section className="punch-grid">
-          <article className="camera-card">
-            <div className="card-heading">
-              <div><span className="step">1</span><b>Take your selfie</b></div>
-              <span className="secure">Secure capture</span>
-            </div>
-            <div className={`camera-frame ${photo ? "has-photo" : ""}`}>
+        <section className="punch-section">
+          <article className="punch-compact-card">
+            <div className={`camera-frame compact ${photo ? "has-photo" : ""}`}>
               {cameraOpen ? (
-                <video ref={videoRef} autoPlay muted playsInline />
+                <>
+                  <video ref={videoRef} autoPlay muted playsInline />
+                  <canvas ref={overlayCanvasRef} className="face-detect-overlay" />
+                  <div className={`face-guidance face-guidance-${faceStatus}`}>
+                    <span className="face-guidance-dot" />
+                    {faceGuidance}
+                  </div>
+                  {!modelsLoaded && !modelError && (
+                    <div className="face-model-loading">Loading face detection...</div>
+                  )}
+                </>
               ) : photo ? (
                 <img src={photo} alt="Captured attendance selfie" />
               ) : (
                 <div className="camera-empty">
                   <span className="camera-icon">&#9678;</span>
-                  <b>Camera preview</b>
-                  <p>Your selfie will be used only for attendance verification.</p>
+                  <p>Tap below to open camera</p>
                 </div>
               )}
               <span className="corner tl" /><span className="corner tr" /><span className="corner bl" /><span className="corner br" />
             </div>
-            {cameraOpen ? (
-              <button className="primary" onClick={capture}>Capture selfie</button>
-            ) : (
-              <button className="secondary" onClick={() => { setPhoto(null); setCameraOpen(true); }}>{photo ? "Retake selfie" : "Open camera"}</button>
-            )}
-          </article>
+            {modelError && cameraOpen && <p className="face-model-error">{modelError}</p>}
 
-          <aside className="punch-card">
-            <div className="card-heading">
-              <div><span className="step">2</span><b>{nextPunchType === "IN" ? "Punch in" : "Punch out"}</b></div>
-            </div>
-            <div className="status-row">
-              <span className={`status-icon ${nextPunchType === "OUT" ? "out-icon" : ""}`}>{nextPunchType === "IN" ? "\u2198" : "\u2197"}</span>
-              <div>
-                <small>Punch {nextPunchType.toLowerCase()}</small>
-                <b>{nextPunchType === "IN" ? "Mark your arrival" : "Mark your departure"}</b>
-              </div>
-              {hasPunchedIn && <span className="badge success">Clocked in</span>}
-            </div>
-            <dl>
-              <div><dt>Date</dt><dd>{currentTime.fullDateStr}</dd></div>
-              <div><dt>Office</dt><dd>{todayStatus?.office || "\u2014"}</dd></div>
-              <div>
-                <dt>Location</dt>
-                <dd>
-                  {locationLoading && <span className="pending-text">Acquiring GPS...</span>}
-                  {location && <span className="grace-badge on-time">GPS locked ({"\u00B1"}{Math.round(location.accuracy)}m)</span>}
-                  {locationError && !locationLoading && (
-                    <span className="grace-badge late" style={{ fontSize: 11 }}>{locationError}</span>
-                  )}
-                  {!location && !locationLoading && !locationError && (
-                    <button className="secondary" onClick={acquireLocation} style={{ padding: "4px 12px", fontSize: 13 }}>Enable location</button>
-                  )}
-                </dd>
-              </div>
-              <div><dt>Shift</dt><dd>{shiftDisplay}</dd></div>
-              {hasPunchedIn && todayStatus?.punchIn && (
-                <div><dt>Punched in at</dt><dd>{formatTimeIST(todayStatus.punchIn.time)}</dd></div>
+            <div className="punch-info-bar">
+              <span>{todayStatus?.office || "\u2014"}</span>
+              <span className="punch-info-sep">&middot;</span>
+              <span>{shiftDisplay}</span>
+              <span className="punch-info-sep">&middot;</span>
+              {locationLoading && <span className="pending-text">GPS...</span>}
+              {location && <span className="grace-badge on-time" style={{ fontSize: 11, padding: "1px 6px" }}>GPS {"\u00B1"}{Math.round(location.accuracy)}m</span>}
+              {locationError && !locationLoading && (
+                <button className="secondary" onClick={acquireLocation} style={{ padding: "2px 8px", fontSize: 11 }}>Enable GPS</button>
               )}
-              {elapsed && !dayComplete && (
-                <div><dt>Time elapsed</dt><dd>{elapsed}</dd></div>
+              {!location && !locationLoading && !locationError && (
+                <button className="secondary" onClick={acquireLocation} style={{ padding: "2px 8px", fontSize: 11 }}>Enable GPS</button>
               )}
-            </dl>
-            <button
-              className={`primary punch ${nextPunchType === "OUT" ? "punch-out-btn" : ""}`}
-              onClick={submitPunch}
-              disabled={saving || !location}
-            >
-              {saving ? "Saving securely..." : !location ? "Waiting for GPS..." : nextPunchType === "IN" ? "Punch in with selfie" : "Punch out with selfie"}
-            </button>
+            </div>
+
+            {currentlyIn && lastPunch && (
+              <div className="punch-info-bar" style={{ fontSize: 12, color: "#6b7280" }}>
+                <span>In: {formatTimeIST(lastPunch.time)}</span>
+                {elapsed && <><span className="punch-info-sep">&middot;</span><span>{elapsed} elapsed</span></>}
+              </div>
+            )}
+
+            {cameraOpen ? (
+              <button
+                className={`primary punch ${nextPunchType === "OUT" ? "punch-out-btn" : ""}`}
+                onClick={captureAndSubmit}
+                disabled={saving || !location || (modelsLoaded && !modelError && faceStatus !== "ready")}
+              >
+                {saving
+                  ? "Saving..."
+                  : !location
+                    ? "Waiting for GPS..."
+                    : modelsLoaded && !modelError && faceStatus !== "ready"
+                      ? faceGuidance
+                      : nextPunchType === "IN" ? "Capture & Punch In" : "Capture & Punch Out"}
+              </button>
+            ) : (
+              <button
+                className={`primary punch ${nextPunchType === "OUT" ? "punch-out-btn" : ""}`}
+                onClick={() => { setPhoto(null); setCameraOpen(true); }}
+                disabled={saving}
+              >
+                {photo ? "Retake" : nextPunchType === "IN" ? "Open Camera to Punch In" : "Open Camera to Punch Out"}
+              </button>
+            )}
+
             {locationError && !locationLoading && (
-              <button className="secondary" onClick={acquireLocation} style={{ marginTop: 8, width: "100%" }}>Retry location</button>
+              <button className="secondary" onClick={acquireLocation} style={{ marginTop: 4, width: "100%", fontSize: 12 }}>Retry GPS</button>
             )}
-            {message && <p className={`form-message ${!message.includes("Could not") && !message.includes("Waiting") && !message.includes("not within") ? "success-text" : ""}`}>{message}</p>}
-            <p className="server-note">Timestamp is generated securely by the server</p>
-            {location && location.accuracy > 100 && (
-              <div className="tip">
-                <span>&#9888;</span>
-                <p><b>Low GPS accuracy</b><br />Your GPS accuracy is {Math.round(location.accuracy)}m. Move to an open area or near a window for better accuracy.</p>
-              </div>
-            )}
-            <div className="tip">
-              <span>&#9788;</span>
-              <p><b>Grace period</b><br />You have a 15-minute grace window after your shift start time.</p>
-            </div>
-          </aside>
+            {message && <p className={`form-message ${!message.includes("Could not") && !message.includes("Waiting") && !message.includes("not within") ? "success-text" : ""}`} style={{ margin: "6px 0 0", fontSize: 13 }}>{message}</p>}
+          </article>
         </section>
       )}
 
@@ -342,41 +544,38 @@ export default function AttendanceTab({ employeeId, displayName }: { employeeId:
           <div className="day-complete-icon">&#10003;</div>
           <h2>Workday complete</h2>
           <p>You punched in at <b>{todayStatus?.punchIn ? formatTimeIST(todayStatus.punchIn.time) : ""}</b> and out at <b>{todayStatus?.punchOut ? formatTimeIST(todayStatus.punchOut.time) : ""}</b>.</p>
+          {punches.length > 2 && <p><small>{punches.length / 2} sessions today</small></p>}
           <p>Total hours: <b>{elapsed}</b> ({progressPct >= 100 ? "target met" : `${progressPct}% of target`})</p>
         </section>
       )}
 
-      {hasPunchedIn && todayStatus?.punchIn && (
+      {punches.length > 0 && (
         <section className="punch-photos-row">
           <h3>Today&apos;s selfies</h3>
-          <div className="punch-row">
-            <div className="punch-thumb-wrap">
-              {todayStatus.punchIn.photoKey ? (
-                <img className="punch-thumb" src={`/api/attendance/photo?key=${encodeURIComponent(todayStatus.punchIn.photoKey)}`} alt="Punch in" />
-              ) : (
-                <div className="punch-thumb empty-thumb" />
-              )}
-              <div className="punch-thumb-info">
-                <b>Punch In</b>
-                <span>{formatTimeIST(todayStatus.punchIn.time)}</span>
-                <small>{todayStatus.punchIn.office}</small>
+          <div className="punch-row" style={{ flexWrap: "wrap" }}>
+            {punches.map((p, i) => (
+              <div key={i} className="punch-thumb-wrap" style={{ marginBottom: 8 }}>
+                {p.photoKey ? (
+                  <img className="punch-thumb" src={`/api/attendance/photo?key=${encodeURIComponent(p.photoKey)}`} alt={p.type} style={{ cursor: "pointer" }} onClick={() => setViewPhoto(`/api/attendance/photo?key=${encodeURIComponent(p.photoKey!)}`)} />
+                ) : (
+                  <div className="punch-thumb empty-thumb" />
+                )}
+                <div className="punch-thumb-info">
+                  <b>{p.type === "IN" ? "Punch In" : "Punch Out"}</b>
+                  <span>{formatTimeIST(p.time)}</span>
+                  <small>{p.office}</small>
+                </div>
+                {i < punches.length - 1 && <div className="punch-thumb-divider" />}
               </div>
-            </div>
-            <div className="punch-thumb-divider" />
-            <div className="punch-thumb-wrap">
-              {todayStatus.punchOut?.photoKey ? (
-                <img className="punch-thumb" src={`/api/attendance/photo?key=${encodeURIComponent(todayStatus.punchOut.photoKey)}`} alt="Punch out" />
-              ) : (
-                <div className="punch-thumb empty-thumb" />
-              )}
-              <div className="punch-thumb-info">
-                <b>Punch Out</b>
-                <span>{todayStatus.punchOut ? formatTimeIST(todayStatus.punchOut.time) : "\u2014"}</span>
-                {todayStatus.punchOut && <small>{todayStatus.punchOut.office}</small>}
-              </div>
-            </div>
+            ))}
           </div>
         </section>
+      )}
+
+      {viewPhoto && (
+        <div className="photo-overlay" onClick={() => setViewPhoto(null)}>
+          <img src={viewPhoto} alt="Attendance selfie" onClick={(e) => e.stopPropagation()} />
+        </div>
       )}
     </>
   );

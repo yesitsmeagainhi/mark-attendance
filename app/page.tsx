@@ -22,8 +22,8 @@ export default function Home() {
               Take your attendance selfie, punch in or out, and view your
               own attendance.
             </p>
-            <Link className="primary login-link" href="/login">
-              Continue as employee
+            <Link className="primary login-link" href="/login?mode=employee">
+              Continue with OTP
             </Link>
           </article>
           <article className="admin-login-card">
@@ -33,8 +33,8 @@ export default function Home() {
               Review employee records, timestamps, attendance status, and
               stored selfies.
             </p>
-            <Link className="primary login-link" href="/login">
-              Continue as administrator
+            <Link className="primary login-link" href="/login?mode=admin">
+              Continue with password
             </Link>
           </article>
         </div>

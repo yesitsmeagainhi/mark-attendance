@@ -1,7 +1,7 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { eq, sql, desc } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { employees } from "../../../db/schema";
+import { employees, employeeRuleOverrides } from "../../../db/schema";
 import { requireApiRole } from "../../authz";
 
 export async function GET() {
@@ -74,6 +74,7 @@ export async function POST(request: Request) {
     workStartTime?: string;
     workEndTime?: string;
     office?: string;
+    ruleOverrides?: { ruleId: string; value: string }[];
   };
   try {
     body = await request.json();
@@ -152,6 +153,22 @@ export async function POST(request: Request) {
       office,
     })
     .run();
+
+  // Insert rule overrides if provided
+  if (body.ruleOverrides && Array.isArray(body.ruleOverrides)) {
+    for (const override of body.ruleOverrides) {
+      if (override.ruleId && override.value !== undefined) {
+        db.insert(employeeRuleOverrides)
+          .values({
+            id: randomUUID(),
+            employeeId: id,
+            ruleId: override.ruleId,
+            value: override.value,
+          })
+          .run();
+      }
+    }
+  }
 
   return Response.json(
     { id, name, email, role, jobRole, mobileNumber, workStartTime, workEndTime, office },

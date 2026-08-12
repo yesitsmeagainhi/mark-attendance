@@ -1,7 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { BranchRow } from "./types";
+
+type RuleDefault = {
+  id: string;
+  label: string;
+  valueType: "number" | "boolean";
+  defaultValue: string;
+};
 
 const emptyForm = {
   name: "",
@@ -31,6 +38,18 @@ export default function AddEmployeeModal({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showRules, setShowRules] = useState(false);
+  const [ruleDefaults, setRuleDefaults] = useState<RuleDefault[]>([]);
+  const [ruleOverrides, setRuleOverrides] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (open) {
+      fetch("/api/admin/rules")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => { if (data?.rules) setRuleDefaults(data.rules); })
+        .catch(() => undefined);
+    }
+  }, [open]);
 
   if (!open) return null;
 
@@ -65,6 +84,9 @@ export default function AddEmployeeModal({
           office: form.office.trim(),
           role: form.role,
           monthlySalary: parseInt(form.monthlySalary, 10) || 0,
+          ruleOverrides: Object.entries(ruleOverrides)
+            .filter(([, v]) => v !== "")
+            .map(([ruleId, value]) => ({ ruleId, value })),
         }),
       });
       const data = (await res.json()) as { error?: string; id?: string; name?: string };
@@ -74,6 +96,8 @@ export default function AddEmployeeModal({
       }
       setSuccess(`${data.name} (${data.id}) created successfully.`);
       setForm({ ...emptyForm, office: branches.find((b) => b.active)?.name || "" });
+      setRuleOverrides({});
+      setShowRules(false);
       onCreated();
       setTimeout(() => {
         onClose();
@@ -140,6 +164,45 @@ export default function AddEmployeeModal({
             <span>Monthly salary</span>
             <input type="number" inputMode="numeric" value={form.monthlySalary} onChange={(e) => setForm({ ...form, monthlySalary: e.target.value })} placeholder="e.g. 25000" min="0" />
           </label>
+          <div style={{ borderTop: "1px solid #f0f0f3", paddingTop: 12 }}>
+            <button type="button" className="secondary" style={{ width: "100%", fontSize: 13 }} onClick={() => setShowRules(!showRules)}>
+              {showRules ? "\u25B2 Hide attendance rules" : "\u25BC Attendance rules (optional)"}
+            </button>
+            {showRules && ruleDefaults.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                {ruleDefaults.map((rule) => (
+                  <div key={rule.id} style={{ marginBottom: 10 }}>
+                    <small style={{ fontWeight: 600 }}>{rule.label}</small>
+                    <small style={{ color: "#9ca3af", marginLeft: 8 }}>Default: {rule.valueType === "boolean" ? (rule.defaultValue === "true" ? "Enabled" : "Disabled") : rule.defaultValue}</small>
+                    {rule.valueType === "boolean" ? (
+                      <div style={{ marginTop: 4 }}>
+                        <button
+                          type="button"
+                          className={(ruleOverrides[rule.id] || rule.defaultValue) === "true" ? "btn-approve" : "btn-reject"}
+                          style={{ fontSize: 12 }}
+                          onClick={() => {
+                            const current = ruleOverrides[rule.id] || rule.defaultValue;
+                            setRuleOverrides({ ...ruleOverrides, [rule.id]: current === "true" ? "false" : "true" });
+                          }}
+                        >
+                          {(ruleOverrides[rule.id] || rule.defaultValue) === "true" ? "Enabled" : "Disabled"}
+                        </button>
+                      </div>
+                    ) : (
+                      <input
+                        type="number"
+                        className="salary-input"
+                        style={{ marginTop: 4, width: 80 }}
+                        placeholder={rule.defaultValue}
+                        value={ruleOverrides[rule.id] ?? ""}
+                        onChange={(e) => setRuleOverrides({ ...ruleOverrides, [rule.id]: e.target.value })}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           {error && <p className="form-message">{error}</p>}
           {success && <p className="form-message success-text">{success}</p>}
           <button className="primary" type="submit" disabled={saving}>{saving ? "Creating..." : "Create employee"}</button>

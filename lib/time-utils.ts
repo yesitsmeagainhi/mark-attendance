@@ -59,15 +59,45 @@ export function istToUTC(date: string, istTime: string): string {
 }
 
 /** Compute grace period status */
-export function getGraceStatus(punchInTime: string, workStartTime: string): { label: string; className: string } {
+export function getGraceStatus(punchInTime: string, workStartTime: string, gracePeriodMinutes: number = 15): { label: string; className: string } {
   const punchDate = new Date(punchInTime.replace(" ", "T") + (punchInTime.includes("Z") || punchInTime.includes("+") ? "" : "Z"));
   const punchIST = new Date(punchDate.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
   const punchMinutes = punchIST.getHours() * 60 + punchIST.getMinutes();
   const startMinutes = timeToMinutes(workStartTime);
-  const graceDeadline = startMinutes + 15;
+  const graceDeadline = startMinutes + gracePeriodMinutes;
 
   if (punchMinutes <= startMinutes) return { label: "On time", className: "on-time" };
   if (punchMinutes <= graceDeadline) return { label: "Within grace period", className: "grace" };
   const lateBy = punchMinutes - startMinutes;
   return { label: `Late by ${formatDuration(lateBy)}`, className: "late" };
+}
+
+/** Sum total working minutes from a chronological list of punch records */
+export function calculateTotalDuration(
+  punches: { punchType: string; serverTimestamp: string }[],
+): number {
+  let total = 0;
+  for (let i = 0; i < punches.length - 1; i += 2) {
+    if (punches[i].punchType === "IN" && punches[i + 1]?.punchType === "OUT") {
+      const inDate = new Date(punches[i].serverTimestamp.replace(" ", "T") + (punches[i].serverTimestamp.includes("Z") ? "" : "Z"));
+      const outDate = new Date(punches[i + 1].serverTimestamp.replace(" ", "T") + (punches[i + 1].serverTimestamp.includes("Z") ? "" : "Z"));
+      total += Math.max(0, Math.floor((outDate.getTime() - inDate.getTime()) / 60000));
+    }
+  }
+  return total;
+}
+
+/** Calculate total break time (gaps between OUT→IN) from sorted punches */
+export function calculateBreakDuration(
+  punches: { punchType: string; serverTimestamp: string }[],
+): number {
+  let breakTotal = 0;
+  for (let i = 0; i < punches.length - 1; i++) {
+    if (punches[i].punchType === "OUT" && punches[i + 1]?.punchType === "IN") {
+      const outTime = new Date(punches[i].serverTimestamp.replace(" ", "T") + (punches[i].serverTimestamp.includes("Z") ? "" : "Z"));
+      const inTime = new Date(punches[i + 1].serverTimestamp.replace(" ", "T") + (punches[i + 1].serverTimestamp.includes("Z") ? "" : "Z"));
+      breakTotal += Math.max(0, Math.floor((inTime.getTime() - outTime.getTime()) / 60000));
+    }
+  }
+  return breakTotal;
 }

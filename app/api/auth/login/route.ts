@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { eq, and, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { getDb } from "../../../../db";
-import { employees } from "../../../../db/schema";
+import { employees, sessions } from "../../../../db/schema";
 
 export async function POST(request: Request) {
   let body: { email?: string; password?: string };
@@ -53,13 +53,32 @@ export async function POST(request: Request) {
     );
   }
 
+  if (record.role !== "admin") {
+    return Response.json(
+      { error: "Employees must log in using OTP. Please use the employee login." },
+      { status: 403 },
+    );
+  }
+
+  // Atomic: invalidate old sessions + create new session
+  const token = randomUUID();
+  db.transaction((tx) => {
+    tx.delete(sessions).where(eq(sessions.employeeId, record.id)).run();
+    tx.insert(sessions).values({
+      id: randomUUID(),
+      employeeId: record.id,
+      token,
+      userAgent: request.headers.get("user-agent") || null,
+    }).run();
+  });
+
   const cookieStore = await cookies();
-  cookieStore.set("session", record.id, {
+  cookieStore.set("session", token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24, // 24 hours
+    maxAge: 60 * 60 * 24 * 365, // 1 year (persistent)
   });
 
   return Response.json({

@@ -2,6 +2,7 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { attendance, employees, holidays } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
+import { getEffectiveRulesBatch } from "../../../../lib/rules";
 
 export async function GET(request: Request) {
   const auth = await requireApiRole("admin");
@@ -48,6 +49,9 @@ export async function GET(request: Request) {
     .where(eq(holidays.date, date))
     .get();
 
+  // Load rules for all employees at once
+  const rulesByEmp = getEffectiveRulesBatch(allEmployees.map((e) => e.id));
+
   // Build per-employee status
   const result = allEmployees.map((emp) => {
     const empRecords = records.filter((r) => r.employeeId === emp.id);
@@ -77,7 +81,8 @@ export async function GET(request: Request) {
 
         const [startH, startM] = emp.workStartTime.split(":").map(Number);
         const shiftStartMin = startH * 60 + startM;
-        const graceMin = shiftStartMin + 15;
+        const empRules = rulesByEmp.get(emp.id)!;
+        const graceMin = shiftStartMin + empRules.grace_period;
 
         if (totalPunchMin <= graceMin) {
           status = "present";
@@ -94,6 +99,21 @@ export async function GET(request: Request) {
       status = date < today ? "absent" : "not_marked";
     }
 
+    // Calculate work duration in minutes (sum all IN/OUT pairs for multi-session)
+    let durationMinutes: number | null = null;
+    if (punchIn) {
+      const sorted = [...empRecords].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
+      let total = 0;
+      for (let i = 0; i < sorted.length; i += 2) {
+        if (sorted[i]?.punchType === "IN" && sorted[i + 1]?.punchType === "OUT") {
+          const inD = new Date(sorted[i].serverTimestamp.replace(" ", "T") + (sorted[i].serverTimestamp.includes("Z") ? "" : "Z"));
+          const outD = new Date(sorted[i + 1].serverTimestamp.replace(" ", "T") + (sorted[i + 1].serverTimestamp.includes("Z") ? "" : "Z"));
+          total += Math.max(0, Math.floor((outD.getTime() - inD.getTime()) / 60000));
+        }
+      }
+      if (total > 0) durationMinutes = total;
+    }
+
     return {
       id: emp.id,
       name: emp.name,
@@ -104,6 +124,7 @@ export async function GET(request: Request) {
       punchOut: punchOut
         ? { time: punchOut.serverTimestamp, photoKey: punchOut.photoKey, source: punchOut.source }
         : null,
+      durationMinutes,
       status,
       source,
     };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import TabNavigation from "./components/employee/TabNavigation";
 import AttendanceTab from "./components/employee/AttendanceTab";
 import MissPunchTab from "./components/employee/MissPunchTab";
@@ -26,6 +26,21 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
   const [activeTab, setActiveTab] = useState("attendance");
   const [adminTab, setAdminTab] = useState("dashboard");
 
+  // Session heartbeat: detect if session was invalidated (e.g. logged in on another device)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/auth/session-check", { cache: "no-store" });
+        if (res.status === 401) {
+          window.location.href = view === "admin" ? "/login?mode=admin" : "/login?mode=employee";
+        }
+      } catch {
+        // Network error — ignore, will retry on next interval
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [view]);
+
   async function handleSignOut() {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.href = "/";
@@ -35,7 +50,7 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
     <main>
       <header className="topbar">
         <Brand />
-        <nav><span className="portal-label">{view === "admin" ? "Admin portal" : "Employee portal"}</span></nav>
+        <nav><span className="portal-label">{view === "admin" ? "Admin" : "Employee"}</span></nav>
         <div className="user">
           <span className="avatar">{displayName.slice(0, 2).toUpperCase()}</span>
           <span><b>{displayName}</b><small>{role === "admin" ? "Administrator" : employeeId}</small></span>
@@ -45,11 +60,7 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
 
       {view === "employee" ? (
         <div className="employee-layout">
-          <div className="mobile-signout-bar">
-            <span className="avatar">{displayName.slice(0, 2).toUpperCase()}</span>
-            <span><b>{displayName}</b><small>{employeeId}</small></span>
-            <button className="signout" onClick={handleSignOut}>Sign out</button>
-          </div>
+
 
           <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
@@ -73,7 +84,13 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
           {adminTab === "history" && <AdminHistoryTab />}
           {adminTab === "settings" && <SettingsTab />}
         </div>
+
       )}
+      <div className="mobile-signout-bar">
+        <span className="avatar">{displayName.slice(0, 2).toUpperCase()}</span>
+        <span><b>{displayName}</b><small>{employeeId}</small></span>
+        <button className="signout" onClick={handleSignOut}>Sign out</button>
+      </div>
       <footer><span>&copy; 2026 Attendly</span><span>Privacy &middot; Support &middot; System status <i>&#9679; Operational</i></span></footer>
     </main>
   );

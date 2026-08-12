@@ -82,3 +82,39 @@ export const branches = sqliteTable("branches", {
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const sessions = sqliteTable("sessions", {
+  id: text("id").primaryKey(),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  token: text("token").notNull().unique(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  userAgent: text("user_agent"),
+});
+
+export const otpRequests = sqliteTable("otp_requests", {
+  id: text("id").primaryKey(),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  otpCode: text("otp_code").notNull(),
+  status: text("status", { enum: ["pending", "used", "expired"] }).notNull().default("pending"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  expiresAt: text("expires_at").notNull(),
+});
+
+export const attendanceRules = sqliteTable("attendance_rules", {
+  id: text("id").primaryKey(),
+  label: text("label").notNull(),
+  description: text("description"),
+  valueType: text("value_type", { enum: ["number", "boolean"] }).notNull(),
+  defaultValue: text("default_value").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const employeeRuleOverrides = sqliteTable("employee_rule_overrides", {
+  id: text("id").primaryKey(),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  ruleId: text("rule_id").notNull().references(() => attendanceRules.id),
+  value: text("value").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});

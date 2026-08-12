@@ -19,6 +19,7 @@ export type DailyEmployee = {
   workStartTime: string;
   punchIn: { time: string; photoKey: string; source: string } | null;
   punchOut: { time: string; photoKey: string; source: string } | null;
+  durationMinutes: number | null;
   status: string;
   source: string | null;
 };

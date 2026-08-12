@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
-import { employees } from "../db/schema";
+import { employees, sessions } from "../db/schema";
 
 export type ChatGPTUser = {
   displayName: string;
@@ -12,17 +12,26 @@ export type ChatGPTUser = {
 
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get("session")?.value;
-  if (!sessionId) return null;
+  const sessionToken = cookieStore.get("session")?.value;
+  if (!sessionToken) return null;
 
   const db = getDb();
+  const session = db
+    .select({ employeeId: sessions.employeeId })
+    .from(sessions)
+    .where(eq(sessions.token, sessionToken))
+    .limit(1)
+    .get();
+
+  if (!session) return null;
+
   const record = db
     .select({
       name: employees.name,
       email: employees.email,
     })
     .from(employees)
-    .where(eq(employees.id, sessionId))
+    .where(eq(employees.id, session.employeeId))
     .limit(1)
     .get();
 

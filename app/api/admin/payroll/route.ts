@@ -2,6 +2,7 @@ import { eq, and, sql, gte, lte } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { attendance, employees, leaveRequests, holidays } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
+import { getEffectiveRulesBatch } from "../../../../lib/rules";
 
 export async function GET(request: Request) {
   const auth = await requireApiRole("admin");
@@ -79,10 +80,13 @@ export async function GET(request: Request) {
     ))
     .all();
 
+  const rulesByEmp = getEffectiveRulesBatch(allEmployees.map((e) => e.id));
+
   const payroll = allEmployees.map((emp) => {
     const empPunches = punchRecords.filter((r) => r.employeeId === emp.id);
     const [startH, startM] = emp.workStartTime.split(":").map(Number);
-    const graceMin = startH * 60 + startM + 15;
+    const empRules = rulesByEmp.get(emp.id)!;
+    const graceMin = startH * 60 + startM + empRules.grace_period;
 
     // Group records by date to handle selfie + admin overlaps correctly
     const byDate = new Map<string, typeof empPunches>();
@@ -128,8 +132,13 @@ export async function GET(request: Request) {
 
     const effectiveWorkDays = workingDays - uhDays - leaveDays;
     const absentDays = Math.max(0, effectiveWorkDays - presentDays);
+    // Late-to-absent conversion: e.g. every 3 lates = 1 extra absent day
+    const lateAbsentDays = empRules.late_to_absent_count > 0
+      ? Math.floor(lateDays / empRules.late_to_absent_count)
+      : 0;
+    const totalDeductionDays = absentDays + lateAbsentDays;
     const perDayRate = workingDays > 0 ? emp.monthlySalary / workingDays : 0;
-    const deduction = Math.round(perDayRate * absentDays);
+    const deduction = Math.round(perDayRate * totalDeductionDays);
     const netPay = emp.monthlySalary - deduction;
 
     return {
@@ -139,6 +148,7 @@ export async function GET(request: Request) {
       workingDays,
       presentDays,
       absentDays,
+      lateAbsentDays,
       lateDays,
       leaveDays,
       deduction,

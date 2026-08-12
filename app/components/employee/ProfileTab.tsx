@@ -13,6 +13,7 @@ type Profile = {
   office: string;
   role: string;
   createdAt: string;
+  workShift: string; // Added workShift property
 };
 
 export default function ProfileTab() {
@@ -33,6 +34,18 @@ export default function ProfileTab() {
   if (!profile) return <div className="profile-card" style={{ textAlign: "center", padding: 48 }}>Could not load profile.</div>;
 
   const initials = profile.name.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
+  const convertTo12Hour = (timeStr: string) => {
+    if (!timeStr) return '';
+
+    let [hours, minutes] = timeStr.trim().split(':');
+    let hoursInt = parseInt(hours, 10);
+
+    const ampm = hoursInt >= 12 ? 'PM' : 'AM';
+    hoursInt = hoursInt % 12 || 12;
+
+    return `${hoursInt}:${minutes} ${ampm}`;
+  };
+
 
   return (
     <div className="profile-card">
@@ -64,11 +77,24 @@ export default function ProfileTab() {
         </div>
         <div className="profile-field">
           <dt>Work Shift</dt>
-          <dd>{profile.workStartTime} | {profile.workEndTime}</dd>
+          <dd>
+            {profile.workStartTime && profile.workEndTime
+              ? `${convertTo12Hour(profile.workStartTime)} | ${convertTo12Hour(profile.workEndTime)}`
+              : 'No shift assigned'}
+          </dd>
         </div>
+
         <div className="profile-field">
           <dt>Date Joined</dt>
-          <dd>{new Date(profile.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}</dd>
+          <dd>
+            {/* This fixes your Date Joined back to a valid date format */}
+            {new Date(profile.createdAt).toLocaleDateString("en-IN", {
+              day: "2-digit",
+              month: "long",
+              year: "numeric"
+            })}
+          </dd>
+          {/* <dd>{new Date(profile.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", hour12: true })}</dd> */}
         </div>
         <div className="profile-field">
           <dt>Role</dt>

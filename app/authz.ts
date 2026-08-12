@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { getDb } from "../db";
-import { employees } from "../db/schema";
+import { employees, sessions } from "../db/schema";
 
 export type AppIdentity = {
   email: string;
@@ -13,10 +13,19 @@ export type AppIdentity = {
 
 export async function getAppIdentity(): Promise<AppIdentity | null> {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get("session")?.value;
-  if (!sessionId) return null;
+  const sessionToken = cookieStore.get("session")?.value;
+  if (!sessionToken) return null;
 
   const db = getDb();
+  const session = db
+    .select({ employeeId: sessions.employeeId })
+    .from(sessions)
+    .where(eq(sessions.token, sessionToken))
+    .limit(1)
+    .get();
+
+  if (!session) return null;
+
   const record = db
     .select({
       id: employees.id,
@@ -26,7 +35,7 @@ export async function getAppIdentity(): Promise<AppIdentity | null> {
       office: employees.office,
     })
     .from(employees)
-    .where(eq(employees.id, sessionId))
+    .where(eq(employees.id, session.employeeId))
     .limit(1)
     .get();
 
