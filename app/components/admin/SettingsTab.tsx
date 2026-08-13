@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { BranchRow } from "./types";
+import type { BranchRow, DepartmentRow } from "./types";
 import AttendanceRulesSection from "./AttendanceRulesSection";
 
-export default function SettingsTab() {
+export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
   const [branchList, setBranchList] = useState<BranchRow[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: "", latitude: "", longitude: "" });
@@ -14,6 +14,15 @@ export default function SettingsTab() {
   const [editing, setEditing] = useState<BranchRow | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
 
+  // Department state
+  const [deptList, setDeptList] = useState<DepartmentRow[]>([]);
+  const [showDeptModal, setShowDeptModal] = useState(false);
+  const [deptForm, setDeptForm] = useState({ name: "" });
+  const [deptError, setDeptError] = useState("");
+  const [deptSuccess, setDeptSuccess] = useState("");
+  const [deptSaving, setDeptSaving] = useState(false);
+  const [editingDept, setEditingDept] = useState<DepartmentRow | null>(null);
+
   function fetchBranches() {
     fetch("/api/branches")
       .then((r) => (r.ok ? r.json() : null))
@@ -21,7 +30,14 @@ export default function SettingsTab() {
       .catch(() => undefined);
   }
 
-  useEffect(() => { fetchBranches(); }, []);
+  function fetchDepartments() {
+    fetch("/api/departments")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data?.departments) setDeptList(data.departments); })
+      .catch(() => undefined);
+  }
+
+  useEffect(() => { fetchBranches(); fetchDepartments(); }, []);
 
   function useCurrentLocation() {
     if (!navigator.geolocation) {
@@ -158,7 +174,91 @@ export default function SettingsTab() {
         </div>
       )}
 
+      {/* Departments section */}
+      <section className="table-card" style={{ marginTop: 24 }}>
+        <div className="table-tools">
+          <div><h2>Departments</h2><p>{deptList.length} total</p></div>
+          <div className="filters">
+            <button className="primary" style={{ fontSize: 13, padding: "6px 14px" }} onClick={() => { setShowDeptModal(true); setEditingDept(null); setDeptForm({ name: "" }); setDeptError(""); setDeptSuccess(""); }}>+ Add department</button>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Department name</th><th>Status</th><th>Added</th><th>Actions</th></tr></thead>
+            <tbody>
+              {deptList.map((d) => (
+                <tr key={d.id}>
+                  <td><b>{d.name}</b></td>
+                  <td><span className={`status ${d.active ? "" : "absent"}`}>&#9679; {d.active ? "Active" : "Inactive"}</span></td>
+                  <td><small>{new Date(d.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</small></td>
+                  <td>
+                    <div className="review-actions">
+                      <button className="btn-approve" style={{ fontSize: 12 }} onClick={() => { setEditingDept(d); setDeptForm({ name: d.name }); setShowDeptModal(true); setDeptError(""); setDeptSuccess(""); }}>Edit</button>
+                      <button className={d.active ? "btn-reject" : "btn-approve"} style={{ fontSize: 12 }} onClick={async () => {
+                        await fetch("/api/departments", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: d.id, active: !d.active }) });
+                        fetchDepartments();
+                      }}>{d.active ? "Deactivate" : "Activate"}</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {deptList.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No departments configured yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {showDeptModal && (
+        <div className="modal-overlay" onClick={() => setShowDeptModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{editingDept ? "Edit department" : "Add new department"}</h2>
+              <button className="modal-close" onClick={() => setShowDeptModal(false)}>&times;</button>
+            </div>
+            <form className="modal-form" onSubmit={async (e) => {
+              e.preventDefault();
+              setDeptError("");
+              setDeptSuccess("");
+              setDeptSaving(true);
+              try {
+                if (editingDept) {
+                  const res = await fetch("/api/departments", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: editingDept.id, name: deptForm.name.trim() }) });
+                  const data = (await res.json()) as { error?: string };
+                  if (!res.ok) { setDeptError(data.error || "Could not update department."); return; }
+                  setDeptSuccess("Department updated successfully.");
+                } else {
+                  const res = await fetch("/api/departments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: deptForm.name.trim() }) });
+                  const data = (await res.json()) as { error?: string; name?: string };
+                  if (!res.ok) { setDeptError(data.error || "Could not create department."); return; }
+                  setDeptSuccess(`Department "${data.name}" created successfully.`);
+                }
+                setDeptForm({ name: "" });
+                setEditingDept(null);
+                fetchDepartments();
+                setTimeout(() => { setShowDeptModal(false); setDeptSuccess(""); }, 1500);
+              } catch {
+                setDeptError("Could not connect to server.");
+              } finally {
+                setDeptSaving(false);
+              }
+            }}>
+              <label>
+                <span>Department name</span>
+                <input type="text" value={deptForm.name} onChange={(e) => setDeptForm({ ...deptForm, name: e.target.value })} placeholder="e.g. Human Resources" required minLength={2} autoFocus />
+              </label>
+              {deptError && <p className="form-message">{deptError}</p>}
+              {deptSuccess && <p className="form-message success-text">{deptSuccess}</p>}
+              <button className="primary" type="submit" disabled={deptSaving}>{deptSaving ? "Saving..." : editingDept ? "Update department" : "Create department"}</button>
+            </form>
+          </div>
+        </div>
+      )}
+
       <AttendanceRulesSection />
+
+      <section className="table-card" style={{ marginTop: 24, textAlign: "center", padding: 24 }}>
+        <button className="signout" onClick={onSignOut} style={{ width: "100%" }}>Sign out</button>
+      </section>
     </>
   );
 }

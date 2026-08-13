@@ -2,6 +2,7 @@ import { eq, desc } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { missPunchRequests, employees } from "../../../db/schema";
 import { getAppIdentity } from "../../authz";
+import { logActivity } from "../../../lib/activity-logger";
 
 export async function GET() {
   const identity = await getAppIdentity();
@@ -100,6 +101,14 @@ export async function POST(request: Request) {
       reason,
     })
     .run();
+
+  logActivity({
+    actionType: "misspunch_request",
+    performedBy: identity.employeeId,
+    performedByName: identity.displayName,
+    description: `${identity.displayName} submitted miss punch request for ${date} (${punchType} at ${requestedTime})`,
+    metadata: { date, punchType, requestedTime, reason },
+  });
 
   return Response.json({ id, status: "pending" }, { status: 201 });
 }

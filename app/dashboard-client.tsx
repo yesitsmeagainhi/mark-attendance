@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import TabNavigation from "./components/employee/TabNavigation";
+import HomeTab from "./components/employee/HomeTab";
 import AttendanceTab from "./components/employee/AttendanceTab";
 import MissPunchTab from "./components/employee/MissPunchTab";
 import LeaveTab from "./components/employee/LeaveTab";
@@ -23,7 +24,7 @@ function Brand() {
 }
 
 export default function DashboardClient({ view, employeeId, displayName, role }: { view: "employee" | "admin"; employeeId: string; displayName: string; role: "employee" | "admin" }) {
-  const [activeTab, setActiveTab] = useState("attendance");
+  const [activeTab, setActiveTab] = useState("home");
   const [adminTab, setAdminTab] = useState("dashboard");
 
   // Session heartbeat: detect if session was invalidated (e.g. logged in on another device)
@@ -64,12 +65,25 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
 
           <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
+          {/* Back bar for sub-screens navigated from Home */}
+          {!["home", "attendance"].includes(activeTab) && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "10px 16px", background: "#f6f7fb",
+              borderBottom: "1px solid var(--line)", cursor: "pointer",
+            }} onClick={() => setActiveTab("home")}>
+              <span style={{ fontSize: 18, lineHeight: 1 }}>&larr;</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>Back to Home</span>
+            </div>
+          )}
+
+          {activeTab === "home" && <HomeTab displayName={displayName} onNavigate={setActiveTab} />}
           {activeTab === "attendance" && <AttendanceTab employeeId={employeeId} displayName={displayName} />}
           {activeTab === "miss-punch" && <MissPunchTab />}
           {activeTab === "leave" && <LeaveTab />}
           {activeTab === "history" && <HistoryTab />}
           {activeTab === "timesheet" && <TimesheetTab />}
-          {activeTab === "profile" && <ProfileTab />}
+          {activeTab === "profile" && <ProfileTab onSignOut={handleSignOut} />}
         </div>
       ) : (
         <div className="admin-layout">
@@ -82,15 +96,10 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
           {adminTab === "reports" && <ReportsTab />}
           {adminTab === "payroll" && <PayrollTab />}
           {adminTab === "history" && <AdminHistoryTab />}
-          {adminTab === "settings" && <SettingsTab />}
+          {adminTab === "settings" && <SettingsTab onSignOut={handleSignOut} />}
         </div>
 
       )}
-      <div className="mobile-signout-bar">
-        <span className="avatar">{displayName.slice(0, 2).toUpperCase()}</span>
-        <span><b>{displayName}</b><small>{employeeId}</small></span>
-        <button className="signout" onClick={handleSignOut}>Sign out</button>
-      </div>
       <footer><span>&copy; 2026 Attendly</span><span>Privacy &middot; Support &middot; System status <i>&#9679; Operational</i></span></footer>
     </main>
   );

@@ -16,7 +16,7 @@ type Profile = {
   workShift: string; // Added workShift property
 };
 
-export default function ProfileTab() {
+export default function ProfileTab({ onSignOut }: { onSignOut: () => void }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -101,6 +101,7 @@ export default function ProfileTab() {
           <dd>{profile.role === "admin" ? "Administrator" : "Employee"}</dd>
         </div>
       </dl>
+      <button className="signout" onClick={onSignOut} style={{ marginTop: 24, width: "100%" }}>Sign out</button>
     </div>
   );
 }

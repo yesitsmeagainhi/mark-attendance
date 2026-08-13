@@ -3,6 +3,7 @@ import { getDb } from "../../../../db";
 import { missPunchRequests, attendance, employees } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
 import { istToUTC } from "../../../../lib/time-utils";
+import { logActivity } from "../../../../lib/activity-logger";
 
 export async function PATCH(request: Request) {
   const auth = await requireApiRole("admin");
@@ -88,6 +89,17 @@ export async function PATCH(request: Request) {
         .run();
     }
   }
+
+  const empName = db.select({ name: employees.name }).from(employees).where(eq(employees.id, existing.employeeId)).get();
+  logActivity({
+    actionType: action === "approved" ? "misspunch_approved" : "misspunch_rejected",
+    performedBy: auth.identity.employeeId,
+    performedByName: auth.identity.displayName,
+    targetId: existing.employeeId,
+    targetName: empName?.name || existing.employeeId,
+    description: `Admin ${action} miss punch request from ${empName?.name || existing.employeeId} for ${existing.date}`,
+    metadata: { date: existing.date, punchType: existing.punchType, requestedTime: existing.requestedTime, action },
+  });
 
   return Response.json({ ok: true, status: action });
 }

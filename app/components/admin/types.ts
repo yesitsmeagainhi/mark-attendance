@@ -8,6 +8,7 @@ export type EmployeeRow = {
   workStartTime: string;
   workEndTime: string;
   office: string;
+  department: string;
   active: boolean;
   monthlySalary: number;
   createdAt: string;
@@ -47,6 +48,13 @@ export type LeaveRow = {
   reason: string;
   status: string;
   adminNote: string | null;
+  createdAt: string;
+};
+
+export type DepartmentRow = {
+  id: string;
+  name: string;
+  active: boolean;
   createdAt: string;
 };
 

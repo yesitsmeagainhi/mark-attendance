@@ -3,6 +3,7 @@ import { getDb } from "../../../../db";
 import { attendance, employees, holidays } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
 import { istToUTC } from "../../../../lib/time-utils";
+import { logActivity } from "../../../../lib/activity-logger";
 
 export async function POST(request: Request) {
   const auth = await requireApiRole("admin");
@@ -37,6 +38,13 @@ export async function POST(request: Request) {
         type: "unpaid_holiday",
       }).run();
     }
+    logActivity({
+      actionType: "mark_all_uh",
+      performedBy: auth.identity.employeeId,
+      performedByName: auth.identity.displayName,
+      description: `Admin marked ${date} as Unpaid Holiday for all employees`,
+      metadata: { date, action: "unpaid_holiday" },
+    });
     return Response.json({ ok: true, action: "unpaid_holiday" });
   }
 
@@ -73,6 +81,14 @@ export async function POST(request: Request) {
       affected++;
     }
   }
+
+  logActivity({
+    actionType: "mark_all_present",
+    performedBy: auth.identity.employeeId,
+    performedByName: auth.identity.displayName,
+    description: `Admin marked all employees as Present for ${date} (${affected} affected)`,
+    metadata: { date, action: "present", affected },
+  });
 
   return Response.json({ ok: true, affected });
 }

@@ -256,7 +256,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import type { DailyEmployee, BranchRow } from "./types";
+import type { DailyEmployee, BranchRow, DepartmentRow } from "./types";
 import AddEmployeeModal from "./AddEmployeeModal";
 import JournalsSection from "./JournalsSection";
 import OtpRequestsSection from "./OtpRequestsSection";
@@ -294,11 +294,13 @@ export default function DashboardTab() {
   const [loading, setLoading] = useState(true);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [branches, setBranches] = useState<BranchRow[]>([]);
+  const [departments, setDepartments] = useState<DepartmentRow[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewPhoto, setViewPhoto] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [confirmAction, setConfirmAction] = useState<{ label: string; detail: string; onConfirm: () => void } | null>(null);
 
   const fetchData = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -325,6 +327,10 @@ export default function DashboardTab() {
     fetch("/api/branches")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d?.branches) setBranches(d.branches); })
+      .catch(() => undefined);
+    fetch("/api/departments")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.departments) setDepartments(d.departments); })
       .catch(() => undefined);
   }, []);
 
@@ -359,25 +365,48 @@ export default function DashboardTab() {
     }
   }
 
-  async function markOne(employeeId: string, action: "present" | "absent" | "unpaid_holiday") {
-    await runAction(`${employeeId}-${action}`, "/api/admin/mark-attendance", {
-      employeeId,
-      date: selectedDate,
-      action,
+  function confirmMarkOne(employeeId: string, employeeName: string, action: "present" | "absent" | "unpaid_holiday") {
+    const actionLabels = { present: "Present", absent: "Absent", unpaid_holiday: "Unpaid Holiday" };
+    setConfirmAction({
+      label: `Mark ${actionLabels[action]}`,
+      detail: `Mark ${employeeName} as ${actionLabels[action]} for ${selectedDate}?`,
+      onConfirm: async () => {
+        setConfirmAction(null);
+        await runAction(`${employeeId}-${action}`, "/api/admin/mark-attendance", {
+          employeeId,
+          date: selectedDate,
+          action,
+        });
+      },
     });
   }
 
-  async function undoMark(employeeId: string) {
-    await runAction(`${employeeId}-undo`, "/api/admin/undo-mark", {
-      employeeId,
-      date: selectedDate,
+  function confirmUndoMark(employeeId: string, employeeName: string) {
+    setConfirmAction({
+      label: "Undo Mark",
+      detail: `Undo attendance mark for ${employeeName} on ${selectedDate}?`,
+      onConfirm: async () => {
+        setConfirmAction(null);
+        await runAction(`${employeeId}-undo`, "/api/admin/undo-mark", {
+          employeeId,
+          date: selectedDate,
+        });
+      },
     });
   }
 
-  async function markAll(action: "present" | "unpaid_holiday") {
-    await runAction(`all-${action}`, "/api/admin/mark-all", {
-      date: selectedDate,
-      action,
+  function confirmMarkAll(action: "present" | "unpaid_holiday") {
+    const label = action === "present" ? "Mark All Present" : "Mark All Unpaid Holiday";
+    setConfirmAction({
+      label,
+      detail: `${label} for all unmarked employees on ${selectedDate}?`,
+      onConfirm: async () => {
+        setConfirmAction(null);
+        await runAction(`all-${action}`, "/api/admin/mark-all", {
+          date: selectedDate,
+          action,
+        });
+      },
     });
   }
 
@@ -406,6 +435,17 @@ export default function DashboardTab() {
   }
 
   const summary = data?.summary || { total: 0, checkedIn: 0, absent: 0 };
+
+  // Detailed breakdown from employee statuses
+  const allEmps = data?.employees || [];
+  const onTime = allEmps.filter((e) => e.status === "present").length;
+  const late = allEmps.filter((e) => e.status === "late").length;
+  const absent = allEmps.filter((e) => e.status === "absent").length;
+  const notMarked = allEmps.filter((e) => e.status === "not_marked").length;
+  const uh = allEmps.filter((e) => e.status === "unpaid_holiday").length;
+  const checkedIn = onTime + late;
+  const attendancePct = summary.total > 0 ? Math.round((checkedIn / summary.total) * 100) : 0;
+
   const visibleEmployees = (data?.employees || []).filter((employee) => {
     const matchesSearch = `${employee.name} ${employee.id}`.toLowerCase().includes(search.trim().toLowerCase());
     const matchesStatus = statusFilter === "all" || employee.status === statusFilter;
@@ -427,7 +467,7 @@ export default function DashboardTab() {
             className="btn-action btn-present"
             style={{ padding: "10px 18px", fontSize: 13 }}
             disabled={!!actionInProgress}
-            onClick={() => markAll("present")}
+            onClick={() => confirmMarkAll("present")}
           >
             Mark All Present
           </button>
@@ -435,7 +475,7 @@ export default function DashboardTab() {
             className="btn-action btn-uh"
             style={{ padding: "10px 18px", fontSize: 13 }}
             disabled={!!actionInProgress}
-            onClick={() => markAll("unpaid_holiday")}
+            onClick={() => confirmMarkAll("unpaid_holiday")}
           >
             Unpaid Holiday
           </button>
@@ -462,11 +502,69 @@ export default function DashboardTab() {
         </div>
       )}
 
-      {/* Summary cards */}
-      <section className="metrics metrics-3">
-        <article><span className="metric-icon purple">&#9673;</span><div><small>Total Staff</small><strong>{summary.total}</strong></div></article>
-        <article><span className="metric-icon green">&#10003;</span><div><small>Checked In</small><strong>{summary.checkedIn}</strong></div></article>
-        <article><span className="metric-icon red">&times;</span><div><small>Marked Absent</small><strong>{summary.absent}</strong></div></article>
+      {/* Attendance summary */}
+      <section className="dash-summary" style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 16, marginBottom: 20 }}>
+        {/* Hero — Attendance Rate Ring */}
+        <div style={{ background: "#fff", border: "1px solid #e7e9ee", borderRadius: 18, padding: "20px 28px", display: "flex", alignItems: "center", gap: 20, boxShadow: "0 5px 24px rgba(25,28,39,.04)" }}>
+          <svg width={96} height={96} viewBox="0 0 96 96">
+            <circle cx={48} cy={48} r={40} fill="none" stroke="#f0f1f3" strokeWidth={8} />
+            <circle
+              cx={48} cy={48} r={40} fill="none"
+              stroke={attendancePct >= 75 ? "#6d45e5" : attendancePct >= 50 ? "#a86400" : "#c73333"}
+              strokeWidth={8}
+              strokeLinecap="round"
+              strokeDasharray={2 * Math.PI * 40}
+              strokeDashoffset={2 * Math.PI * 40 * (1 - attendancePct / 100)}
+              transform="rotate(-90 48 48)"
+              style={{ transition: "stroke-dashoffset 0.6s ease" }}
+            />
+            <text x={48} y={44} textAnchor="middle" fontSize={22} fontWeight={800} fill="#172033">{attendancePct}%</text>
+            <text x={48} y={60} textAnchor="middle" fontSize={9} fill="#667085" fontWeight={600}>ATTENDANCE</text>
+          </svg>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#172033" }}>Attendance Rate</div>
+            <div style={{ fontSize: 12, color: "#667085", marginTop: 2 }}>{checkedIn} of {summary.total} staff checked in</div>
+            <div style={{ fontSize: 11, color: "#8990a0", marginTop: 4 }}>{selectedDate === today ? "Live \u00B7 Today" : selectedDate}</div>
+          </div>
+        </div>
+
+        {/* Status breakdown cards */}
+        <div className="dash-breakdown" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
+          {[
+            { label: "On Time", value: onTime, bg: "#e8f7ef", color: "#168052", icon: "\u2713", filter: "present" },
+            { label: "Late", value: late, bg: "#fff4dc", color: "#a86400", icon: "\u23F0", filter: "late" },
+            { label: "Absent", value: absent, bg: "#ffeded", color: "#c73333", icon: "\u2717", filter: "absent" },
+            { label: "Not Marked", value: notMarked, bg: "#f3f4f8", color: "#667085", icon: "\u2014", filter: "not_marked" },
+            { label: "Unpaid Hol.", value: uh, bg: "#fff4dc", color: "#a86400", icon: "UH", filter: "unpaid_holiday" },
+          ].map((c) => {
+            const isActive = statusFilter === c.filter;
+            return (
+              <div
+                key={c.label}
+                onClick={() => {
+                  setStatusFilter(isActive ? "all" : c.filter);
+                  // Scroll to the table
+                  setTimeout(() => document.querySelector(".table-card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                }}
+                style={{
+                  background: isActive ? c.bg : "#fff",
+                  border: `2px solid ${isActive ? c.color : "#e7e9ee"}`,
+                  borderRadius: 14,
+                  padding: "16px 12px",
+                  textAlign: "center",
+                  boxShadow: "0 5px 24px rgba(25,28,39,.04)",
+                  cursor: "pointer",
+                  transition: "all .2s ease",
+                }}
+              >
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: isActive ? "#fff" : c.bg, color: c.color, display: "inline-grid", placeItems: "center", fontSize: 14, fontWeight: 700, marginBottom: 8 }}>{c.icon}</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#172033" }}>{c.value}</div>
+                <div style={{ fontSize: 9, fontWeight: 600, color: c.color, textTransform: "uppercase", letterSpacing: ".04em", marginTop: 2 }}>{c.label}</div>
+                <div style={{ fontSize: 10, color: "#8990a0", marginTop: 2 }}>of {summary.total}</div>
+              </div>
+            );
+          })}
+        </div>
       </section>
 
       <OtpRequestsSection />
@@ -560,11 +658,11 @@ export default function DashboardTab() {
                     <td data-label="Status">{statusBadge(emp.status)}</td>
                     <td data-label="Actions">
                       <div className="review-actions" style={{ gap: 4 }}>
-                        <button className="btn-action btn-present" disabled={!!actionInProgress} onClick={() => markOne(emp.id, "present")} title="Mark Present">P</button>
-                        <button className="btn-action btn-absent" disabled={!!actionInProgress} onClick={() => markOne(emp.id, "absent")} title="Mark Absent">A</button>
-                        <button className="btn-action btn-uh" disabled={!!actionInProgress} onClick={() => markOne(emp.id, "unpaid_holiday")} title="Unpaid Holiday">UH</button>
+                        <button className="btn-action btn-present" disabled={!!actionInProgress} onClick={() => confirmMarkOne(emp.id, emp.name, "present")} title="Mark Present">P</button>
+                        <button className="btn-action btn-absent" disabled={!!actionInProgress} onClick={() => confirmMarkOne(emp.id, emp.name, "absent")} title="Mark Absent">A</button>
+                        <button className="btn-action btn-uh" disabled={!!actionInProgress} onClick={() => confirmMarkOne(emp.id, emp.name, "unpaid_holiday")} title="Unpaid Holiday">UH</button>
                         {isAdminMarked && (
-                          <button className="btn-action btn-undo" disabled={!!actionInProgress} onClick={() => undoMark(emp.id)} title="Undo">&#8617;</button>
+                          <button className="btn-action btn-undo" disabled={!!actionInProgress} onClick={() => confirmUndoMark(emp.id, emp.name)} title="Undo">&#8617;</button>
                         )}
                       </div>
                     </td>
@@ -595,7 +693,35 @@ export default function DashboardTab() {
         onClose={() => setShowAddModal(false)}
         onCreated={fetchData}
         branches={branches}
+        departments={departments}
       />
+
+      {/* Confirmation modal */}
+      {confirmAction && (
+        <div className="modal-overlay" onClick={() => setConfirmAction(null)}>
+          <div className="modal-card" style={{ maxWidth: 380, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>&#9888;</div>
+            <h2 style={{ margin: "0 0 8px", fontSize: 18 }}>{confirmAction.label}</h2>
+            <p style={{ margin: "0 0 22px", color: "var(--muted)", fontSize: 14, lineHeight: 1.5 }}>{confirmAction.detail}</p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                className="secondary"
+                style={{ flex: 1 }}
+                onClick={() => setConfirmAction(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="primary"
+                style={{ flex: 1 }}
+                onClick={confirmAction.onConfirm}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         .attendance-error {
@@ -612,7 +738,12 @@ export default function DashboardTab() {
         .attendance-filters input { width: min(240px, 42vw); }
         .employee-cell { min-width: 190px; }
         .attendance-empty { text-align: center; color: #8990a0; padding: 30px !important; }
+        @media (max-width: 900px) {
+          .dash-summary { grid-template-columns: 1fr !important; }
+          .dash-breakdown { grid-template-columns: repeat(3, 1fr) !important; }
+        }
         @media (max-width: 760px) {
+          .dash-breakdown { grid-template-columns: repeat(2, 1fr) !important; }
           .date-picker-row { align-items: stretch; flex-direction: column; }
           .bulk-actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
           .bulk-actions .add-emp-btn { grid-column: 1 / -1; }

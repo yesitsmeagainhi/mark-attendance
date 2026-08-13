@@ -3,6 +3,7 @@ import { getDb } from "../../../../db";
 import { attendance, employees } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
 import { istToUTC } from "../../../../lib/time-utils";
+import { logActivity } from "../../../../lib/activity-logger";
 
 export async function POST(request: Request) {
   const auth = await requireApiRole("admin");
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
   const db = getDb();
 
   const emp = db
-    .select({ id: employees.id, workStartTime: employees.workStartTime, workEndTime: employees.workEndTime, office: employees.office })
+    .select({ id: employees.id, name: employees.name, workStartTime: employees.workStartTime, workEndTime: employees.workEndTime, office: employees.office })
     .from(employees)
     .where(eq(employees.id, employeeId))
     .get();
@@ -99,6 +100,17 @@ export async function POST(request: Request) {
       source: "admin",
     }).run();
   }
+
+  const actionLabel = action === "present" ? "Present" : action === "absent" ? "Absent" : "Unpaid Holiday";
+  logActivity({
+    actionType: action === "present" ? "mark_present" : action === "absent" ? "mark_absent" : "mark_uh",
+    performedBy: auth.identity.employeeId,
+    performedByName: auth.identity.displayName,
+    targetId: employeeId,
+    targetName: emp.name,
+    description: `Admin marked ${emp.name} as ${actionLabel} for ${date}`,
+    metadata: { date, action },
+  });
 
   return Response.json({ ok: true });
 }

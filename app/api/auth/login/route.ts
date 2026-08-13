@@ -3,6 +3,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { getDb } from "../../../../db";
 import { employees, sessions } from "../../../../db/schema";
+import { logActivity } from "../../../../lib/activity-logger";
 
 export async function POST(request: Request) {
   let body: { email?: string; password?: string };
@@ -75,10 +76,17 @@ export async function POST(request: Request) {
   const cookieStore = await cookies();
   cookieStore.set("session", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.NODE_ENV === "production" && process.env.ALLOW_HTTP_COOKIES !== "true",
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 365, // 1 year (persistent)
+  });
+
+  logActivity({
+    actionType: "admin_login",
+    performedBy: record.id,
+    performedByName: record.name,
+    description: `Admin ${record.name} signed in`,
   });
 
   return Response.json({

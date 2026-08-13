@@ -1,7 +1,8 @@
 import { eq, and, sql } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { attendance } from "../../../../db/schema";
+import { attendance, employees } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
+import { logActivity } from "../../../../lib/activity-logger";
 
 export async function POST(request: Request) {
   const auth = await requireApiRole("admin");
@@ -21,6 +22,8 @@ export async function POST(request: Request) {
 
   const db = getDb();
 
+  const emp = db.select({ name: employees.name }).from(employees).where(eq(employees.id, employeeId)).get();
+
   // Delete only admin-created records for this employee on this date
   db.delete(attendance)
     .where(and(
@@ -29,6 +32,16 @@ export async function POST(request: Request) {
       sql`date(${attendance.serverTimestamp}) = ${date}`,
     ))
     .run();
+
+  logActivity({
+    actionType: "undo_mark",
+    performedBy: auth.identity.employeeId,
+    performedByName: auth.identity.displayName,
+    targetId: employeeId,
+    targetName: emp?.name || employeeId,
+    description: `Admin undid attendance mark for ${emp?.name || employeeId} on ${date}`,
+    metadata: { date },
+  });
 
   return Response.json({ ok: true });
 }

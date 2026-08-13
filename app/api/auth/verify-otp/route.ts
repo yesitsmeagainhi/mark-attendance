@@ -3,6 +3,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { getDb } from "../../../../db";
 import { employees, sessions, otpRequests } from "../../../../db/schema";
+import { logActivity } from "../../../../lib/activity-logger";
 
 export async function POST(request: Request) {
   let body: { employeeId?: string; otpCode?: string };
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
   const cookieStore = await cookies();
   cookieStore.set("session", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.NODE_ENV === "production" && process.env.ALLOW_HTTP_COOKIES !== "true",
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 365, // 1 year (persistent)
@@ -79,6 +80,13 @@ export async function POST(request: Request) {
     .where(eq(employees.id, employeeId))
     .limit(1)
     .get();
+
+  logActivity({
+    actionType: "employee_login",
+    performedBy: employeeId,
+    performedByName: emp?.name || employeeId,
+    description: `Employee ${emp?.name || employeeId} signed in`,
+  });
 
   return Response.json({
     role: emp?.role || "employee",

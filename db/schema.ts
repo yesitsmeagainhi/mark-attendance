@@ -12,6 +12,7 @@ export const employees = sqliteTable("employees", {
   workStartTime: text("work_start_time").notNull().default("09:00"),
   workEndTime: text("work_end_time").notNull().default("18:00"),
   office: text("office").notNull().default("Bhayandar Office"),
+  department: text("department").notNull().default(""),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   monthlySalary: integer("monthly_salary").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -74,6 +75,13 @@ export const dailyJournals = sqliteTable("daily_journals", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 })
+export const departments = sqliteTable("departments", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const branches = sqliteTable("branches", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),
@@ -108,6 +116,18 @@ export const attendanceRules = sqliteTable("attendance_rules", {
   defaultValue: text("default_value").notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const activityLog = sqliteTable("activity_log", {
+  id: text("id").primaryKey(),
+  actionType: text("action_type").notNull(),
+  performedBy: text("performed_by").notNull(),
+  performedByName: text("performed_by_name").notNull(),
+  targetId: text("target_id"),
+  targetName: text("target_name"),
+  description: text("description").notNull(),
+  metadata: text("metadata"),
+  timestamp: text("timestamp").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const employeeRuleOverrides = sqliteTable("employee_rule_overrides", {

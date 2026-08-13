@@ -20,6 +20,7 @@ export async function GET() {
       workStartTime: employees.workStartTime,
       workEndTime: employees.workEndTime,
       office: employees.office,
+      department: employees.department,
       active: employees.active,
       monthlySalary: employees.monthlySalary,
       createdAt: employees.createdAt,
@@ -35,7 +36,20 @@ export async function PATCH(request: Request) {
   const auth = await requireApiRole("admin");
   if ("error" in auth) return auth.error;
 
-  let body: { id?: string; monthlySalary?: number };
+  let body: {
+    id?: string;
+    name?: string;
+    email?: string;
+    password?: string;
+    jobRole?: string;
+    mobileNumber?: string;
+    workStartTime?: string;
+    workEndTime?: string;
+    office?: string;
+    department?: string;
+    monthlySalary?: number;
+    active?: boolean;
+  };
   try {
     body = await request.json();
   } catch {
@@ -52,9 +66,41 @@ export async function PATCH(request: Request) {
     return Response.json({ error: "Employee not found." }, { status: 404 });
   }
 
-  if (body.monthlySalary !== undefined) {
-    const salary = Math.max(0, Math.round(Number(body.monthlySalary) || 0));
-    db.update(employees).set({ monthlySalary: salary }).where(eq(employees.id, body.id)).run();
+  const updates: Record<string, unknown> = {};
+
+  if (body.name !== undefined) {
+    const name = body.name.trim();
+    if (!name) return Response.json({ error: "Name cannot be empty." }, { status: 400 });
+    updates.name = name;
+  }
+
+  if (body.email !== undefined) {
+    const email = body.email.trim().toLowerCase();
+    if (!email) return Response.json({ error: "Email cannot be empty." }, { status: 400 });
+    // Check duplicate email (excluding current employee)
+    const dup = db.select({ id: employees.id }).from(employees)
+      .where(sql`lower(${employees.email}) = ${email} AND ${employees.id} != ${body.id}`)
+      .limit(1).get();
+    if (dup) return Response.json({ error: "Another employee already uses this email." }, { status: 409 });
+    updates.email = email;
+  }
+
+  if (body.password !== undefined && body.password.length > 0) {
+    if (body.password.length < 4) return Response.json({ error: "Password must be at least 4 characters." }, { status: 400 });
+    updates.password = createHash("sha256").update(body.password).digest("hex");
+  }
+
+  if (body.jobRole !== undefined) updates.jobRole = body.jobRole.trim();
+  if (body.mobileNumber !== undefined) updates.mobileNumber = body.mobileNumber.replace(/\D/g, "");
+  if (body.workStartTime !== undefined) updates.workStartTime = body.workStartTime;
+  if (body.workEndTime !== undefined) updates.workEndTime = body.workEndTime;
+  if (body.office !== undefined) updates.office = body.office.trim();
+  if (body.department !== undefined) updates.department = body.department.trim();
+  if (body.monthlySalary !== undefined) updates.monthlySalary = Math.max(0, Math.round(Number(body.monthlySalary) || 0));
+  if (body.active !== undefined) updates.active = body.active;
+
+  if (Object.keys(updates).length > 0) {
+    db.update(employees).set(updates).where(eq(employees.id, body.id)).run();
   }
 
   return Response.json({ ok: true });
@@ -74,6 +120,7 @@ export async function POST(request: Request) {
     workStartTime?: string;
     workEndTime?: string;
     office?: string;
+    department?: string;
     ruleOverrides?: { ruleId: string; value: string }[];
   };
   try {
@@ -91,6 +138,7 @@ export async function POST(request: Request) {
   const workStartTime = body.workStartTime || "09:00";
   const workEndTime = body.workEndTime || "18:00";
   const office = body.office?.trim() || "Bhayandar Office";
+  const department = body.department?.trim() || "";
 
   if (!name) {
     return Response.json({ error: "Name is required." }, { status: 400 });
@@ -151,6 +199,7 @@ export async function POST(request: Request) {
       workStartTime,
       workEndTime,
       office,
+      department,
     })
     .run();
 
@@ -171,7 +220,7 @@ export async function POST(request: Request) {
   }
 
   return Response.json(
-    { id, name, email, role, jobRole, mobileNumber, workStartTime, workEndTime, office },
+    { id, name, email, role, jobRole, mobileNumber, workStartTime, workEndTime, office, department },
     { status: 201 },
   );
 }

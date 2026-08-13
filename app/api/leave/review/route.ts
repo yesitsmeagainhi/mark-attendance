@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { leaveRequests } from "../../../../db/schema";
+import { leaveRequests, employees } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
+import { logActivity } from "../../../../lib/activity-logger";
 
 export async function PATCH(request: Request) {
   const auth = await requireApiRole("admin");
@@ -46,6 +47,17 @@ export async function PATCH(request: Request) {
     .set({ status: action, adminNote, reviewedAt: now })
     .where(eq(leaveRequests.id, requestId))
     .run();
+
+  const emp = db.select({ name: employees.name }).from(employees).where(eq(employees.id, existing.employeeId)).get();
+  logActivity({
+    actionType: action === "approved" ? "leave_approved" : "leave_rejected",
+    performedBy: auth.identity.employeeId,
+    performedByName: auth.identity.displayName,
+    targetId: existing.employeeId,
+    targetName: emp?.name || existing.employeeId,
+    description: `Admin ${action} ${existing.leaveType} leave request from ${emp?.name || existing.employeeId} (${existing.fromDate} to ${existing.toDate})`,
+    metadata: { leaveType: existing.leaveType, fromDate: existing.fromDate, toDate: existing.toDate, action },
+  });
 
   return Response.json({ ok: true, status: action });
 }

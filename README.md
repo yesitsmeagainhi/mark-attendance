@@ -82,3 +82,25 @@ npm run build
 npm run validate:artifact
 npm run db:generate
 ```
+
+This is "Attendly" — a full-stack Employee Attendance Management System built with:
+
+Tech Stack:
+
+Next.js 16 (React 19) + TypeScript
+SQLite with Drizzle ORM
+Tailwind CSS for styling
+face-api.js for facial recognition
+ExcelJS / jsPDF for report generation
+What it does:
+
+Employee side: Selfie-based punch in/out with facial recognition, geofencing (location verification), leave applications, miss-punch requests, and daily journal/timesheet logging.
+Admin side: Dashboard, staff management, attendance history with photos, leave/request approvals, payroll, report generation (Excel/PDF), configurable attendance rules, and OTP-based login management.
+Key features:
+
+Geolocation-based attendance verification (Haversine formula, 200m radius)
+OTP-based employee login, password-based admin login
+40+ API routes
+Grace period tracking, per-employee rule overrides
+SQLite database with tables for employees, attendance, leaves, holidays, branches, journals, etc.
+It's a production-oriented internal HR/attendance tool designed for tracking employee time with biometric (face) and location verification.

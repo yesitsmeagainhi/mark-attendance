@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { BranchRow } from "./types";
+import type { BranchRow, DepartmentRow } from "./types";
 
 type RuleDefault = {
   id: string;
@@ -19,6 +19,7 @@ const emptyForm = {
   workStartTime: "09:00",
   workEndTime: "18:00",
   office: "",
+  department: "",
   monthlySalary: "",
   role: "employee" as const,
 };
@@ -28,11 +29,13 @@ export default function AddEmployeeModal({
   onClose,
   onCreated,
   branches,
+  departments,
 }: {
   open: boolean;
   onClose: () => void;
   onCreated: () => void;
   branches: BranchRow[];
+  departments: DepartmentRow[];
 }) {
   const [form, setForm] = useState({ ...emptyForm, office: branches.find((b) => b.active)?.name || "" });
   const [error, setError] = useState("");
@@ -82,6 +85,7 @@ export default function AddEmployeeModal({
           workStartTime: form.workStartTime,
           workEndTime: form.workEndTime,
           office: form.office.trim(),
+          department: form.department.trim(),
           role: form.role,
           monthlySalary: parseInt(form.monthlySalary, 10) || 0,
           ruleOverrides: Object.entries(ruleOverrides)
@@ -125,6 +129,15 @@ export default function AddEmployeeModal({
           <label>
             <span>Job role</span>
             <input type="text" value={form.jobRole} onChange={(e) => setForm({ ...form, jobRole: e.target.value })} placeholder="e.g. Counsellor" required maxLength={80} />
+          </label>
+          <label>
+            <span>Department</span>
+            <select value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
+              <option value="">-- Select department --</option>
+              {departments.filter((d) => d.active).map((d) => (
+                <option key={d.id} value={d.name}>{d.name}</option>
+              ))}
+            </select>
           </label>
           <label>
             <span>Email address</span>

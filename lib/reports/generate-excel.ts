@@ -95,84 +95,76 @@ function buildEmployeeSheet(
   month: string,
   workingDays: number,
 ) {
-  // Column widths
+  // Column widths (compact)
   sheet.columns = [
-    { width: 14 }, { width: 10 }, { width: 12 }, { width: 14 },
-    { width: 14 }, { width: 12 }, { width: 14 }, { width: 16 },
+    { width: 12 }, { width: 8 }, { width: 11 }, { width: 13 },
+    { width: 13 }, { width: 10 }, { width: 12 }, { width: 14 },
   ];
 
-  // Row 1 — Title
+  // Row 1 — Title + Month combined
   sheet.mergeCells("A1:H1");
   const titleCell = sheet.getCell("A1");
-  titleCell.value = "ATTENDANCE & SALARY REPORT";
-  titleCell.font = { bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+  titleCell.value = `ATTENDANCE & SALARY REPORT  \u2014  ${month}`;
+  titleCell.font = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
   titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF6D45E5" } };
   titleCell.alignment = { horizontal: "center", vertical: "middle" };
-  sheet.getRow(1).height = 32;
+  sheet.getRow(1).height = 20;
 
-  // Row 2 — Month
-  sheet.mergeCells("A2:H2");
-  const monthCell = sheet.getCell("A2");
-  monthCell.value = `Month: ${month}`;
-  monthCell.font = { size: 11, color: { argb: "FF667085" } };
-  monthCell.alignment = { horizontal: "center" };
-
-  // Row 3 — blank separator
-
-  // Rows 4-11 — Employee info grid
-  const infoRows: [string, string, string, string][] = [
-    ["Employee Name", emp.name, "Monthly Salary", fmt(emp.monthlySalary)],
-    ["Employee ID", emp.id, "Per Day Rate", fmt(emp.perDayRate)],
-    ["Branch", emp.office, "Present Days", String(emp.presentDays)],
-    ["Job Role", emp.jobRole, "Absent Days", String(emp.absentDays)],
-    ["Shift Timing", emp.shift, "Late Days", `${emp.lateDays}${emp.lateAbsentDays > 0 ? ` (= ${emp.lateAbsentDays} absent)` : ""}`],
-    ["Joining Date", fmtJoinDate(emp.createdAt), "Leave Days", String(emp.leaveDays)],
-    ["Working Days", String(workingDays), "Weekly Offs", String(emp.weeklyOffs)],
-    ["Deduction", fmt(emp.deduction), "Net Pay", fmt(emp.netPay)],
+  // Rows 2-5 — Employee info grid (4 rows, 4 label-value pairs each)
+  // Each pair uses 2 columns: odd col = label, even col = value
+  const infoGrid: [string, string, string, string, string, string, string, string][] = [
+    ["Name", emp.name, "Emp ID", emp.id, "Branch", emp.office, "Role", emp.jobRole],
+    ["Shift", emp.shift, "Joined", fmtJoinDate(emp.createdAt), "Work Days", String(workingDays), "Salary", fmt(emp.monthlySalary)],
+    ["Present", String(emp.presentDays), "Absent", String(emp.absentDays), "Late", `${emp.lateDays}${emp.lateAbsentDays > 0 ? `(=${emp.lateAbsentDays}abs)` : ""}`, "Leave", String(emp.leaveDays)],
+    ["Wkly Off", String(emp.weeklyOffs), "Holidays", String(emp.holidayCount), "Deduction", fmt(emp.deduction), "Net Pay", fmt(emp.netPay)],
   ];
 
-  for (let i = 0; i < infoRows.length; i++) {
-    const row = sheet.getRow(4 + i);
-    const [labelL, valL, labelR, valR] = infoRows[i];
-    row.getCell(1).value = labelL;
-    row.getCell(1).font = { bold: true, size: 10, color: { argb: "FF667085" } };
-    row.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF9FAFB" } };
-    row.getCell(2).value = valL;
-    row.getCell(2).font = { size: 10 };
-    // Merge B-D for value column
-    sheet.mergeCells(4 + i, 2, 4 + i, 4);
+  const infoStartRow = 2;
+  for (let i = 0; i < infoGrid.length; i++) {
+    const row = sheet.getRow(infoStartRow + i);
+    row.height = 15;
+    const data = infoGrid[i];
+    for (let p = 0; p < 4; p++) {
+      const labelCol = p * 2 + 1;
+      const valCol = p * 2 + 2;
+      const label = data[p * 2];
+      const val = data[p * 2 + 1];
 
-    row.getCell(5).value = labelR;
-    row.getCell(5).font = { bold: true, size: 10, color: { argb: "FF667085" } };
-    row.getCell(5).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF9FAFB" } };
-    row.getCell(6).value = valR;
-    row.getCell(6).font = { size: 10, bold: labelR === "Net Pay" };
-    if (labelR === "Net Pay") {
-      row.getCell(6).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8F7EF" } };
+      row.getCell(labelCol).value = label;
+      row.getCell(labelCol).font = { bold: true, size: 8, color: { argb: "FF667085" } };
+      row.getCell(labelCol).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF9FAFB" } };
+
+      row.getCell(valCol).value = val;
+      row.getCell(valCol).font = { size: 8 };
+
+      // Highlight Net Pay
+      if (label === "Net Pay") {
+        row.getCell(valCol).font = { size: 8, bold: true };
+        row.getCell(valCol).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8F7EF" } };
+      }
     }
-    sheet.mergeCells(4 + i, 6, 4 + i, 8);
 
-    // Borders for info cells
+    // Borders
     for (let c = 1; c <= 8; c++) {
       row.getCell(c).border = thinBorder();
     }
   }
 
-  // Row 12 — blank separator
-  const tableStartRow = 13;
+  // Table starts right after info grid
+  const tableStartRow = infoStartRow + infoGrid.length;
 
   // Table header row
-  const headers = ["Date", "Day", "Status", "Punch In", "Punch Out", "Break", "Work Hours", "Per Day Salary"];
+  const headers = ["Date", "Day", "Status", "Punch In", "Punch Out", "Break", "Work Hrs", "Salary"];
   const headerRow = sheet.getRow(tableStartRow);
   headers.forEach((h, idx) => {
     const cell = headerRow.getCell(idx + 1);
     cell.value = h;
-    cell.font = { bold: true, size: 9, color: { argb: "FF667085" } };
+    cell.font = { bold: true, size: 8, color: { argb: "FF667085" } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF9FAFB" } };
     cell.alignment = { horizontal: "center" };
     cell.border = thinBorder();
   });
-  headerRow.height = 22;
+  headerRow.height = 15;
 
   // Daily rows
   let totalBreakMins = 0;
@@ -181,6 +173,7 @@ function buildEmployeeSheet(
 
   for (const day of emp.dailyDetails) {
     const row = sheet.getRow(rowIdx);
+    row.height = 13;
     const isWorkDay = day.status === "present" || day.status === "late";
     const daySalary = isWorkDay ? emp.perDayRate : 0;
     if (isWorkDay) totalSalary += daySalary;
@@ -198,7 +191,7 @@ function buildEmployeeSheet(
     // Status cell coloring
     const sc = statusColors[day.status];
     if (sc) {
-      row.getCell(3).font = { size: 9, color: { argb: `FF${sc.fg}` }, bold: true };
+      row.getCell(3).font = { size: 8, color: { argb: `FF${sc.fg}` }, bold: true };
       row.getCell(3).fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${sc.bg}` } };
     }
 
@@ -212,8 +205,9 @@ function buildEmployeeSheet(
 
     // Alignment + borders
     for (let c = 1; c <= 8; c++) {
-      row.getCell(c).alignment = { horizontal: "center" };
+      row.getCell(c).alignment = { horizontal: "center", vertical: "middle" };
       row.getCell(c).border = thinBorder();
+      if (!row.getCell(c).font.size) row.getCell(c).font = { ...row.getCell(c).font, size: 8 };
     }
 
     rowIdx++;
@@ -221,12 +215,13 @@ function buildEmployeeSheet(
 
   // Totals row
   const totalsRow = sheet.getRow(rowIdx);
+  totalsRow.height = 15;
   totalsRow.getCell(1).value = "TOTAL";
   totalsRow.getCell(6).value = totalBreakMins > 0 ? fmtDur(totalBreakMins) : "\u2014";
   totalsRow.getCell(7).value = emp.totalWorkedMinutes > 0 ? fmtDur(emp.totalWorkedMinutes) : "\u2014";
   totalsRow.getCell(8).value = fmt(totalSalary);
   for (let c = 1; c <= 8; c++) {
-    totalsRow.getCell(c).font = { bold: true, size: 10 };
+    totalsRow.getCell(c).font = { bold: true, size: 8 };
     totalsRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF9FAFB" } };
     totalsRow.getCell(c).alignment = { horizontal: "center" };
     totalsRow.getCell(c).border = {
@@ -237,12 +232,31 @@ function buildEmployeeSheet(
     };
   }
 
-  // Generated on
-  const genRow = sheet.getRow(rowIdx + 2);
-  sheet.mergeCells(rowIdx + 2, 1, rowIdx + 2, 8);
-  genRow.getCell(1).value = `Report Generated On: ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`;
-  genRow.getCell(1).font = { size: 9, italic: true, color: { argb: "FF667085" } };
+  // Generated on (directly after totals)
+  const genRow = sheet.getRow(rowIdx + 1);
+  sheet.mergeCells(rowIdx + 1, 1, rowIdx + 1, 8);
+  genRow.getCell(1).value = `Generated: ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`;
+  genRow.getCell(1).font = { size: 7, italic: true, color: { argb: "FF667085" } };
   genRow.getCell(1).alignment = { horizontal: "right" };
+  genRow.height = 13;
+
+  // Page setup — fit entire employee report on one printed page
+  sheet.pageSetup = {
+    orientation: "landscape",
+    paperSize: 9, // A4
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 1,
+    margins: {
+      left: 0.25, right: 0.25,
+      top: 0.2, bottom: 0.2,
+      header: 0.1, footer: 0.1,
+    },
+  };
+
+  // Print area
+  const lastContentRow = rowIdx + 1;
+  sheet.pageSetup.printArea = `A1:H${lastContentRow}`;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
