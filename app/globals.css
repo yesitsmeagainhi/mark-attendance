@@ -86,7 +86,7 @@
 /* Compact punch card (mobile-first) */
 .punch-section{display:flex;justify-content:center}
 .punch-compact-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:14px;width:100%;max-width:420px;box-shadow:0 5px 24px rgba(25,28,39,.04)}
-.punch-compact-card .camera-frame.compact{height:clamp(220px,50vw,320px);margin:0 0 10px;border-radius:12px}
+.punch-compact-card .camera-frame.compact{height:clamp(200px,calc(100vh- 350px), 500px);margin:0 0 10px;border-radius:12px}
 .face-detect-overlay{position:absolute;top:0;left:0;pointer-events:none;z-index:2}
 .face-guidance{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:3;background:rgba(0,0,0,.65);backdrop-filter:blur(6px);color:#fff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:99px;display:flex;align-items:center;gap:8px;white-space:nowrap;max-width:90%;overflow:hidden;text-overflow:ellipsis;transition:background .3s}
 .face-guidance-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;transition:background .3s}

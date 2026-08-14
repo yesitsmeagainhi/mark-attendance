@@ -104,3 +104,44 @@ OTP-based employee login, password-based admin login
 Grace period tracking, per-employee rule overrides
 SQLite database with tables for employees, attendance, leaves, holidays, branches, journals, etc.
 It's a production-oriented internal HR/attendance tool designed for tracking employee time with biometric (face) and location verification.
+
+
+
+Using Firestore instead of SQLite would have affected several areas:
+
+What Would Change
+1. Database layer (db/ folder) — Complete rewrite
+
+Replace better-sqlite3 + drizzle-orm with firebase-admin SDK
+Schema definition changes from SQL tables to Firestore collections/documents
+All queries rewritten — Firestore uses .collection().doc().get() instead of SQL
+No migrations needed — Firestore is schemaless
+2. Every API route (app/api/) — All queries rewritten
+
+SQL joins don't exist in Firestore — you'd need multiple reads or denormalized data
+Aggregations (COUNT, SUM, GROUP BY) are limited — need manual computation or Cloud Functions
+Transactions work differently (Firestore has its own transaction API)
+3. Deployment — Simpler in some ways
+
+No .db file on the VPS — data lives in Google Cloud
+No risk of data loss if VPS dies
+No need to worry about file permissions or backups on server
+4. Cost — SQLite is free, Firestore charges per read/write/storage
+
+Every attendance check, dashboard load, report generation = billable reads
+With many employees punching daily, costs can add up
+What Would Stay the Same
+Frontend components — unchanged (they call the same API routes)
+Authentication flow — same logic, just stored differently
+Face detection / camera / GPS — client-side, unrelated to database
+Nginx / PM2 / VPS setup — same (though you wouldn't need to protect a .db file)
+Trade-offs
+SQLite (current)	Firestore
+Cost	Free	Pay per read/write
+Speed	Very fast (local file)	Network latency per query
+Hosting	Data on VPS only	Data in Google Cloud
+Backups	Manual (copy .db file)	Automatic
+Scaling	Single server	Multi-region
+Complexity	Simple SQL	NoSQL, denormalization needed
+Offline risk	VPS dies = data lost	Data safe in cloud
+For a small-to-medium attendance system, SQLite is the better choice — it's free, fast, and simple. Firestore makes more sense if you need multi-device real-time sync or expect hundreds of offices accessing simultaneously.
