@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import TabNavigation from "./components/employee/TabNavigation";
 import HomeTab from "./components/employee/HomeTab";
 import AttendanceTab from "./components/employee/AttendanceTab";
+import FullscreenCameraOverlay from "./components/employee/FullscreenCameraOverlay";
+import { useAttendanceCamera } from "./hooks/useAttendanceCamera";
 import MissPunchTab from "./components/employee/MissPunchTab";
 import LeaveTab from "./components/employee/LeaveTab";
 import HistoryTab from "./components/employee/HistoryTab";
@@ -26,6 +28,7 @@ function Brand() {
 export default function DashboardClient({ view, employeeId, displayName, role }: { view: "employee" | "admin"; employeeId: string; displayName: string; role: "employee" | "admin" }) {
   const [activeTab, setActiveTab] = useState("home");
   const [adminTab, setAdminTab] = useState("dashboard");
+  const camera = useAttendanceCamera({ enabled: view === "employee" });
 
   // Session heartbeat: detect if session was invalidated (e.g. logged in on another device)
   useEffect(() => {
@@ -77,15 +80,40 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
             </div>
           )}
 
-          {activeTab === "home" && <HomeTab displayName={displayName} onNavigate={setActiveTab} />}
-          {activeTab === "attendance" && <AttendanceTab employeeId={employeeId} displayName={displayName} />}
+          {activeTab === "home" && <HomeTab displayName={displayName} onNavigate={setActiveTab} onOpenCamera={camera.openCamera} todayStatus={camera.todayStatus} />}
+          {activeTab === "attendance" && <AttendanceTab employeeId={employeeId} displayName={displayName} camera={camera} />}
           {activeTab === "miss-punch" && <MissPunchTab />}
           {activeTab === "leave" && <LeaveTab />}
           {activeTab === "history" && <HistoryTab />}
           {activeTab === "timesheet" && <TimesheetTab />}
           {activeTab === "profile" && <ProfileTab onSignOut={handleSignOut} />}
         </div>
-      ) : (
+      ) : null}
+
+      {view === "employee" && camera.cameraOpen && (
+        <FullscreenCameraOverlay
+          modelsLoaded={camera.modelsLoaded}
+          modelError={camera.modelError}
+          faceStatus={camera.faceStatus}
+          faceGuidance={camera.faceGuidance}
+          nextPunchType={(camera.nextPunchType ?? "IN") as "IN" | "OUT"}
+          officeName={camera.todayStatus?.office || ""}
+          shiftDisplay={camera.shiftDisplay}
+          location={camera.location}
+          locationLoading={camera.locationLoading}
+          locationError={camera.locationError}
+          currentlyIn={camera.currentlyIn}
+          lastPunchTime={camera.lastPunchTime}
+          elapsed={camera.elapsed}
+          onCaptureFrame={camera.handleCaptureFrame}
+          onClose={camera.closeCamera}
+          onRetryGPS={camera.acquireLocation}
+          onFaceUpdate={camera.setFaceUpdate}
+          saving={camera.saving}
+        />
+      )}
+
+      {view === "admin" && (
         <div className="admin-layout">
           <AdminTabNavigation activeTab={adminTab} onTabChange={setAdminTab} />
 
@@ -98,7 +126,6 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
           {adminTab === "history" && <AdminHistoryTab />}
           {adminTab === "settings" && <SettingsTab onSignOut={handleSignOut} />}
         </div>
-
       )}
       <footer><span>&copy; 2026 Attendly</span><span>Privacy &middot; Support &middot; System status <i>&#9679; Operational</i></span></footer>
     </main>

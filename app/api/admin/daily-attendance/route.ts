@@ -72,22 +72,28 @@ export async function GET(request: Request) {
       if (punchIn.photoKey === "admin/unpaid-holiday") {
         status = "unpaid_holiday";
       } else {
-        // Determine on-time vs late based on punch time
-        const ts = punchIn.serverTimestamp;
-        const punchDate = new Date(ts.replace(" ", "T") + (ts.includes("Z") ? "" : "Z"));
-        const punchHour = punchDate.getUTCHours() + 5;
-        const punchMin = punchDate.getUTCMinutes() + 30;
-        const totalPunchMin = (punchHour * 60 + punchMin) % (24 * 60);
-
-        const [startH, startM] = emp.workStartTime.split(":").map(Number);
-        const shiftStartMin = startH * 60 + startM;
-        const empRules = rulesByEmp.get(emp.id)!;
-        const graceMin = shiftStartMin + empRules.grace_period;
-
-        if (totalPunchMin <= graceMin) {
-          status = "present";
+        // If punch-out is missing on a past day, treat as absent
+        const todayStr = new Date().toISOString().slice(0, 10);
+        if (!punchOut && date < todayStr) {
+          status = "absent";
         } else {
-          status = "late";
+          // Determine on-time vs late based on punch time
+          const ts = punchIn.serverTimestamp;
+          const punchDate = new Date(ts.replace(" ", "T") + (ts.includes("Z") ? "" : "Z"));
+          const punchHour = punchDate.getUTCHours() + 5;
+          const punchMin = punchDate.getUTCMinutes() + 30;
+          const totalPunchMin = (punchHour * 60 + punchMin) % (24 * 60);
+
+          const [startH, startM] = emp.workStartTime.split(":").map(Number);
+          const shiftStartMin = startH * 60 + startM;
+          const empRules = rulesByEmp.get(emp.id)!;
+          const graceMin = shiftStartMin + empRules.grace_period;
+
+          if (totalPunchMin <= graceMin) {
+            status = "present";
+          } else {
+            status = "late";
+          }
         }
       }
     } else if (holiday) {

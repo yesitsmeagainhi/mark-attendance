@@ -2,20 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getIST, getGreeting, formatTimeIST, getGraceStatus } from "../../../lib/time-utils";
-
-type PunchRecord = { type: "IN" | "OUT"; time: string; office: string; photoKey?: string };
-type TodayStatus = {
-  workStartTime: string;
-  workEndTime: string;
-  office: string;
-  punchIn: { time: string; office: string; photoKey?: string } | null;
-  punchOut: { time: string; office: string; photoKey?: string } | null;
-  punches: PunchRecord[];
-  rules: { gracePeriod: number; lunchBreakEnabled: boolean; lunchBreakMinHours: number };
-  nextPunchType: "IN" | "OUT" | null;
-  canPunchIn: boolean;
-  canPunchOut: boolean;
-};
+import type { TodayStatus } from "./attendance-types";
 
 const menuItems = [
   { id: "miss-punch", icon: "\u{1F514}", label: "Miss Punch", desc: "Request correction for missed punches", color: "#ea580c", bg: "#fff7ed" },
@@ -25,20 +12,12 @@ const menuItems = [
   { id: "profile", icon: "\u{1F464}", label: "Profile", desc: "Your profile & account info", color: "#64748b", bg: "#f8fafc" },
 ];
 
-export default function HomeTab({ displayName, onNavigate }: { displayName: string; onNavigate: (tab: string) => void }) {
+export default function HomeTab({ displayName, onNavigate, onOpenCamera, todayStatus }: { displayName: string; onNavigate: (tab: string) => void; onOpenCamera: () => void; todayStatus: TodayStatus | null }) {
   const [currentTime, setCurrentTime] = useState(getIST());
-  const [todayStatus, setTodayStatus] = useState<TodayStatus | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setCurrentTime(getIST()), 1000);
     return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/attendance/status")
-      .then((r) => r.ok ? r.json() : null)
-      .then((data: TodayStatus | null) => { if (data) setTodayStatus(data); })
-      .catch(() => undefined);
   }, []);
 
   const greeting = getGreeting(currentTime.hours);
@@ -121,7 +100,7 @@ export default function HomeTab({ displayName, onNavigate }: { displayName: stri
         </div>
         {!dayComplete && (
           <button
-            onClick={() => onNavigate("attendance")}
+            onClick={onOpenCamera}
             style={{
               width: "100%",
               marginTop: 14,
@@ -135,6 +114,7 @@ export default function HomeTab({ displayName, onNavigate }: { displayName: stri
               cursor: "pointer",
               letterSpacing: "0.01em",
             }}
+            
           >
             {punchedIn ? "\u{1F4F7} Punch Out" : "\u{1F4F7} Mark Attendance"}
           </button>

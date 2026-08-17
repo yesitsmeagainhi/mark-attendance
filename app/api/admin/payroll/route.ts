@@ -65,6 +65,29 @@ export async function GET(request: Request) {
     ))
     .all();
 
+  // Get punch-out dates per employee (to check for missing punch-outs)
+  const punchOutRecords = db
+    .select({
+      employeeId: attendance.employeeId,
+      serverTimestamp: attendance.serverTimestamp,
+    })
+    .from(attendance)
+    .where(and(
+      eq(attendance.punchType, "OUT"),
+      sql`date(${attendance.serverTimestamp}) >= ${firstDay}`,
+      sql`date(${attendance.serverTimestamp}) <= ${lastDayStr}`,
+    ))
+    .all();
+
+  const punchOutDates = new Map<string, Set<string>>();
+  for (const r of punchOutRecords) {
+    const d = r.serverTimestamp.slice(0, 10);
+    if (!punchOutDates.has(r.employeeId)) punchOutDates.set(r.employeeId, new Set());
+    punchOutDates.get(r.employeeId)!.add(d);
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+
   // Get approved leaves
   const leaves = db
     .select({
@@ -106,6 +129,10 @@ export async function GET(request: Request) {
       const hasSelfie = dayRecords.some((r) => r.source !== "admin");
       const isUH = !hasSelfie && dayRecords.some((r) => r.photoKey === "admin/unpaid-holiday");
       if (isUH) { uhDays++; continue; }
+
+      // If punch-out is missing on a past day, treat as absent (don't count as present)
+      const empOutDates = punchOutDates.get(emp.id);
+      if (!empOutDates?.has(dateStr) && dateStr < today) continue;
 
       punchDates.add(dateStr);
 

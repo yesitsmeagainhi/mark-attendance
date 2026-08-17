@@ -88,13 +88,16 @@ export async function GET(request: Request) {
     }
   }
 
-  // Calculate durations
+  // Calculate durations and check for missing punch-outs
+  const todayStr = new Date().toISOString().slice(0, 10);
   const result: GroupedRecord[] = [];
   for (const entry of grouped.values()) {
     if (entry.punchIn && entry.punchOut) {
       const inDate = new Date(entry.punchIn.replace(" ", "T") + (entry.punchIn.includes("Z") ? "" : "Z"));
       const outDate = new Date(entry.punchOut.replace(" ", "T") + (entry.punchOut.includes("Z") ? "" : "Z"));
       entry.durationMinutes = Math.max(0, Math.floor((outDate.getTime() - inDate.getTime()) / 60000));
+    } else if (entry.punchIn && !entry.punchOut && entry.date < todayStr && entry.status !== "UH") {
+      entry.status = "absent";
     }
     result.push(entry);
   }

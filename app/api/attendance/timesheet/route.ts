@@ -167,6 +167,13 @@ export async function GET(request: Request) {
       continue;
     }
 
+    // If punch-out is missing on a past day, treat as absent
+    if (!dayData.punchOut && dateStr < today) {
+      absentDays++;
+      days.push({ date: dateStr, dayOfWeek, status: "absent", punchIn: dayData.punchIn, punchOut: null, duration: null });
+      continue;
+    }
+
     presentDays++;
     let duration: number | null = null;
     if (dayData.punchOut) {

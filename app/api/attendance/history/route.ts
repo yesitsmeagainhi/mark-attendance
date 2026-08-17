@@ -149,6 +149,12 @@ export async function GET(request: Request) {
       continue;
     }
 
+    // If punch-out is missing on a past day, treat as absent
+    if (!dayData.punchOut && dateStr < today) {
+      result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: null, duration: null, status: "Absent", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: null });
+      continue;
+    }
+
     const inDate = new Date(dayData.punchIn.replace(" ", "T") + (dayData.punchIn.includes("Z") ? "" : "Z"));
     const inIST = new Date(inDate.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
     const punchMinutes = inIST.getHours() * 60 + inIST.getMinutes();

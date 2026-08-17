@@ -185,6 +185,12 @@ export async function GET(request: Request) {
         continue;
       }
 
+      // If punch-out is missing on a past day, treat as absent
+      if (!entry.punchOut && dateStr < today) {
+        dailyDetails.push({ date: dateStr, punchIn: entry.punchIn, punchOut: null, durationMinutes: null, breakMinutes: null, status: "absent" });
+        continue;
+      }
+
       presentDays++;
       let durationMinutes: number | null = null;
       let breakMinutes: number | null = null;

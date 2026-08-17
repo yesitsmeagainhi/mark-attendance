@@ -77,7 +77,7 @@ function buildEmployeePage(
   // Employee info table (2-column key-value layout)
   const infoData = [
     ["Employee Name", emp.name, "Monthly Salary", fmt(emp.monthlySalary)],
-    ["Employee ID", emp.id, "Per Day Rate", fmt(emp.perDayRate)],
+    ["Employee ID", emp.id, "Per Day Pay", fmt(emp.perDayRate)],
     ["Branch", emp.office, "Present Days", String(emp.presentDays)],
     ["Job Role", emp.jobRole, "Absent Days", String(emp.absentDays)],
     ["Shift Timing", emp.shift, "Late Days", `${emp.lateDays}${emp.lateAbsentDays > 0 ? ` (= ${emp.lateAbsentDays} absent)` : ""}`],
@@ -137,9 +137,31 @@ function buildEmployeePage(
     head: [["Date", "Day", "Status", "Punch In", "Punch Out", "Break", "Work Hours", "Salary"]],
     body: bodyData,
     foot: [["TOTAL", "", "", "", "", totalBreakMins > 0 ? fmtDur(totalBreakMins) : "\u2014", emp.totalWorkedMinutes > 0 ? fmtDur(emp.totalWorkedMinutes) : "\u2014", fmt(totalSalary)]],
-    styles: { fontSize: 7, cellPadding: 2, halign: "center" },
-    headStyles: { fillColor: [109, 69, 229], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
-    footStyles: { fillColor: [249, 250, 251], fontStyle: "bold", fontSize: 8, textColor: [23, 32, 51] },
+    // styles: { fontSize: 7, cellPadding: 2, halign: "center" },
+    styles: {
+      fontSize: 8,
+      cellPadding: { top: 0.65, right: 1, bottom: 0.65, left: 1 },
+      minCellHeight: 3.7,
+      halign: "center",
+      valign: "middle",
+      overflow: "linebreak",
+    },
+    headStyles: {
+      fillColor: [109, 69, 229],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 8,
+      cellPadding: { top: 1, right: 1, bottom: 1, left: 1 },
+    },
+    footStyles: {
+      fillColor: [249, 250, 251],
+      fontStyle: "bold",
+      fontSize: 8,
+      textColor: [23, 32, 51],
+      cellPadding: { top: 1, right: 1, bottom: 1, left: 1 },
+    },
+    // headStyles: { fillColor: [109, 69, 229], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
+    // footStyles: { fillColor: [249, 250, 251], fontStyle: "bold", fontSize: 8, textColor: [23, 32, 51] },
     columnStyles: {
       0: { cellWidth: 22 },
       1: { cellWidth: 18 },
@@ -179,7 +201,7 @@ export async function generateEmployeePDF(
   const { default: jsPDF } = await import("jspdf");
   const { default: autoTable } = await import("jspdf-autotable");
 
-  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
   buildEmployeePage(doc, emp, month, workingDays, autoTable);
   doc.save(`${emp.name.replace(/\s+/g, "-")}-report-${month}.pdf`);
 }
@@ -192,7 +214,7 @@ export async function generateAllEmployeesPDF(
   const { default: jsPDF } = await import("jspdf");
   const { default: autoTable } = await import("jspdf-autotable");
 
-  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
 
   for (let i = 0; i < employees.length; i++) {
     if (i > 0) doc.addPage();
