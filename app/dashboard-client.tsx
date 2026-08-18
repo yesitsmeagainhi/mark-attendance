@@ -67,12 +67,12 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
 <div className={`employee-layout ${camera.cameraOpen ? "camera-active" : ""}`}>
 
           {/* <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} /> */}
-          {!camera.cameraOpen && (
+          {/* {!camera.cameraOpen && (
             <TabNavigation
               activeTab={activeTab}
               onTabChange={setActiveTab}
             />
-          )}
+          )} */}
           {/* Back bar for sub-screens navigated from Home */}
           {!["home", "attendance"].includes(activeTab) && (
             <div style={{
