@@ -21,6 +21,7 @@ type ReportRow = {
   createdAt: string;
   presentDays: number;
   absentDays: number;
+  shortDays: number;
   lateAbsentDays: number;
   lateDays: number;
   leaveDays: number;
@@ -69,18 +70,18 @@ function downloadCsv(filename: string, csvContent: string) {
 }
 
 function exportSummary(rows: ReportRow[], month: string, workingDays: number) {
-  const header = ["Employee", "ID", "Shift", "Present", "Absent", "Late", "Late=Absent", "Leave", "UH", "Total Hours", "Attendance %"];
+  const header = ["Employee", "ID", "Shift", "Present", "Absent", "Short Day", "Late", "Late=Absent", "Leave", "UH", "Total Hours", "Attendance %"];
   const lines = rows.map((r) => [
     csvEscape(r.name), r.id, r.shift,
-    String(r.presentDays), String(r.absentDays), String(r.lateDays), String(r.lateAbsentDays || 0), String(r.leaveDays), String(r.uhDays),
+    String(r.presentDays), String(r.absentDays), String(r.shortDays || 0), String(r.lateDays), String(r.lateAbsentDays || 0), String(r.leaveDays), String(r.uhDays),
     fmtDur(r.totalWorkedMinutes), `${r.attendancePct}%`,
   ].join(","));
   const totals = rows.reduce((a, r) => ({
-    p: a.p + r.presentDays, ab: a.ab + r.absentDays, l: a.l + r.lateDays, la: a.la + (r.lateAbsentDays || 0),
+    p: a.p + r.presentDays, ab: a.ab + r.absentDays, sd: a.sd + (r.shortDays || 0), l: a.l + r.lateDays, la: a.la + (r.lateAbsentDays || 0),
     lv: a.lv + r.leaveDays, u: a.u + r.uhDays, m: a.m + r.totalWorkedMinutes,
-  }), { p: 0, ab: 0, l: 0, la: 0, lv: 0, u: 0, m: 0 });
+  }), { p: 0, ab: 0, sd: 0, l: 0, la: 0, lv: 0, u: 0, m: 0 });
   const avgPct = rows.length > 0 ? Math.round(rows.reduce((s, r) => s + r.attendancePct, 0) / rows.length) : 0;
-  lines.push(["TOTALS", "", "", String(totals.p), String(totals.ab), String(totals.l), String(totals.la), String(totals.lv), String(totals.u), fmtDur(totals.m), `${avgPct}%`].join(","));
+  lines.push(["TOTALS", "", "", String(totals.p), String(totals.ab), String(totals.sd), String(totals.l), String(totals.la), String(totals.lv), String(totals.u), fmtDur(totals.m), `${avgPct}%`].join(","));
 
   const csv = `Attendance Report - ${month} (Working Days: ${workingDays})\n\n${header.join(",")}\n${lines.join("\n")}`;
   downloadCsv(`attendance-report-${month}.csv`, csv);
@@ -93,6 +94,7 @@ function exportEmployeeDetail(emp: ReportRow, month: string) {
     "",
     `Present,${emp.presentDays}`,
     `Absent,${emp.absentDays}`,
+    `Short Day,${emp.shortDays || 0}`,
     `Late,${emp.lateDays}`,
     `Late Ded.,${emp.lateAbsentDays || 0} days`,
     `Leave,${emp.leaveDays}`,
@@ -126,6 +128,7 @@ const statusBadge: Record<string, { bg: string; color: string; label: string }> 
   present: { bg: "#e8f7ef", color: "#168052", label: "Present" },
   late: { bg: "#fff4dc", color: "#a86400", label: "Late" },
   absent: { bg: "#ffeded", color: "#c73333", label: "Absent" },
+  "short-day": { bg: "#ffeded", color: "#c73333", label: "Short Day" },
   leave: { bg: "#eff6ff", color: "#2563eb", label: "Leave" },
   uh: { bg: "#fff4dc", color: "#a86400", label: "UH" },
   sunday: { bg: "#f3f4f8", color: "#667085", label: "Sun" },
@@ -271,6 +274,7 @@ export default function ReportsTab() {
             {[
               { label: "Present", value: selectedEmp.presentDays, bg: "#e8f7ef", color: "#168052" },
               { label: "Absent", value: selectedEmp.absentDays, bg: "#ffeded", color: "#c73333" },
+              ...(selectedEmp.shortDays > 0 ? [{ label: "Short Day", value: selectedEmp.shortDays, bg: "#ffeded", color: "#c73333" }] : []),
               { label: "Late", value: selectedEmp.lateDays, bg: "#fff4dc", color: "#a86400" },
               { label: "Leave", value: selectedEmp.leaveDays, bg: "#eff6ff", color: "#2563eb" },
               { label: "Total Hours", value: fmtDur(selectedEmp.totalWorkedMinutes), bg: "#eee9ff", color: "#6d45e5" },

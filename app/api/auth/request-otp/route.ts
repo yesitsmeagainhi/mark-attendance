@@ -4,19 +4,18 @@ import { getDb } from "../../../../db";
 import { employees, otpRequests } from "../../../../db/schema";
 
 export async function POST(request: Request) {
-  let body: { name?: string; mobileNumber?: string };
+  let body: { mobileNumber?: string };
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const name = body.name?.trim();
   const mobileNumber = body.mobileNumber?.trim().replace(/\D/g, "");
 
-  if (!name || !mobileNumber) {
+  if (!mobileNumber) {
     return Response.json(
-      { error: "Name and mobile number are required." },
+      { error: "Mobile number is required." },
       { status: 400 },
     );
   }
@@ -27,7 +26,6 @@ export async function POST(request: Request) {
     .from(employees)
     .where(
       and(
-        sql`lower(${employees.name}) = ${name.toLowerCase()}`,
         eq(employees.mobileNumber, mobileNumber),
         eq(employees.active, true),
         sql`${employees.role} != 'admin'`,
@@ -38,7 +36,7 @@ export async function POST(request: Request) {
 
   if (!employee) {
     return Response.json(
-      { error: "No matching employee found. Please check your name and mobile number, or contact your admin." },
+      { error: "No employee found with this mobile number. Please check and try again, or contact your admin." },
       { status: 404 },
     );
   }

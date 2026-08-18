@@ -7,15 +7,17 @@ export type RuleValues = {
   lunch_break_enabled: boolean;
   lunch_break_min_hours: number;
   late_to_absent_count: number;
+  minimum_hours_for_present: number;
 };
 
 function parseRules(rules: { id: string; value: string; valueType: string }[]): RuleValues {
-  const result: RuleValues = { grace_period: 15, lunch_break_enabled: false, lunch_break_min_hours: 4, late_to_absent_count: 3 };
+  const result: RuleValues = { grace_period: 15, lunch_break_enabled: false, lunch_break_min_hours: 4, late_to_absent_count: 3, minimum_hours_for_present: 4 };
   for (const r of rules) {
     if (r.id === "grace_period") result.grace_period = parseInt(r.value, 10) || 15;
     if (r.id === "lunch_break_enabled") result.lunch_break_enabled = r.value === "true";
     if (r.id === "lunch_break_min_hours") result.lunch_break_min_hours = parseFloat(r.value) || 4;
     if (r.id === "late_to_absent_count") result.late_to_absent_count = parseInt(r.value, 10) || 3;
+    if (r.id === "minimum_hours_for_present") result.minimum_hours_for_present = parseFloat(r.value) || 4;
   }
   return result;
 }

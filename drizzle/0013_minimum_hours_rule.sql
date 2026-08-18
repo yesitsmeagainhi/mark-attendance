@@ -1,0 +1,2 @@
+INSERT INTO attendance_rules (id, label, description, value_type, default_value)
+VALUES ('minimum_hours_for_present', 'Minimum hours for present', 'Minimum working hours required to count as present for the day. Below this = absent.', 'number', '4');

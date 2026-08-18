@@ -49,7 +49,7 @@ export async function PATCH(request: Request) {
     .where(eq(missPunchRequests.id, requestId))
     .run();
 
-  // If approved, insert an attendance record to backfill the missed punch
+  // If approved, insert or update an attendance record for the missed punch
   if (action === "approved") {
     const emp = db
       .select({ office: employees.office })
@@ -57,30 +57,73 @@ export async function PATCH(request: Request) {
       .where(eq(employees.id, existing.employeeId))
       .get();
 
-    // Check for duplicate before inserting
+    const timestamp = istToUTC(existing.date, existing.requestedTime);
+    const punchType = existing.punchType as "IN" | "OUT";
+
+    // Check if a record with the same punchType already exists for this date
     const duplicate = db
       .select({ id: attendance.id })
       .from(attendance)
       .where(
         and(
           eq(attendance.employeeId, existing.employeeId),
-          eq(attendance.punchType, existing.punchType as "IN" | "OUT"),
+          eq(attendance.punchType, punchType),
           sql`date(${attendance.serverTimestamp}) = ${existing.date}`,
         ),
       )
       .limit(1)
       .get();
 
-    if (!duplicate) {
-      const attendanceId = crypto.randomUUID();
-      // Convert IST time to UTC for consistent storage
-      const timestamp = istToUTC(existing.date, existing.requestedTime);
+    if (duplicate) {
+      // A record with the same punchType exists — check if the other type also exists
+      const otherType = punchType === "IN" ? "OUT" : "IN";
+      const otherExists = db
+        .select({ id: attendance.id })
+        .from(attendance)
+        .where(
+          and(
+            eq(attendance.employeeId, existing.employeeId),
+            eq(attendance.punchType, otherType),
+            sql`date(${attendance.serverTimestamp}) = ${existing.date}`,
+          ),
+        )
+        .limit(1)
+        .get();
 
+      if (otherExists) {
+        // Both IN and OUT exist — update the existing record's timestamp
+        db.update(attendance)
+          .set({ serverTimestamp: timestamp, photoKey: `miss-punch/approved/${requestId}` })
+          .where(eq(attendance.id, duplicate.id))
+          .run();
+      } else {
+        // Only one record exists with same type, no other type
+        // e.g. employee punched IN at wrong time (was actually OUT) then submitted miss-punch for correct IN
+        // → convert existing record to the other type, insert the miss-punch as correct type
+        db.update(attendance)
+          .set({ punchType: otherType })
+          .where(eq(attendance.id, duplicate.id))
+          .run();
+
+        db.insert(attendance)
+          .values({
+            id: crypto.randomUUID(),
+            employeeId: existing.employeeId,
+            punchType,
+            serverTimestamp: timestamp,
+            photoKey: `miss-punch/approved/${requestId}`,
+            contentType: "text/plain",
+            office: emp?.office || "Bhayandar Office",
+          })
+          .run();
+      }
+    } else {
+      // No duplicate — simple insert
       db.insert(attendance)
         .values({
-          id: attendanceId,
+          id: crypto.randomUUID(),
           employeeId: existing.employeeId,
-          punchType: existing.punchType as "IN" | "OUT",
+          punchType,
           serverTimestamp: timestamp,
           photoKey: `miss-punch/approved/${requestId}`,
           contentType: "text/plain",

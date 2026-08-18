@@ -20,6 +20,7 @@ export default function StaffTab() {
   const [detailEmployee, setDetailEmployee] = useState<EmployeeRow | null>(null);
   const [datewiseEmployee, setDatewiseEmployee] = useState<{ id: string; name: string } | null>(null);
   const [editEmployee, setEditEmployee] = useState<EmployeeRow | null>(null);
+  const [showBulkModal, setShowBulkModal] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   function fetchEmployees() {
@@ -98,7 +99,8 @@ export default function StaffTab() {
       <section className="table-card">
         <div className="table-tools">
           <div><h2>Registered employees</h2><p>{employeeList.length} total</p></div>
-          <div className="filters">
+          <div className="filters" style={{ gap: 8, display: "flex" }}>
+            <button className="secondary" style={{ fontSize: 13, padding: "6px 14px" }} onClick={() => setShowBulkModal(true)}>Import</button>
             <button className="primary" style={{ fontSize: 13, padding: "6px 14px" }} onClick={() => setShowAddModal(true)}>+ Add employee</button>
           </div>
         </div>
@@ -179,7 +181,7 @@ export default function StaffTab() {
       {/* Row click popup menu */}
       {menuEmployee && (() => {
         const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
-        const menuW = 220, menuH = 150;
+        const menuW = 240, menuH = 260;
         const vw = typeof window !== "undefined" ? window.innerWidth : 1000;
         const vh = typeof window !== "undefined" ? window.innerHeight : 800;
         const left = Math.min(menuEmployee.x, vw - menuW - 8);
@@ -313,6 +315,268 @@ export default function StaffTab() {
           onUpdated={fetchEmployees}
         />
       )}
+
+      {/* Bulk import modal */}
+      {showBulkModal && (
+        <BulkImportModal
+          onClose={() => setShowBulkModal(false)}
+          onImported={fetchEmployees}
+        />
+      )}
     </>
+  );
+}
+
+/* ── Bulk Import Modal (CSV + XLSX) ────────────────────────── */
+
+const CSV_HEADERS = ["name", "email", "password", "jobRole", "department", "mobileNumber", "workStartTime", "workEndTime", "office", "monthlySalary"] as const;
+
+type ParsedRow = Record<string, string>;
+
+function parseCSV(text: string): ParsedRow[] {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return [];
+  const headers = splitCSVLine(lines[0]).map((h) => h.trim());
+  const rows: ParsedRow[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const values = splitCSVLine(lines[i]);
+    const row: ParsedRow = {};
+    for (let j = 0; j < headers.length; j++) {
+      row[headers[j]] = (values[j] || "").trim();
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+function splitCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+      else if (ch === '"') { inQuotes = false; }
+      else { current += ch; }
+    } else {
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === ',') { result.push(current); current = ""; }
+      else { current += ch; }
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+function downloadTemplate() {
+  const header = CSV_HEADERS.join(",");
+  const example = "John Doe,john@company.com,pass1234,Counsellor,HR,9876543210,09:00,18:00,Bhayandar Office,25000";
+  const blob = new Blob([header + "\n" + example + "\n"], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "employee_template.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+type ImportError = { row: number; field: string; message: string };
+type ImportResult = { created: { id: string; name: string; email: string }[]; errors: ImportError[] };
+
+function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [fileName, setFileName] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isXlsx, setIsXlsx] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [error, setError] = useState("");
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    setError("");
+    setResult(null);
+    setSelectedFile(file);
+
+    const ext = file.name.toLowerCase();
+    if (ext.endsWith(".xlsx")) {
+      // XLSX files are parsed server-side; show file name only
+      setIsXlsx(true);
+      setRows([]);
+    } else if (ext.endsWith(".csv")) {
+      setIsXlsx(false);
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        const parsed = parseCSV(text);
+        if (parsed.length === 0) {
+          setError("No data rows found. Make sure the file has a header row and at least one data row.");
+          setRows([]);
+          return;
+        }
+        setRows(parsed);
+      };
+      reader.readAsText(file);
+    } else {
+      setError("Unsupported file format. Please upload a .csv or .xlsx file.");
+      setSelectedFile(null);
+      setRows([]);
+    }
+  }
+
+  async function handleImport() {
+    setImporting(true);
+    setError("");
+    try {
+      let res: Response;
+      if (isXlsx && selectedFile) {
+        // Send XLSX as FormData for server-side parsing
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+        res = await fetch("/api/employees/bulk", { method: "POST", body: formData });
+      } else {
+        // Send parsed CSV rows as JSON
+        const payload = rows.map((r) => ({
+          name: r.name || "",
+          email: r.email || "",
+          password: r.password || "",
+          jobRole: r.jobRole || "",
+          department: r.department || "",
+          mobileNumber: r.mobileNumber || "",
+          workStartTime: r.workStartTime || "",
+          workEndTime: r.workEndTime || "",
+          office: r.office || "",
+          monthlySalary: r.monthlySalary ? Number(r.monthlySalary) : 0,
+        }));
+        res = await fetch("/api/employees/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ employees: payload }),
+        });
+      }
+      const data = await res.json() as ImportResult & { error?: string };
+      if (data.error) {
+        setError(data.error);
+      } else {
+        setResult(data);
+        if (data.created.length > 0) onImported();
+      }
+    } catch {
+      setError("Could not connect to server.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  const canImport = isXlsx ? !!selectedFile : rows.length > 0;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 700 }}>
+        <div className="modal-header">
+          <h2>Import employees</h2>
+          <button className="modal-close" onClick={onClose}>&times;</button>
+        </div>
+        <div className="modal-form" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {!result && (
+            <>
+              <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>
+                Upload a <b>.csv</b> or <b>.xlsx</b> file with employee details. Required columns: <b>name</b>, <b>email</b>, <b>password</b>. Optional: jobRole, department, mobileNumber, workStartTime, workEndTime, office, monthlySalary.
+              </p>
+              <button type="button" className="secondary" onClick={downloadTemplate} style={{ alignSelf: "flex-start", fontSize: 13 }}>
+                Download CSV template
+              </button>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>Choose file (.csv or .xlsx)</span>
+                <input type="file" accept=".csv,.xlsx" onChange={handleFile} />
+              </label>
+
+              {/* CSV preview */}
+              {fileName && !isXlsx && rows.length > 0 && (
+                <>
+                  <p style={{ margin: 0, fontSize: 13 }}>
+                    <b>{rows.length}</b> employee{rows.length !== 1 ? "s" : ""} found in <b>{fileName}</b>
+                  </p>
+                  <div style={{ maxHeight: 250, overflow: "auto", border: "1px solid #e7e9ee", borderRadius: 8 }}>
+                    <table style={{ fontSize: 12 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: "6px 10px" }}>#</th>
+                          <th style={{ padding: "6px 10px" }}>Name</th>
+                          <th style={{ padding: "6px 10px" }}>Email</th>
+                          <th style={{ padding: "6px 10px" }}>Job Role</th>
+                          <th style={{ padding: "6px 10px" }}>Dept</th>
+                          <th style={{ padding: "6px 10px" }}>Mobile</th>
+                          <th style={{ padding: "6px 10px" }}>Office</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((r, i) => (
+                          <tr key={i}>
+                            <td style={{ padding: "4px 10px" }}>{i + 1}</td>
+                            <td style={{ padding: "4px 10px" }}>{r.name || <span style={{ color: "#e53e3e" }}>missing</span>}</td>
+                            <td style={{ padding: "4px 10px" }}>{r.email || <span style={{ color: "#e53e3e" }}>missing</span>}</td>
+                            <td style={{ padding: "4px 10px" }}>{r.jobRole || "\u2014"}</td>
+                            <td style={{ padding: "4px 10px" }}>{r.department || "\u2014"}</td>
+                            <td style={{ padding: "4px 10px" }}>{r.mobileNumber || "\u2014"}</td>
+                            <td style={{ padding: "4px 10px" }}>{r.office || "\u2014"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* XLSX file selected indicator */}
+              {fileName && isXlsx && (
+                <p style={{ margin: 0, fontSize: 13 }}>
+                  Selected: <b>{fileName}</b> (Excel file &mdash; will be parsed on import)
+                </p>
+              )}
+
+              {error && <p className="form-message">{error}</p>}
+              <button
+                className="primary"
+                onClick={handleImport}
+                disabled={importing || !canImport}
+                style={{ fontSize: 14 }}
+              >
+                {importing ? "Importing..." : isXlsx ? "Import from Excel" : `Import ${rows.length} employee${rows.length !== 1 ? "s" : ""}`}
+              </button>
+            </>
+          )}
+
+          {result && (
+            <>
+              {result.created.length > 0 && (
+                <div style={{ padding: 16, background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
+                  <b style={{ color: "#166534" }}>{result.created.length} employee{result.created.length !== 1 ? "s" : ""} imported successfully</b>
+                  <ul style={{ margin: "8px 0 0", paddingLeft: 20, fontSize: 13 }}>
+                    {result.created.map((c) => (
+                      <li key={c.id}>{c.name} ({c.id}) &mdash; {c.email}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {result.errors.length > 0 && (
+                <div style={{ padding: 16, background: "#fef2f2", borderRadius: 8, border: "1px solid #fecaca" }}>
+                  <b style={{ color: "#991b1b" }}>{result.errors.length} error{result.errors.length !== 1 ? "s" : ""}</b>
+                  <ul style={{ margin: "8px 0 0", paddingLeft: 20, fontSize: 13 }}>
+                    {result.errors.map((err, i) => (
+                      <li key={i} style={{ color: "#991b1b" }}>Row {err.row}: {err.message}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <button className="primary" onClick={onClose} style={{ fontSize: 14 }}>Close</button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

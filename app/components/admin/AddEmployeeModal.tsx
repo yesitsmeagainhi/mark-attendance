@@ -121,14 +121,14 @@ export default function AddEmployeeModal({
           <h2>Add new employee</h2>
           <button className="modal-close" onClick={onClose}>&times;</button>
         </div>
-        <form className="modal-form" onSubmit={handleSubmit}>
+        <form className="modal-form" onSubmit={handleSubmit} autoComplete="off">
           <label>
             <span>Full name</span>
-            <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Priya Shah" required autoFocus />
+            <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Priya Shah" required autoFocus autoComplete="off" />
           </label>
           <label>
             <span>Job role</span>
-            <input type="text" value={form.jobRole} onChange={(e) => setForm({ ...form, jobRole: e.target.value })} placeholder="e.g. Counsellor" required maxLength={80} />
+            <input type="text" value={form.jobRole} onChange={(e) => setForm({ ...form, jobRole: e.target.value })} placeholder="e.g. Counsellor" required maxLength={80} autoComplete="off" />
           </label>
           <label>
             <span>Department</span>
@@ -141,15 +141,15 @@ export default function AddEmployeeModal({
           </label>
           <label>
             <span>Email address</span>
-            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="priya@company.com" required />
+            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="priya@company.com" required autoComplete="new-email" />
           </label>
           <label>
             <span>Password</span>
-            <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Min 4 characters" required minLength={4} />
+            <input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Min 4 characters" required minLength={4} autoComplete="new-password" />
           </label>
           <label>
             <span>Mobile number</span>
-            <input type="tel" inputMode="numeric" value={form.mobileNumber} onChange={(e) => setForm({ ...form, mobileNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="10-digit mobile number" pattern="[0-9]{10}" required />
+            <input type="tel" inputMode="numeric" value={form.mobileNumber} onChange={(e) => setForm({ ...form, mobileNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="10-digit mobile number" pattern="[0-9]{10}" required autoComplete="off" />
           </label>
           <div className="modal-row">
             <label>

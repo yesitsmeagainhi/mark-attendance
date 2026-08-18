@@ -3,6 +3,7 @@ import { getDb } from "../../../../db";
 import { attendance, employees, leaveRequests, holidays } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
 import { getEffectiveRulesBatch } from "../../../../lib/rules";
+import { calculateTotalDuration } from "../../../../lib/time-utils";
 
 export async function GET(request: Request) {
   const auth = await requireApiRole("admin");
@@ -66,14 +67,15 @@ export async function GET(request: Request) {
     .all();
 
   // Group all records by employee + date
-  type DayEntry = { punchIn: string | null; punchOut: string | null; source: string; photoKey: string; inRecords: typeof allRecords };
+  type DayEntry = { punchIn: string | null; punchOut: string | null; source: string; photoKey: string; inRecords: typeof allRecords; allPunches: { punchType: string; serverTimestamp: string }[] };
   const empDayMap = new Map<string, Map<string, DayEntry>>();
   for (const r of allRecords) {
     const dateStr = r.serverTimestamp.slice(0, 10);
     if (!empDayMap.has(r.employeeId)) empDayMap.set(r.employeeId, new Map());
     const dayMap = empDayMap.get(r.employeeId)!;
-    if (!dayMap.has(dateStr)) dayMap.set(dateStr, { punchIn: null, punchOut: null, source: r.source, photoKey: r.photoKey, inRecords: [] });
+    if (!dayMap.has(dateStr)) dayMap.set(dateStr, { punchIn: null, punchOut: null, source: r.source, photoKey: r.photoKey, inRecords: [], allPunches: [] });
     const entry = dayMap.get(dateStr)!;
+    entry.allPunches.push({ punchType: r.punchType, serverTimestamp: r.serverTimestamp });
     if (r.punchType === "IN") {
       entry.inRecords.push(r);
       if (!entry.punchIn || r.serverTimestamp < entry.punchIn) {
@@ -117,6 +119,8 @@ export async function GET(request: Request) {
     let lateDays = 0;
     let uhDays = 0;
     let sundayWorkedDays = 0;
+    let shortDays = 0;
+    const minHoursMinutes = empRules.minimum_hours_for_present * 60;
 
     // Count leave days
     let leaveDays = 0;
@@ -158,6 +162,16 @@ export async function GET(request: Request) {
 
       // If punch-out is missing on a past day, treat as absent
       if (!entry.punchOut && dateStr < today) continue;
+
+      // Check minimum hours requirement
+      if (minHoursMinutes > 0 && dateStr < today) {
+        const sorted = [...entry.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
+        const totalDur = calculateTotalDuration(sorted);
+        if (totalDur > 0 && totalDur < minHoursMinutes) {
+          shortDays++;
+          continue;
+        }
+      }
 
       punchDates.add(dateStr);
 

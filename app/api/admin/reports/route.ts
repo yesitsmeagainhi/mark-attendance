@@ -134,6 +134,8 @@ export async function GET(request: Request) {
     let holidayCount = 0;
     let totalWorkedMinutes = 0;
     let sundayWorkedDays = 0;
+    let shortDays = 0;
+    const minHoursMinutes = empRules.minimum_hours_for_present * 60;
 
     // Build daily details
     type DayDetail = {
@@ -213,7 +215,6 @@ export async function GET(request: Request) {
         continue;
       }
 
-      presentDays++;
       let durationMinutes: number | null = null;
       let breakMinutes: number | null = null;
       const sorted = [...entry.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
@@ -224,6 +225,22 @@ export async function GET(request: Request) {
       }
       const brk = calculateBreakDuration(sorted);
       if (brk > 0) breakMinutes = brk;
+
+      // Check if worked less than minimum hours (only for past completed days)
+      if (minHoursMinutes > 0 && totalDur > 0 && totalDur < minHoursMinutes && dateStr < today) {
+        shortDays++;
+        dailyDetails.push({
+          date: dateStr,
+          punchIn: entry.punchIn,
+          punchOut: entry.punchOut,
+          durationMinutes,
+          breakMinutes,
+          status: "short-day",
+        });
+        continue;
+      }
+
+      presentDays++;
 
       // Check late
       let isLate = false;
@@ -268,6 +285,7 @@ export async function GET(request: Request) {
       createdAt: emp.createdAt,
       presentDays,
       absentDays,
+      shortDays,
       lateAbsentDays: lateDeductionDays,
       lateDays,
       leaveDays,

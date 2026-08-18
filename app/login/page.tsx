@@ -22,7 +22,6 @@ function LoginInner() {
   const [password, setPassword] = useState("");
 
   // Employee OTP state
-  const [name, setName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [employeeId, setEmployeeId] = useState("");
@@ -69,7 +68,7 @@ function LoginInner() {
       const res = await fetch("/api/auth/request-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, mobileNumber }),
+        body: JSON.stringify({ mobileNumber }),
       });
       const data = await res.json() as { error?: string; ok?: boolean; employeeId?: string; employeeName?: string };
 
@@ -79,7 +78,7 @@ function LoginInner() {
       }
 
       setEmployeeId(data.employeeId || "");
-      setEmployeeName(data.employeeName || name);
+      setEmployeeName(data.employeeName || "");
       setSuccess("OTP generated! Please ask your admin for the code.");
       setMode("employee-verify");
     } catch {
@@ -140,7 +139,7 @@ function LoginInner() {
               <article>
                 <span className="login-icon">&#9678;</span>
                 <h2>Employee</h2>
-                <p>Sign in with your name and mobile number. Your admin will provide an OTP.</p>
+                <p>Sign in with your registered mobile number. Your admin will provide an OTP.</p>
                 <button className="primary login-link" onClick={() => setMode("employee-request")}>
                   Continue with OTP
                 </button>
@@ -204,22 +203,11 @@ function LoginInner() {
             <p className="eyebrow">Employee login</p>
             <h1>Sign in with OTP</h1>
             <p className="login-intro">
-              Enter your full name and registered mobile number.
-              An OTP will be sent to your admin for verification.
+              Enter your registered mobile number.
+              An OTP will be generated for your admin to share with you.
             </p>
 
             <form className="login-form" onSubmit={handleRequestOtp}>
-              <label>
-                <span>Full name</span>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your full name"
-                  required
-                  autoFocus
-                />
-              </label>
               <label>
                 <span>Mobile number</span>
                 <input
