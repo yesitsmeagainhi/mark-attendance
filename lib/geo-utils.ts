@@ -20,17 +20,18 @@ export function haversineDistance(
   return EARTH_RADIUS_METERS * c;
 }
 
-/** Fixed geo-fence radius in meters. */
+/** Default geo-fence radius in meters (used as fallback). */
 export const GEO_FENCE_RADIUS_METERS = 200;
 
 /**
- * Find the nearest branch within the geo-fence radius.
+ * Find the nearest branch within its configured geo-fence radius.
+ * Each branch can have its own radius; defaults to 200m if not set.
  * Returns the branch info + distance, or null if none are within range.
  */
 export function findNearestBranch(
   empLat: number,
   empLon: number,
-  branchList: Array<{ id: string; name: string; latitude: string; longitude: string }>,
+  branchList: Array<{ id: string; name: string; latitude: string; longitude: string; radius: number }>,
 ): { id: string; name: string; distance: number } | null {
   let nearest: { id: string; name: string; distance: number } | null = null;
 
@@ -39,8 +40,9 @@ export function findNearestBranch(
     const brLon = parseFloat(branch.longitude);
     if (isNaN(brLat) || isNaN(brLon)) continue;
 
+    const branchRadius = branch.radius || GEO_FENCE_RADIUS_METERS;
     const distance = haversineDistance(empLat, empLon, brLat, brLon);
-    if (distance <= GEO_FENCE_RADIUS_METERS) {
+    if (distance <= branchRadius) {
       if (!nearest || distance < nearest.distance) {
         nearest = { id: branch.id, name: branch.name, distance };
       }

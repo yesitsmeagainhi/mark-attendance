@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import { eq, sql, desc } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { employees, employeeRuleOverrides } from "../../../db/schema";
-import { requireApiRole } from "../../authz";
+import { employees, employeeRuleOverrides, attendance, leaveRequests, missPunchRequests } from "../../../db/schema";
+import { requireApiRole, getAppIdentity } from "../../authz";
 
 export async function GET() {
   const auth = await requireApiRole("admin");
@@ -223,4 +223,43 @@ export async function POST(request: Request) {
     { id, name, email, role, jobRole, mobileNumber, workStartTime, workEndTime, office, department },
     { status: 201 },
   );
+}
+
+export async function DELETE(request: Request) {
+  const auth = await requireApiRole("admin");
+  if ("error" in auth) return auth.error;
+
+  let body: { id?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  if (!body.id) {
+    return Response.json({ error: "Employee ID is required." }, { status: 400 });
+  }
+
+  // Prevent admin from deleting themselves
+  const identity = await getAppIdentity();
+  if (identity && identity.employeeId === body.id) {
+    return Response.json({ error: "You cannot delete your own account." }, { status: 403 });
+  }
+
+  const db = getDb();
+  const emp = db.select({ id: employees.id }).from(employees).where(eq(employees.id, body.id)).get();
+  if (!emp) {
+    return Response.json({ error: "Employee not found." }, { status: 404 });
+  }
+
+  // Delete related records first (foreign key constraints)
+  db.delete(attendance).where(eq(attendance.employeeId, body.id)).run();
+  db.delete(leaveRequests).where(eq(leaveRequests.employeeId, body.id)).run();
+  db.delete(missPunchRequests).where(eq(missPunchRequests.employeeId, body.id)).run();
+  db.delete(employeeRuleOverrides).where(eq(employeeRuleOverrides.employeeId, body.id)).run();
+
+  // Delete the employee
+  db.delete(employees).where(eq(employees.id, body.id)).run();
+
+  return Response.json({ ok: true });
 }

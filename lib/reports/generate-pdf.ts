@@ -7,6 +7,7 @@ const statusLabels: Record<string, string> = {
   leave: "Leave",
   uh: "UH",
   sunday: "Sunday",
+  "sunday-worked": "Sun Work",
   holiday: "Holiday",
 };
 
@@ -17,6 +18,7 @@ const statusColors: Record<string, { bg: [number, number, number]; fg: [number, 
   leave: { bg: [239, 246, 255], fg: [37, 99, 235] },
   uh: { bg: [255, 244, 220], fg: [168, 100, 0] },
   sunday: { bg: [243, 244, 248], fg: [102, 112, 133] },
+  "sunday-worked": { bg: [219, 234, 254], fg: [29, 78, 216] },
   holiday: { bg: [243, 244, 248], fg: [102, 112, 133] },
 };
 
@@ -80,10 +82,11 @@ function buildEmployeePage(
     ["Employee ID", emp.id, "Per Day Pay", fmt(emp.perDayRate)],
     ["Branch", emp.office, "Present Days", String(emp.presentDays)],
     ["Job Role", emp.jobRole, "Absent Days", String(emp.absentDays)],
-    ["Shift Timing", emp.shift, "Late Days", `${emp.lateDays}${emp.lateAbsentDays > 0 ? ` (= ${emp.lateAbsentDays} absent)` : ""}`],
+    ["Shift Timing", emp.shift, "Late Days", `${emp.lateDays}${emp.lateAbsentDays > 0 ? ` (= ${emp.lateAbsentDays}d ded.)` : ""}`],
     ["Joining Date", fmtJoinDate(emp.createdAt), "Leave Days", String(emp.leaveDays)],
     ["Working Days", String(workingDays), "Weekly Offs", String(emp.weeklyOffs)],
-    ["Deduction", fmt(emp.deduction), "Net Pay", fmt(emp.netPay)],
+    ["Sunday Worked", `${emp.sundayWorkedDays}${emp.sundayBonus > 0 ? ` (+${fmt(emp.sundayBonus)})` : ""}`, "Deduction", fmt(emp.deduction)],
+    ["", "", "Net Pay", fmt(emp.netPay)],
   ];
 
   autoTable(doc, {
@@ -99,7 +102,7 @@ function buildEmployeePage(
     },
     didParseCell(data: { column: { index: number }; row: { index: number }; cell: { styles: { fillColor: number[]; fontStyle: string; textColor: number[] } } }) {
       // Highlight Net Pay value
-      if (data.column.index === 3 && data.row.index === 7) {
+      if (data.column.index === 3 && data.row.index === 8) {
         data.cell.styles.fillColor = [232, 247, 239];
         data.cell.styles.fontStyle = "bold";
       }
@@ -113,8 +116,9 @@ function buildEmployeePage(
 
   const bodyData = emp.dailyDetails.map((day) => {
     const isWorkDay = day.status === "present" || day.status === "late";
-    const daySalary = isWorkDay ? emp.perDayRate : 0;
-    if (isWorkDay) totalSalary += daySalary;
+    const isSundayWorked = day.status === "sunday-worked";
+    const daySalary = isSundayWorked ? emp.perDayRate : (isWorkDay ? emp.perDayRate : 0);
+    if (isWorkDay || isSundayWorked) totalSalary += daySalary;
     if (day.breakMinutes) totalBreakMins += day.breakMinutes;
 
     return [
@@ -125,7 +129,7 @@ function buildEmployeePage(
       day.punchOut ? fmtTimeIST(day.punchOut) : "\u2014",
       day.breakMinutes ? fmtDur(day.breakMinutes) : "\u2014",
       day.durationMinutes ? fmtDur(day.durationMinutes) : "\u2014",
-      isWorkDay ? fmt(daySalary) : "\u2014",
+      (isWorkDay || isSundayWorked) ? fmt(daySalary) : "\u2014",
     ];
   });
 

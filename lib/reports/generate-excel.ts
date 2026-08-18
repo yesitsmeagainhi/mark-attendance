@@ -27,6 +27,8 @@ export type ReportEmployee = {
   holidayCount: number;
   attendancePct: number;
   totalWorkedMinutes: number;
+  sundayWorkedDays: number;
+  sundayBonus: number;
   perDayRate: number;
   deduction: number;
   netPay: number;
@@ -40,6 +42,7 @@ const statusLabels: Record<string, string> = {
   leave: "Leave",
   uh: "Unpaid Holiday",
   sunday: "Sunday",
+  "sunday-worked": "Sun Work",
   holiday: "Holiday",
 };
 
@@ -50,6 +53,7 @@ const statusColors: Record<string, { bg: string; fg: string }> = {
   leave: { bg: "EFF6FF", fg: "2563EB" },
   uh: { bg: "FFF4DC", fg: "A86400" },
   sunday: { bg: "F3F4F8", fg: "667085" },
+  "sunday-worked": { bg: "DBEAFE", fg: "1D4ED8" },
   holiday: { bg: "F3F4F8", fg: "667085" },
 };
 
@@ -115,8 +119,9 @@ function buildEmployeeSheet(
   const infoGrid: [string, string, string, string, string, string, string, string][] = [
     ["Name", emp.name, "Emp ID", emp.id, "Branch", emp.office, "Role", emp.jobRole],
     ["Shift", emp.shift, "Joined", fmtJoinDate(emp.createdAt), "Work Days", String(workingDays), "Salary", fmt(emp.monthlySalary)],
-    ["Present", String(emp.presentDays), "Absent", String(emp.absentDays), "Late", `${emp.lateDays}${emp.lateAbsentDays > 0 ? `(=${emp.lateAbsentDays}abs)` : ""}`, "Leave", String(emp.leaveDays)],
-    ["Wkly Off", String(emp.weeklyOffs), "Holidays", String(emp.holidayCount), "Deduction", fmt(emp.deduction), "Net Pay", fmt(emp.netPay)],
+    ["Present", String(emp.presentDays), "Absent", String(emp.absentDays), "Late", `${emp.lateDays}${emp.lateAbsentDays > 0 ? ` (= ${emp.lateAbsentDays}d ded.)` : ""}`, "Leave", String(emp.leaveDays)],
+    ["Wkly Off", String(emp.weeklyOffs), "Holidays", String(emp.holidayCount), "Sun Work", `${emp.sundayWorkedDays}${emp.sundayBonus > 0 ? ` (+${fmt(emp.sundayBonus)})` : ""}`, "Deduction", fmt(emp.deduction)],
+    ["", "", "", "", "", "", "Net Pay", fmt(emp.netPay)],
   ];
 
   const infoStartRow = 2;
@@ -175,8 +180,9 @@ function buildEmployeeSheet(
     const row = sheet.getRow(rowIdx);
     row.height = 13;
     const isWorkDay = day.status === "present" || day.status === "late";
-    const daySalary = isWorkDay ? emp.perDayRate : 0;
-    if (isWorkDay) totalSalary += daySalary;
+    const isSundayWorked = day.status === "sunday-worked";
+    const daySalary = isSundayWorked ? emp.perDayRate : (isWorkDay ? emp.perDayRate : 0);
+    if (isWorkDay || isSundayWorked) totalSalary += daySalary;
     if (day.breakMinutes) totalBreakMins += day.breakMinutes;
 
     row.getCell(1).value = fmtDate(day.date);
@@ -186,7 +192,7 @@ function buildEmployeeSheet(
     row.getCell(5).value = day.punchOut ? fmtTimeIST(day.punchOut) : "\u2014";
     row.getCell(6).value = day.breakMinutes ? fmtDur(day.breakMinutes) : "\u2014";
     row.getCell(7).value = day.durationMinutes ? fmtDur(day.durationMinutes) : "\u2014";
-    row.getCell(8).value = isWorkDay ? fmt(daySalary) : "\u2014";
+    row.getCell(8).value = (isWorkDay || isSundayWorked) ? fmt(daySalary) : "\u2014";
 
     // Status cell coloring
     const sc = statusColors[day.status];

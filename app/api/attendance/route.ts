@@ -93,7 +93,7 @@ export async function POST(request: Request) {
   }
 
   const activeBranches = db
-    .select({ id: branches.id, name: branches.name, latitude: branches.latitude, longitude: branches.longitude })
+    .select({ id: branches.id, name: branches.name, latitude: branches.latitude, longitude: branches.longitude, radius: branches.radius })
     .from(branches)
     .where(eq(branches.active, true))
     .all();
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
   const matchedBranch = findNearestBranch(empLat, empLon, activeBranches);
   if (!matchedBranch) {
     return Response.json(
-      { error: "You are not within 200 meters of any registered office. Please move closer to your office and try again." },
+      { error: "You are not within the geo-fence radius of any registered office. Please move closer to your office and try again." },
       { status: 403 },
     );
   }

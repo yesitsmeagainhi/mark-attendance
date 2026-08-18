@@ -7,7 +7,7 @@ import AttendanceRulesSection from "./AttendanceRulesSection";
 export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
   const [branchList, setBranchList] = useState<BranchRow[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ name: "", latitude: "", longitude: "" });
+  const [form, setForm] = useState({ name: "", latitude: "", longitude: "", radius: "200" });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
@@ -72,7 +72,7 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
         const res = await fetch("/api/branches", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: editing.id, name: form.name.trim(), latitude: form.latitude.trim(), longitude: form.longitude.trim() }),
+          body: JSON.stringify({ id: editing.id, name: form.name.trim(), latitude: form.latitude.trim(), longitude: form.longitude.trim(), radius: parseInt(form.radius, 10) || 200 }),
         });
         const data = (await res.json()) as { error?: string };
         if (!res.ok) { setError(data.error || "Could not update branch."); return; }
@@ -81,13 +81,13 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
         const res = await fetch("/api/branches", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: form.name.trim(), latitude: form.latitude.trim(), longitude: form.longitude.trim() }),
+          body: JSON.stringify({ name: form.name.trim(), latitude: form.latitude.trim(), longitude: form.longitude.trim(), radius: parseInt(form.radius, 10) || 200 }),
         });
         const data = (await res.json()) as { error?: string; name?: string };
         if (!res.ok) { setError(data.error || "Could not create branch."); return; }
         setSuccess(`Branch "${data.name}" created successfully.`);
       }
-      setForm({ name: "", latitude: "", longitude: "" });
+      setForm({ name: "", latitude: "", longitude: "", radius: "200" });
       setEditing(null);
       fetchBranches();
       setTimeout(() => { setShowModal(false); setSuccess(""); }, 1500);
@@ -111,31 +111,32 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
     <>
       <section className="table-card">
         <div className="table-tools">
-          <div><h2>Branch locations</h2><p>{branchList.length} total &middot; Geo-fence radius: 200m</p></div>
+          <div><h2>Branch locations</h2><p>{branchList.length} total</p></div>
           <div className="filters">
-            <button className="primary" style={{ fontSize: 13, padding: "6px 14px" }} onClick={() => { setShowModal(true); setEditing(null); setForm({ name: "", latitude: "", longitude: "" }); setError(""); setSuccess(""); }}>+ Add branch</button>
+            <button className="primary" style={{ fontSize: 13, padding: "6px 14px" }} onClick={() => { setShowModal(true); setEditing(null); setForm({ name: "", latitude: "", longitude: "", radius: "200" }); setError(""); setSuccess(""); }}>+ Add branch</button>
           </div>
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Branch name</th><th>Latitude</th><th>Longitude</th><th>Status</th><th>Added</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Branch name</th><th>Latitude</th><th>Longitude</th><th>Radius</th><th>Status</th><th>Added</th><th>Actions</th></tr></thead>
             <tbody>
               {branchList.map((b) => (
                 <tr key={b.id}>
                   <td><b>{b.name}</b></td>
                   <td><code>{b.latitude}</code></td>
                   <td><code>{b.longitude}</code></td>
+                  <td><code>{b.radius || 200}m</code></td>
                   <td><span className={`status ${b.active ? "" : "absent"}`}>&#9679; {b.active ? "Active" : "Inactive"}</span></td>
                   <td><small>{new Date(b.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</small></td>
                   <td>
                     <div className="review-actions">
-                      <button className="btn-approve" style={{ fontSize: 12 }} onClick={() => { setEditing(b); setForm({ name: b.name, latitude: b.latitude, longitude: b.longitude }); setShowModal(true); setError(""); setSuccess(""); }}>Edit</button>
+                      <button className="btn-approve" style={{ fontSize: 12 }} onClick={() => { setEditing(b); setForm({ name: b.name, latitude: b.latitude, longitude: b.longitude, radius: String(b.radius || 200) }); setShowModal(true); setError(""); setSuccess(""); }}>Edit</button>
                       <button className={b.active ? "btn-reject" : "btn-approve"} style={{ fontSize: 12 }} onClick={() => toggleActive(b)}>{b.active ? "Deactivate" : "Activate"}</button>
                     </div>
                   </td>
                 </tr>
               ))}
-              {branchList.length === 0 && <tr><td colSpan={6} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No branches configured. Add a branch to enable geo-fenced attendance.</td></tr>}
+              {branchList.length === 0 && <tr><td colSpan={7} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No branches configured. Add a branch to enable geo-fenced attendance.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -163,6 +164,10 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
                   <input type="text" inputMode="decimal" value={form.longitude} onChange={(e) => setForm({ ...form, longitude: e.target.value })} placeholder="e.g. 72.8510" required />
                 </label>
               </div>
+              <label>
+                <span>Geo-fence radius (meters)</span>
+                <input type="number" inputMode="numeric" value={form.radius} onChange={(e) => setForm({ ...form, radius: e.target.value })} placeholder="200" min={50} max={5000} required />
+              </label>
               <button type="button" className="secondary" onClick={useCurrentLocation} disabled={gettingLocation} style={{ width: "100%" }}>
                 {gettingLocation ? "Getting location..." : "\u{1F4CD} Use current location"}
               </button>

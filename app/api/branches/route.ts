@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const auth = await requireApiRole("admin");
   if ("error" in auth) return auth.error;
 
-  let body: { name?: string; latitude?: string; longitude?: string };
+  let body: { name?: string; latitude?: string; longitude?: string; radius?: number };
   try {
     body = await request.json();
   } catch {
@@ -31,6 +31,7 @@ export async function POST(request: Request) {
   const name = body.name?.trim();
   const latitude = body.latitude?.trim();
   const longitude = body.longitude?.trim();
+  const radius = Math.max(50, Math.min(5000, Math.round(Number(body.radius) || 200)));
 
   if (!name || name.length < 2) {
     return Response.json({ error: "Branch name is required (minimum 2 characters)." }, { status: 400 });
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
 
   const id = crypto.randomUUID();
   db.insert(branches)
-    .values({ id, name, latitude: lat.toString(), longitude: lon.toString() })
+    .values({ id, name, latitude: lat.toString(), longitude: lon.toString(), radius })
     .run();
 
   return Response.json({ id, name }, { status: 201 });
@@ -69,7 +70,7 @@ export async function PATCH(request: Request) {
   const auth = await requireApiRole("admin");
   if ("error" in auth) return auth.error;
 
-  let body: { id?: string; name?: string; latitude?: string; longitude?: string; active?: boolean };
+  let body: { id?: string; name?: string; latitude?: string; longitude?: string; radius?: number; active?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -113,6 +114,13 @@ export async function PATCH(request: Request) {
       return Response.json({ error: "Valid longitude required." }, { status: 400 });
     }
     updates.longitude = lon.toString();
+  }
+  if (body.radius !== undefined) {
+    const r = Math.round(Number(body.radius));
+    if (isNaN(r) || r < 50 || r > 5000) {
+      return Response.json({ error: "Radius must be between 50 and 5000 meters." }, { status: 400 });
+    }
+    updates.radius = r;
   }
   if (body.active !== undefined) {
     updates.active = body.active;

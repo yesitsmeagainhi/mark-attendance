@@ -65,4 +65,5 @@ export type BranchRow = {
   longitude: string;
   active: boolean;
   createdAt: string;
+  radius: number;
 };

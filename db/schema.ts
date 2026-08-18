@@ -87,6 +87,7 @@ export const branches = sqliteTable("branches", {
   name: text("name").notNull().unique(),
   latitude: text("latitude").notNull(),
   longitude: text("longitude").notNull(),
+  radius: integer("radius").notNull().default(200),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

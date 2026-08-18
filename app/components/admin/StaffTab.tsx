@@ -57,6 +57,31 @@ export default function StaffTab() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [menuEmployee]);
 
+  async function toggleActive(emp: EmployeeRow) {
+    await fetch("/api/employees", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: emp.id, active: !emp.active }),
+    });
+    setMenuEmployee(null);
+    fetchEmployees();
+  }
+
+  async function deleteEmployee(emp: EmployeeRow) {
+    if (!confirm(`Are you sure you want to permanently delete ${emp.name}? This will remove all their attendance records, leave requests, and other data. This action cannot be undone.`)) return;
+    const res = await fetch("/api/employees", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: emp.id }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      alert(data?.error || "Failed to delete employee.");
+    }
+    setMenuEmployee(null);
+    fetchEmployees();
+  }
+
   async function saveSalary(empId: string) {
     const salary = parseInt(salaryValue, 10) || 0;
     await fetch("/api/employees", {
@@ -237,6 +262,24 @@ export default function StaffTab() {
                 onClick={() => { setEditEmployee(menuEmployee.emp); setMenuEmployee(null); }}
               >
                 Edit Employee
+              </button>
+              <div style={{ height: 1, background: "#e7e9ee" }} />
+              <button
+                style={{ display: "block", width: "100%", padding: isMobile ? "16px 20px" : "14px 20px", background: "none", border: "none", textAlign: "left", fontSize: 14, fontWeight: 600, cursor: "pointer", color: menuEmployee.emp.active ? "#a86400" : "#168052" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                onClick={() => toggleActive(menuEmployee.emp)}
+              >
+                {menuEmployee.emp.active ? "Deactivate Employee" : "Activate Employee"}
+              </button>
+              <div style={{ height: 1, background: "#e7e9ee" }} />
+              <button
+                style={{ display: "block", width: "100%", padding: isMobile ? "16px 20px" : "14px 20px", background: "none", border: "none", textAlign: "left", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#c73333" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#fff5f5")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                onClick={() => deleteEmployee(menuEmployee.emp)}
+              >
+                Delete Employee
               </button>
             </div>
           </>

@@ -63,11 +63,16 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
       </header>
 
       {view === "employee" ? (
-        <div className="employee-layout">
+        // <div className="employee-layout">
+<div className={`employee-layout ${camera.cameraOpen ? "camera-active" : ""}`}>
 
-
-          <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
-
+          {/* <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} /> */}
+          {!camera.cameraOpen && (
+            <TabNavigation
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+            />
+          )}
           {/* Back bar for sub-screens navigated from Home */}
           {!["home", "attendance"].includes(activeTab) && (
             <div style={{
@@ -122,7 +127,7 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
           {adminTab === "requests" && <RequestsTab />}
           {adminTab === "leaves" && <LeavesTab />}
           {adminTab === "reports" && <ReportsTab />}
-          {adminTab === "payroll" && <PayrollTab />}
+          {/* {adminTab === "payroll" && <PayrollTab />} */}
           {adminTab === "history" && <AdminHistoryTab />}
           {adminTab === "settings" && <SettingsTab onSignOut={handleSignOut} />}
         </div>

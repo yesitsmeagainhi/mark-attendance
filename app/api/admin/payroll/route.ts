@@ -49,41 +49,43 @@ export async function GET(request: Request) {
     .orderBy(employees.name)
     .all();
 
-  // Get punch-in records for the month
-  const punchRecords = db
+  // Get ALL attendance records (IN + OUT) for the month
+  const allRecords = db
     .select({
       employeeId: attendance.employeeId,
+      punchType: attendance.punchType,
       serverTimestamp: attendance.serverTimestamp,
       source: attendance.source,
       photoKey: attendance.photoKey,
     })
     .from(attendance)
     .where(and(
-      eq(attendance.punchType, "IN"),
       sql`date(${attendance.serverTimestamp}) >= ${firstDay}`,
       sql`date(${attendance.serverTimestamp}) <= ${lastDayStr}`,
     ))
     .all();
 
-  // Get punch-out dates per employee (to check for missing punch-outs)
-  const punchOutRecords = db
-    .select({
-      employeeId: attendance.employeeId,
-      serverTimestamp: attendance.serverTimestamp,
-    })
-    .from(attendance)
-    .where(and(
-      eq(attendance.punchType, "OUT"),
-      sql`date(${attendance.serverTimestamp}) >= ${firstDay}`,
-      sql`date(${attendance.serverTimestamp}) <= ${lastDayStr}`,
-    ))
-    .all();
-
-  const punchOutDates = new Map<string, Set<string>>();
-  for (const r of punchOutRecords) {
-    const d = r.serverTimestamp.slice(0, 10);
-    if (!punchOutDates.has(r.employeeId)) punchOutDates.set(r.employeeId, new Set());
-    punchOutDates.get(r.employeeId)!.add(d);
+  // Group all records by employee + date
+  type DayEntry = { punchIn: string | null; punchOut: string | null; source: string; photoKey: string; inRecords: typeof allRecords };
+  const empDayMap = new Map<string, Map<string, DayEntry>>();
+  for (const r of allRecords) {
+    const dateStr = r.serverTimestamp.slice(0, 10);
+    if (!empDayMap.has(r.employeeId)) empDayMap.set(r.employeeId, new Map());
+    const dayMap = empDayMap.get(r.employeeId)!;
+    if (!dayMap.has(dateStr)) dayMap.set(dateStr, { punchIn: null, punchOut: null, source: r.source, photoKey: r.photoKey, inRecords: [] });
+    const entry = dayMap.get(dateStr)!;
+    if (r.punchType === "IN") {
+      entry.inRecords.push(r);
+      if (!entry.punchIn || r.serverTimestamp < entry.punchIn) {
+        entry.punchIn = r.serverTimestamp;
+        entry.source = r.source;
+        entry.photoKey = r.photoKey;
+      }
+    } else if (r.punchType === "OUT") {
+      if (!entry.punchOut || r.serverTimestamp > entry.punchOut) {
+        entry.punchOut = r.serverTimestamp;
+      }
+    }
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -106,45 +108,15 @@ export async function GET(request: Request) {
   const rulesByEmp = getEffectiveRulesBatch(allEmployees.map((e) => e.id));
 
   const payroll = allEmployees.map((emp) => {
-    const empPunches = punchRecords.filter((r) => r.employeeId === emp.id);
+    const dayMap = empDayMap.get(emp.id) || new Map<string, DayEntry>();
     const [startH, startM] = emp.workStartTime.split(":").map(Number);
     const empRules = rulesByEmp.get(emp.id)!;
     const graceMin = startH * 60 + startM + empRules.grace_period;
 
-    // Group records by date to handle selfie + admin overlaps correctly
-    const byDate = new Map<string, typeof empPunches>();
-    for (const r of empPunches) {
-      const d = r.serverTimestamp.slice(0, 10);
-      if (!byDate.has(d)) byDate.set(d, []);
-      byDate.get(d)!.push(r);
-    }
-
     const punchDates = new Set<string>();
     let lateDays = 0;
     let uhDays = 0;
-
-    for (const [dateStr, dayRecords] of byDate) {
-      // If a selfie-based punch exists, the employee actually came to work —
-      // ignore any admin UH record for that date
-      const hasSelfie = dayRecords.some((r) => r.source !== "admin");
-      const isUH = !hasSelfie && dayRecords.some((r) => r.photoKey === "admin/unpaid-holiday");
-      if (isUH) { uhDays++; continue; }
-
-      // If punch-out is missing on a past day, treat as absent (don't count as present)
-      const empOutDates = punchOutDates.get(emp.id);
-      if (!empOutDates?.has(dateStr) && dateStr < today) continue;
-
-      punchDates.add(dateStr);
-
-      // Use selfie record for late calculation when available
-      const bestPunch = dayRecords.find((r) => r.source !== "admin") || dayRecords[0];
-      const ts = bestPunch.serverTimestamp;
-      const punchDate = new Date(ts.replace(" ", "T") + (ts.includes("Z") ? "" : "Z"));
-      const punchMin = ((punchDate.getUTCHours() + 5) * 60 + punchDate.getUTCMinutes() + 30) % (24 * 60);
-      if (punchMin > graceMin) lateDays++;
-    }
-
-    const presentDays = punchDates.size;
+    let sundayWorkedDays = 0;
 
     // Count leave days
     let leaveDays = 0;
@@ -157,16 +129,59 @@ export async function GET(request: Request) {
       }
     }
 
+    // Iterate every day of the month
+    for (let d = 1; d <= lastDay; d++) {
+      const dateStr = `${month}-${String(d).padStart(2, "0")}`;
+      if (dateStr > today) break;
+      const dayOfWeek = new Date(year, mon - 1, d).getDay();
+
+      const entry = dayMap.get(dateStr);
+
+      // Sunday — check if employee worked (has both IN and OUT)
+      if (dayOfWeek === 0) {
+        if (entry?.punchIn && entry?.punchOut) {
+          sundayWorkedDays++;
+        }
+        continue;
+      }
+
+      // Holiday — skip
+      if (holidayDates.has(dateStr)) continue;
+
+      // No punch record at all
+      if (!entry) continue;
+
+      // Check for UH
+      const hasSelfie = entry.inRecords.some((r) => r.source !== "admin");
+      const isUH = !hasSelfie && entry.photoKey === "admin/unpaid-holiday";
+      if (isUH) { uhDays++; continue; }
+
+      // If punch-out is missing on a past day, treat as absent
+      if (!entry.punchOut && dateStr < today) continue;
+
+      punchDates.add(dateStr);
+
+      // Use selfie record for late calculation when available
+      const bestPunch = entry.inRecords.find((r) => r.source !== "admin") || entry.inRecords[0];
+      if (bestPunch) {
+        const ts = bestPunch.serverTimestamp;
+        const punchDate = new Date(ts.replace(" ", "T") + (ts.includes("Z") ? "" : "Z"));
+        const punchMin = ((punchDate.getUTCHours() + 5) * 60 + punchDate.getUTCMinutes() + 30) % (24 * 60);
+        if (punchMin > graceMin) lateDays++;
+      }
+    }
+
+    const presentDays = punchDates.size;
+
     const effectiveWorkDays = workingDays - uhDays - leaveDays;
     const absentDays = Math.max(0, effectiveWorkDays - presentDays);
-    // Late-to-absent conversion: e.g. every 3 lates = 1 extra absent day
-    const lateAbsentDays = empRules.late_to_absent_count > 0
-      ? Math.floor(lateDays / empRules.late_to_absent_count)
-      : 0;
-    const totalDeductionDays = absentDays + lateAbsentDays;
+    // Late-to-absent conversion: every 3 lates = 0.5 day deduction (half-day steps)
+    const lateDeductionDays = Math.floor(lateDays / 3) * 0.5;
+    const totalDeductionDays = absentDays + lateDeductionDays;
     const perDayRate = workingDays > 0 ? emp.monthlySalary / workingDays : 0;
     const deduction = Math.round(perDayRate * totalDeductionDays);
-    const netPay = emp.monthlySalary - deduction;
+    const sundayBonus = Math.round(sundayWorkedDays * perDayRate);
+    const netPay = emp.monthlySalary - deduction + sundayBonus;
 
     return {
       id: emp.id,
@@ -175,9 +190,11 @@ export async function GET(request: Request) {
       workingDays,
       presentDays,
       absentDays,
-      lateAbsentDays,
+      lateAbsentDays: lateDeductionDays,
       lateDays,
       leaveDays,
+      sundayWorkedDays,
+      sundayBonus,
       deduction,
       netPay,
     };

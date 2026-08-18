@@ -29,6 +29,8 @@ type ReportRow = {
   holidayCount: number;
   attendancePct: number;
   totalWorkedMinutes: number;
+  sundayWorkedDays: number;
+  sundayBonus: number;
   perDayRate: number;
   deduction: number;
   netPay: number;
@@ -92,9 +94,11 @@ function exportEmployeeDetail(emp: ReportRow, month: string) {
     `Present,${emp.presentDays}`,
     `Absent,${emp.absentDays}`,
     `Late,${emp.lateDays}`,
-    `Late=Absent,${emp.lateAbsentDays || 0}`,
+    `Late Ded.,${emp.lateAbsentDays || 0} days`,
     `Leave,${emp.leaveDays}`,
     `UH,${emp.uhDays}`,
+    `Sunday Worked,${emp.sundayWorkedDays || 0}`,
+    `Sunday Bonus,${emp.sundayBonus || 0}`,
     `Total Hours,${fmtDur(emp.totalWorkedMinutes)}`,
     `Attendance,${emp.attendancePct}%`,
     "",
@@ -125,6 +129,7 @@ const statusBadge: Record<string, { bg: string; color: string; label: string }> 
   leave: { bg: "#eff6ff", color: "#2563eb", label: "Leave" },
   uh: { bg: "#fff4dc", color: "#a86400", label: "UH" },
   sunday: { bg: "#f3f4f8", color: "#667085", label: "Sun" },
+  "sunday-worked": { bg: "#dbeafe", color: "#1d4ed8", label: "Sun Work" },
   holiday: { bg: "#f3f4f8", color: "#667085", label: "Holiday" },
 };
 
@@ -273,6 +278,9 @@ export default function ReportsTab() {
               ...(selectedEmp.monthlySalary > 0 ? [
                 { label: "Salary", value: `\u20B9${selectedEmp.monthlySalary.toLocaleString("en-IN")}`, bg: "#f9fafb", color: "#172033" },
                 { label: "Deduction", value: selectedEmp.deduction > 0 ? `-\u20B9${selectedEmp.deduction.toLocaleString("en-IN")}` : "\u2014", bg: "#ffeded", color: "#c73333" },
+                ...(selectedEmp.sundayBonus > 0 ? [
+                  { label: "Sun Bonus", value: `+\u20B9${selectedEmp.sundayBonus.toLocaleString("en-IN")}`, bg: "#dbeafe", color: "#1d4ed8" },
+                ] : []),
                 { label: "Net Pay", value: `\u20B9${selectedEmp.netPay.toLocaleString("en-IN")}`, bg: "#e8f7ef", color: "#168052" },
               ] : []),
             ].map((c) => (
@@ -298,7 +306,7 @@ export default function ReportsTab() {
               <tbody>
                 {selectedEmp.dailyDetails.map((day) => {
                   const badge = statusBadge[day.status] || statusBadge.absent;
-                  const isOff = day.status === "sunday" || day.status === "holiday";
+                  const isOff = (day.status === "sunday" || day.status === "holiday");
                   return (
                     <tr key={day.date} style={{ background: isOff ? "#fafafa" : undefined }}>
                       <td style={{ padding: "10px 14px", borderTop: "1px solid #eff0f3", fontSize: 13, fontWeight: 600 }}>
@@ -361,7 +369,7 @@ export default function ReportsTab() {
                   <td>
                     <span className="grace-badge grace">{r.lateDays}</span>
                     {r.lateAbsentDays > 0 && (
-                      <div style={{ fontSize: 10, color: "#c73333", marginTop: 2 }}>= {r.lateAbsentDays} absent</div>
+                      <div style={{ fontSize: 10, color: "#c73333", marginTop: 2 }}>= {r.lateAbsentDays}d ded.</div>
                     )}
                   </td>
                   <td>{r.leaveDays}</td>

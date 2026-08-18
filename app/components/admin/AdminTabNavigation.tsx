@@ -11,7 +11,7 @@ const barTabs = [
 
 const moreTabs = [
   { id: "leaves", label: "Leaves", icon: "\u{1F334}" },
-  { id: "payroll", label: "Payroll", icon: "\u{1F4B0}" },
+  // { id: "payroll", label: "Payroll", icon: "\u{1F4B0}" },
   { id: "history", label: "History", icon: "\u{1F4CB}" },
   { id: "settings", label: "Settings", icon: "\u{2699}" },
 ];
