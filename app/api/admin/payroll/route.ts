@@ -162,18 +162,18 @@ export async function GET(request: Request) {
       const isUH = !hasSelfie && entry.photoKey === "admin/unpaid-holiday";
       if (isUH) { uhDays++; continue; }
 
-      // If punch-out is missing on a past day, treat as absent
-      if (!entry.punchOut && dateStr < today) continue;
+      // If punch-out is missing, treat as absent (incomplete record)
+      if (!entry.punchOut) continue;
 
       // Three-tier check: short-day / half-day / present
       if (dateStr < today) {
         const sorted = [...entry.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
         const totalDur = calculateTotalDuration(sorted);
-        if (totalDur > 0 && totalDur < halfDayMinutes) {
+        if (totalDur < halfDayMinutes) {
           shortDays++;
           continue;
         }
-        if (totalDur > 0 && totalDur < fullDayMinutes) {
+        if (totalDur < fullDayMinutes) {
           halfDays++;
           continue;
         }

@@ -211,8 +211,8 @@ export async function GET(request: Request) {
         continue;
       }
 
-      // If punch-out is missing on a past day, treat as absent
-      if (!entry.punchOut && dateStr < today) {
+      // If punch-out is missing, treat as absent (incomplete record)
+      if (!entry.punchOut) {
         dailyDetails.push({ date: dateStr, punchIn: entry.punchIn, punchOut: null, durationMinutes: null, breakMinutes: null, status: "absent" });
         continue;
       }
@@ -229,7 +229,7 @@ export async function GET(request: Request) {
       if (brk > 0) breakMinutes = brk;
 
       // Three-tier check: short-day / half-day / present (only for past completed days)
-      if (totalDur > 0 && dateStr < today) {
+      if (dateStr < today) {
         if (totalDur < halfDayMinutes) {
           shortDays++;
           dailyDetails.push({ date: dateStr, punchIn: entry.punchIn, punchOut: entry.punchOut, durationMinutes, breakMinutes, status: "short-day" });
