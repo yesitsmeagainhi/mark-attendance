@@ -109,6 +109,8 @@ export async function GET(request: Request) {
 
   // Build daily records
   const today = new Date().toISOString().slice(0, 10);
+  const halfDayMinutes = empRules.minimum_hours_for_half_day * 60;
+  const fullDayMinutes = empRules.minimum_hours_for_full_day * 60;
   const result: Array<{
     date: string;
     punchInTime: string | null;
@@ -123,6 +125,7 @@ export async function GET(request: Request) {
 
   let presentDays = 0;
   let lateDays = 0;
+  let halfDays = 0;
 
   for (let i = 0; i < days; i++) {
     const d = new Date();
@@ -149,10 +152,28 @@ export async function GET(request: Request) {
       continue;
     }
 
-    // If punch-out is missing on a past day, treat as absent
-    if (!dayData.punchOut && dateStr < today) {
+    // If punch-out is missing, treat as absent (incomplete record)
+    if (!dayData.punchOut) {
       result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: null, duration: null, status: "Absent", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: null });
       continue;
+    }
+
+    // Calculate total duration across all IN/OUT pairs
+    const sorted = [...dayData.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
+    const totalDur = calculateTotalDuration(sorted);
+    let duration: number | null = totalDur > 0 ? totalDur : null;
+
+    // Three-tier check: short-day / half-day / present (for past completed days)
+    if (dateStr < today) {
+      if (totalDur < halfDayMinutes) {
+        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut, duration, status: "Short Day", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null });
+        continue;
+      }
+      if (totalDur < fullDayMinutes) {
+        halfDays++;
+        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut, duration, status: "Half Day", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null });
+        continue;
+      }
     }
 
     const inDate = new Date(dayData.punchIn.replace(" ", "T") + (dayData.punchIn.includes("Z") ? "" : "Z"));
@@ -167,12 +188,6 @@ export async function GET(request: Request) {
       lateDays++;
     }
     presentDays++;
-
-    // Calculate total duration across all IN/OUT pairs
-    let duration: number | null = null;
-    const sorted = [...dayData.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
-    const totalDur = calculateTotalDuration(sorted);
-    if (totalDur > 0) duration = totalDur;
 
     result.push({
       date: dateStr,
@@ -192,7 +207,8 @@ export async function GET(request: Request) {
     totalDays: result.length,
     presentDays,
     lateDays,
-    absentDays: result.filter((r) => r.status === "Absent").length,
+    halfDays,
+    absentDays: result.filter((r) => r.status === "Absent" || r.status === "Short Day").length,
     leaveDays: result.filter((r) => r.status === "Leave").length,
   });
 }

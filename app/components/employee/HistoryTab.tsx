@@ -24,6 +24,7 @@ type HistoryData = {
   totalDays: number;
   presentDays: number;
   lateDays: number;
+  halfDays: number;
   absentDays: number;
   leaveDays: number;
 };
@@ -49,7 +50,8 @@ export default function HistoryTab() {
   const statusClass = (s: string) => {
     if (s === "On time") return "on-time";
     if (s === "Late") return "late";
-    if (s === "Absent") return "absent";
+    if (s === "Absent" || s === "Short Day") return "absent";
+    if (s === "Half Day") return "late";
     if (s === "Leave") return "grace";
     return "";
   };
@@ -59,6 +61,7 @@ export default function HistoryTab() {
       <section className="metrics">
         <article><span className="metric-icon green">&#10003;</span><div><small>Present</small><strong>{data.presentDays}</strong><em>days</em></div></article>
         <article><span className="metric-icon amber">&#9719;</span><div><small>Late</small><strong>{data.lateDays}</strong><em>days</em></div></article>
+        <article><span className="metric-icon amber">&#189;</span><div><small>Half Day</small><strong>{data.halfDays}</strong><em>days</em></div></article>
         <article><span className="metric-icon red">&times;</span><div><small>Absent</small><strong>{data.absentDays}</strong><em>days</em></div></article>
         <article><span className="metric-icon purple">&#9673;</span><div><small>Leave</small><strong>{data.leaveDays}</strong><em>days</em></div></article>
       </section>
