@@ -1,6 +1,14 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getAppIdentity } from "./authz";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const identity = await getAppIdentity();
+  if (identity) {
+    redirect(identity.role === "admin" ? "/admin" : "/employee");
+  }
   return (
     <main className="login-page">
       <section className="login-shell">

@@ -5,5 +5,5 @@ export async function GET() {
   if (!identity) {
     return Response.json({ valid: false }, { status: 401 });
   }
-  return Response.json({ valid: true });
+  return Response.json({ valid: true, role: identity.role });
 }

@@ -51,3 +51,29 @@ export function findNearestBranch(
 
   return nearest;
 }
+
+/**
+ * Find the closest branch regardless of whether it's within range.
+ * Returns branch info with distance and allowed radius for alert messages.
+ */
+export function findClosestBranch(
+  empLat: number,
+  empLon: number,
+  branchList: Array<{ id: string; name: string; latitude: string; longitude: string; radius: number }>,
+): { id: string; name: string; distance: number; radius: number } | null {
+  let closest: { id: string; name: string; distance: number; radius: number } | null = null;
+
+  for (const branch of branchList) {
+    const brLat = parseFloat(branch.latitude);
+    const brLon = parseFloat(branch.longitude);
+    if (isNaN(brLat) || isNaN(brLon)) continue;
+
+    const branchRadius = branch.radius || GEO_FENCE_RADIUS_METERS;
+    const distance = haversineDistance(empLat, empLon, brLat, brLon);
+    if (!closest || distance < closest.distance) {
+      closest = { id: branch.id, name: branch.name, distance, radius: branchRadius };
+    }
+  }
+
+  return closest;
+}

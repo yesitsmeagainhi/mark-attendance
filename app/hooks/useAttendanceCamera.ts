@@ -5,6 +5,12 @@ import * as faceapi from "face-api.js";
 import { formatDuration, formatTimeIST } from "../../lib/time-utils";
 import type { FaceEvalStatus, TodayStatus } from "../components/employee/attendance-types";
 
+export type GeoAlert = {
+  branchName: string;
+  distance: number;
+  allowedRadius: number;
+};
+
 export type UseAttendanceCameraReturn = {
   cameraOpen: boolean;
   openCamera: () => void;
@@ -31,6 +37,8 @@ export type UseAttendanceCameraReturn = {
   setPhoto: (p: string | null) => void;
   setMessage: (m: string) => void;
   handleCaptureFrame: (frame: string) => Promise<void>;
+  geoAlert: GeoAlert | null;
+  dismissGeoAlert: () => void;
 };
 
 export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = {}): UseAttendanceCameraReturn {
@@ -51,6 +59,10 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
   const [modelError, setModelError] = useState("");
   const [faceStatus, setFaceStatus] = useState<FaceEvalStatus>("no-face");
   const [faceGuidance, setFaceGuidance] = useState("Position your face in the frame");
+
+  // Geo-fence alert
+  const [geoAlert, setGeoAlert] = useState<GeoAlert | null>(null);
+  const dismissGeoAlert = useCallback(() => setGeoAlert(null), []);
 
   const fetchStatus = useCallback(() => {
     if (!enabled) return;
@@ -194,8 +206,11 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
       form.append("latitude", location.latitude.toString());
       form.append("longitude", location.longitude.toString());
       const response = await fetch("/api/attendance", { method: "POST", body: form });
-      const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error || "Could not mark attendance.");
+      const result = await response.json() as { error?: string; geoAlert?: GeoAlert };
+      if (!response.ok) {
+        if (result.geoAlert) setGeoAlert(result.geoAlert);
+        throw new Error(result.error || "Could not mark attendance.");
+      }
       setMessage(nextPunchType === "IN" ? "Punch in recorded successfully." : "Punch out recorded. Have a great evening!");
       setPhoto(null);
       setLocation(null);
@@ -217,5 +232,6 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
     faceStatus, faceGuidance, setFaceUpdate,
     nextPunchType, currentlyIn, lastPunchTime, shiftDisplay, elapsed,
     handleCaptureFrame,
+    geoAlert, dismissGeoAlert,
   };
 }

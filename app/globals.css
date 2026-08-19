@@ -432,3 +432,14 @@
   .fco-info-strip{bottom:195px}
   .fco-guidance{bottom:235px;font-size:15px}
 }
+
+/* Geo-fence alert popup */
+.geo-alert-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeIn .2s ease}
+.geo-alert-card{background:#fff;border-radius:20px;padding:32px 28px 24px;max-width:340px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.2);animation:slideUp .25s ease}
+.geo-alert-icon{font-size:48px;line-height:1;margin-bottom:8px;color:#f59e0b}
+.geo-alert-card h3{margin:0 0 12px;font-size:18px;font-weight:800;color:#172033}
+.geo-alert-card p{margin:0 0 8px;font-size:14px;color:#374151;line-height:1.5}
+.geo-alert-card .geo-alert-sub{font-size:13px;color:#6b7280;margin-bottom:20px}
+.geo-alert-card button{width:100%;padding:12px;border-radius:12px;border:0;font-weight:700;font-size:15px}
+@keyframes slideUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}

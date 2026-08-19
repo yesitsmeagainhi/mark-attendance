@@ -3,7 +3,7 @@ import { getDb } from "../../../db";
 import { attendance, employees, branches } from "../../../db/schema";
 import { putFile, deleteFile } from "../../../lib/storage";
 import { getAppIdentity } from "../../authz";
-import { findNearestBranch } from "../../../lib/geo-utils";
+import { findNearestBranch, findClosestBranch } from "../../../lib/geo-utils";
 import { getEffectiveRules } from "../../../lib/rules";
 
 const allowedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -107,8 +107,16 @@ export async function POST(request: Request) {
 
   const matchedBranch = findNearestBranch(empLat, empLon, activeBranches);
   if (!matchedBranch) {
+    const closest = findClosestBranch(empLat, empLon, activeBranches);
     return Response.json(
-      { error: "You are not within the geo-fence radius of any registered office. Please move closer to your office and try again." },
+      {
+        error: "You are not within the geo-fence radius of any registered office. Please move closer to your office and try again.",
+        geoAlert: closest ? {
+          branchName: closest.name,
+          distance: Math.round(closest.distance),
+          allowedRadius: closest.radius,
+        } : null,
+      },
       { status: 403 },
     );
   }

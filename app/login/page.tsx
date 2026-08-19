@@ -16,6 +16,21 @@ function LoginInner() {
       : "choose" as Mode;
 
   const [mode, setMode] = useState<Mode>(initialMode);
+  const [checking, setChecking] = useState(true);
+
+  // Redirect already-authenticated users to their dashboard
+  useEffect(() => {
+    fetch("/api/auth/session-check", { cache: "no-store" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { valid?: boolean; role?: string } | null) => {
+        if (data?.valid) {
+          router.replace(data.role === "admin" ? "/admin" : "/employee");
+        } else {
+          setChecking(false);
+        }
+      })
+      .catch(() => setChecking(false));
+  }, [router]);
 
   // Admin login state
   const [email, setEmail] = useState("");
@@ -118,6 +133,20 @@ function LoginInner() {
     setError("");
     setSuccess("");
   }, [mode]);
+
+  if (checking) {
+    return (
+      <main className="login-page">
+        <section className="login-shell" style={{ textAlign: "center", padding: "80px 24px" }}>
+          <div className="login-brand">
+            <span className="brandmark">A</span>
+            <span>Attendly</span>
+          </div>
+          <p style={{ color: "#667085", marginTop: 24 }}>Checking session...</p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="login-page">
