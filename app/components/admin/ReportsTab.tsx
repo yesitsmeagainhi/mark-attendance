@@ -21,6 +21,7 @@ type ReportRow = {
   createdAt: string;
   presentDays: number;
   absentDays: number;
+  halfDays: number;
   shortDays: number;
   lateAbsentDays: number;
   lateDays: number;
@@ -70,18 +71,18 @@ function downloadCsv(filename: string, csvContent: string) {
 }
 
 function exportSummary(rows: ReportRow[], month: string, workingDays: number) {
-  const header = ["Employee", "ID", "Shift", "Present", "Absent", "Short Day", "Late", "Late=Absent", "Leave", "UH", "Total Hours", "Attendance %"];
+  const header = ["Employee", "ID", "Shift", "Present", "Half Day", "Absent", "Short Day", "Late", "Late=Absent", "Leave", "UH", "Total Hours", "Attendance %"];
   const lines = rows.map((r) => [
     csvEscape(r.name), r.id, r.shift,
-    String(r.presentDays), String(r.absentDays), String(r.shortDays || 0), String(r.lateDays), String(r.lateAbsentDays || 0), String(r.leaveDays), String(r.uhDays),
+    String(r.presentDays), String(r.halfDays || 0), String(r.absentDays), String(r.shortDays || 0), String(r.lateDays), String(r.lateAbsentDays || 0), String(r.leaveDays), String(r.uhDays),
     fmtDur(r.totalWorkedMinutes), `${r.attendancePct}%`,
   ].join(","));
   const totals = rows.reduce((a, r) => ({
-    p: a.p + r.presentDays, ab: a.ab + r.absentDays, sd: a.sd + (r.shortDays || 0), l: a.l + r.lateDays, la: a.la + (r.lateAbsentDays || 0),
+    p: a.p + r.presentDays, hd: a.hd + (r.halfDays || 0), ab: a.ab + r.absentDays, sd: a.sd + (r.shortDays || 0), l: a.l + r.lateDays, la: a.la + (r.lateAbsentDays || 0),
     lv: a.lv + r.leaveDays, u: a.u + r.uhDays, m: a.m + r.totalWorkedMinutes,
-  }), { p: 0, ab: 0, sd: 0, l: 0, la: 0, lv: 0, u: 0, m: 0 });
+  }), { p: 0, hd: 0, ab: 0, sd: 0, l: 0, la: 0, lv: 0, u: 0, m: 0 });
   const avgPct = rows.length > 0 ? Math.round(rows.reduce((s, r) => s + r.attendancePct, 0) / rows.length) : 0;
-  lines.push(["TOTALS", "", "", String(totals.p), String(totals.ab), String(totals.sd), String(totals.l), String(totals.la), String(totals.lv), String(totals.u), fmtDur(totals.m), `${avgPct}%`].join(","));
+  lines.push(["TOTALS", "", "", String(totals.p), String(totals.hd), String(totals.ab), String(totals.sd), String(totals.l), String(totals.la), String(totals.lv), String(totals.u), fmtDur(totals.m), `${avgPct}%`].join(","));
 
   const csv = `Attendance Report - ${month} (Working Days: ${workingDays})\n\n${header.join(",")}\n${lines.join("\n")}`;
   downloadCsv(`attendance-report-${month}.csv`, csv);
@@ -93,6 +94,7 @@ function exportEmployeeDetail(emp: ReportRow, month: string) {
     `Month: ${month}  |  Shift: ${emp.shift}`,
     "",
     `Present,${emp.presentDays}`,
+    `Half Day,${emp.halfDays || 0}`,
     `Absent,${emp.absentDays}`,
     `Short Day,${emp.shortDays || 0}`,
     `Late,${emp.lateDays}`,
@@ -128,6 +130,7 @@ const statusBadge: Record<string, { bg: string; color: string; label: string }> 
   present: { bg: "#e8f7ef", color: "#168052", label: "Present" },
   late: { bg: "#fff4dc", color: "#a86400", label: "Late" },
   absent: { bg: "#ffeded", color: "#c73333", label: "Absent" },
+  "half-day": { bg: "#fff4dc", color: "#a86400", label: "Half Day" },
   "short-day": { bg: "#ffeded", color: "#c73333", label: "Short Day" },
   leave: { bg: "#eff6ff", color: "#2563eb", label: "Leave" },
   uh: { bg: "#fff4dc", color: "#a86400", label: "UH" },
@@ -196,13 +199,14 @@ export default function ReportsTab() {
   const totals = rows.reduce(
     (acc, r) => ({
       present: acc.present + r.presentDays,
+      halfDay: acc.halfDay + (r.halfDays || 0),
       absent: acc.absent + r.absentDays,
       late: acc.late + r.lateDays,
       leave: acc.leave + r.leaveDays,
       uh: acc.uh + r.uhDays,
       minutes: acc.minutes + r.totalWorkedMinutes,
     }),
-    { present: 0, absent: 0, late: 0, leave: 0, uh: 0, minutes: 0 },
+    { present: 0, halfDay: 0, absent: 0, late: 0, leave: 0, uh: 0, minutes: 0 },
   );
   const avgPct = rows.length > 0 ? Math.round(rows.reduce((s, r) => s + r.attendancePct, 0) / rows.length) : 0;
 
@@ -273,6 +277,7 @@ export default function ReportsTab() {
           }}>
             {[
               { label: "Present", value: selectedEmp.presentDays, bg: "#e8f7ef", color: "#168052" },
+              ...(selectedEmp.halfDays > 0 ? [{ label: "Half Day", value: selectedEmp.halfDays, bg: "#fff4dc", color: "#a86400" }] : []),
               { label: "Absent", value: selectedEmp.absentDays, bg: "#ffeded", color: "#c73333" },
               ...(selectedEmp.shortDays > 0 ? [{ label: "Short Day", value: selectedEmp.shortDays, bg: "#ffeded", color: "#c73333" }] : []),
               { label: "Late", value: selectedEmp.lateDays, bg: "#fff4dc", color: "#a86400" },
@@ -351,11 +356,11 @@ export default function ReportsTab() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Employee</th><th>Present</th><th>Absent</th><th>Late</th><th>Leave</th><th>UH</th><th>Hours</th><th>Attendance</th></tr>
+              <tr><th>Employee</th><th>Present</th><th>Half Day</th><th>Absent</th><th>Late</th><th>Leave</th><th>UH</th><th>Hours</th><th>Attendance</th></tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>Loading...</td></tr>
+                <tr><td colSpan={9} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>Loading...</td></tr>
               ) : rows.map((r) => (
                 <tr
                   key={r.id}
@@ -369,6 +374,7 @@ export default function ReportsTab() {
                     </div>
                   </td>
                   <td><span className="grace-badge on-time">{r.presentDays}</span></td>
+                  <td>{r.halfDays > 0 ? <span className="grace-badge grace">{r.halfDays}</span> : <span style={{ color: "#b0b5c0" }}>0</span>}</td>
                   <td><span className="grace-badge late">{r.absentDays}</span></td>
                   <td>
                     <span className="grace-badge grace">{r.lateDays}</span>
@@ -397,6 +403,7 @@ export default function ReportsTab() {
                 <tr className="totals-row">
                   <td><b>TOTALS</b></td>
                   <td><b>{totals.present}</b></td>
+                  <td><b>{totals.halfDay}</b></td>
                   <td><b>{totals.absent}</b></td>
                   <td><b>{totals.late}</b></td>
                   <td><b>{totals.leave}</b></td>
@@ -406,7 +413,7 @@ export default function ReportsTab() {
                 </tr>
               )}
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No data for this month.</td></tr>
+                <tr><td colSpan={9} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No data for this month.</td></tr>
               )}
             </tbody>
           </table>

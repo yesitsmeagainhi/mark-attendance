@@ -135,7 +135,9 @@ export async function GET(request: Request) {
     let totalWorkedMinutes = 0;
     let sundayWorkedDays = 0;
     let shortDays = 0;
-    const minHoursMinutes = empRules.minimum_hours_for_present * 60;
+    let halfDays = 0;
+    const halfDayMinutes = empRules.minimum_hours_for_half_day * 60;
+    const fullDayMinutes = empRules.minimum_hours_for_full_day * 60;
 
     // Build daily details
     type DayDetail = {
@@ -226,18 +228,18 @@ export async function GET(request: Request) {
       const brk = calculateBreakDuration(sorted);
       if (brk > 0) breakMinutes = brk;
 
-      // Check if worked less than minimum hours (only for past completed days)
-      if (minHoursMinutes > 0 && totalDur > 0 && totalDur < minHoursMinutes && dateStr < today) {
-        shortDays++;
-        dailyDetails.push({
-          date: dateStr,
-          punchIn: entry.punchIn,
-          punchOut: entry.punchOut,
-          durationMinutes,
-          breakMinutes,
-          status: "short-day",
-        });
-        continue;
+      // Three-tier check: short-day / half-day / present (only for past completed days)
+      if (totalDur > 0 && dateStr < today) {
+        if (totalDur < halfDayMinutes) {
+          shortDays++;
+          dailyDetails.push({ date: dateStr, punchIn: entry.punchIn, punchOut: entry.punchOut, durationMinutes, breakMinutes, status: "short-day" });
+          continue;
+        }
+        if (totalDur < fullDayMinutes) {
+          halfDays++;
+          dailyDetails.push({ date: dateStr, punchIn: entry.punchIn, punchOut: entry.punchOut, durationMinutes, breakMinutes, status: "half-day" });
+          continue;
+        }
       }
 
       presentDays++;
@@ -263,13 +265,14 @@ export async function GET(request: Request) {
 
     const leaveDays = empLeaveDates.size;
     const countableDays = workingDays - uhDays - leaveDays;
-    const absentDays = Math.max(0, countableDays - presentDays);
+    const absentDays = Math.max(0, countableDays - presentDays - halfDays);
     // Late-to-absent conversion: every 3 lates = 0.5 day deduction (half-day steps)
     const lateDeductionDays = Math.floor(lateDays / 3) * 0.5;
-    const attendancePct = countableDays > 0 ? Math.round((presentDays / countableDays) * 100) : 100;
+    const halfDayDeduction = halfDays * 0.5;
+    const attendancePct = countableDays > 0 ? Math.round(((presentDays + halfDays * 0.5) / countableDays) * 100) : 100;
 
     // Salary calculations (per-day rate uses full month working days)
-    const totalDeductionDays = absentDays + lateDeductionDays;
+    const totalDeductionDays = absentDays + halfDayDeduction + lateDeductionDays;
     const perDayRate = totalMonthWorkingDays > 0 ? Math.round(emp.monthlySalary / totalMonthWorkingDays) : 0;
     const deduction = Math.round((totalMonthWorkingDays > 0 ? emp.monthlySalary / totalMonthWorkingDays : 0) * totalDeductionDays);
     const sundayBonus = sundayWorkedDays * perDayRate;
@@ -285,6 +288,7 @@ export async function GET(request: Request) {
       createdAt: emp.createdAt,
       presentDays,
       absentDays,
+      halfDays,
       shortDays,
       lateAbsentDays: lateDeductionDays,
       lateDays,

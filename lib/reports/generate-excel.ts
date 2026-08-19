@@ -19,6 +19,7 @@ export type ReportEmployee = {
   createdAt: string;
   presentDays: number;
   absentDays: number;
+  halfDays: number;
   lateAbsentDays: number;
   lateDays: number;
   leaveDays: number;
@@ -39,6 +40,7 @@ const statusLabels: Record<string, string> = {
   present: "Present",
   late: "Late",
   absent: "Absent",
+  "half-day": "Half Day",
   "short-day": "Short Day",
   leave: "Leave",
   uh: "Unpaid Holiday",
@@ -51,6 +53,7 @@ const statusColors: Record<string, { bg: string; fg: string }> = {
   present: { bg: "E8F7EF", fg: "168052" },
   late: { bg: "FFF4DC", fg: "A86400" },
   absent: { bg: "FFEDED", fg: "C73333" },
+  "half-day": { bg: "FFF4DC", fg: "A86400" },
   "short-day": { bg: "FFEDED", fg: "C73333" },
   leave: { bg: "EFF6FF", fg: "2563EB" },
   uh: { bg: "FFF4DC", fg: "A86400" },
@@ -121,8 +124,8 @@ function buildEmployeeSheet(
   const infoGrid: [string, string, string, string, string, string, string, string][] = [
     ["Name", emp.name, "Emp ID", emp.id, "Branch", emp.office, "Role", emp.jobRole],
     ["Shift", emp.shift, "Joined", fmtJoinDate(emp.createdAt), "Work Days", String(workingDays), "Salary", fmt(emp.monthlySalary)],
-    ["Present", String(emp.presentDays), "Absent", String(emp.absentDays), "Late", `${emp.lateDays}${emp.lateAbsentDays > 0 ? ` (= ${emp.lateAbsentDays}d ded.)` : ""}`, "Leave", String(emp.leaveDays)],
-    ["Wkly Off", String(emp.weeklyOffs), "Holidays", String(emp.holidayCount), "Sun Work", `${emp.sundayWorkedDays}${emp.sundayBonus > 0 ? ` (+${fmt(emp.sundayBonus)})` : ""}`, "Deduction", fmt(emp.deduction)],
+    ["Present", String(emp.presentDays), "Half Day", String(emp.halfDays || 0), "Absent", String(emp.absentDays), "Late", `${emp.lateDays}${emp.lateAbsentDays > 0 ? ` (= ${emp.lateAbsentDays}d ded.)` : ""}`],
+    ["Leave", String(emp.leaveDays), "Wkly Off", String(emp.weeklyOffs), "Holidays", String(emp.holidayCount), "Sun Work", `${emp.sundayWorkedDays}${emp.sundayBonus > 0 ? ` (+${fmt(emp.sundayBonus)})` : ""}`],
     ["", "", "", "", "", "", "Net Pay", fmt(emp.netPay)],
   ];
 
@@ -182,9 +185,10 @@ function buildEmployeeSheet(
     const row = sheet.getRow(rowIdx);
     row.height = 13;
     const isWorkDay = day.status === "present" || day.status === "late";
+    const isHalfDay = day.status === "half-day";
     const isSundayWorked = day.status === "sunday-worked";
-    const daySalary = isSundayWorked ? emp.perDayRate : (isWorkDay ? emp.perDayRate : 0);
-    if (isWorkDay || isSundayWorked) totalSalary += daySalary;
+    const daySalary = isSundayWorked ? emp.perDayRate : isHalfDay ? Math.round(emp.perDayRate * 0.5) : (isWorkDay ? emp.perDayRate : 0);
+    if (isWorkDay || isSundayWorked || isHalfDay) totalSalary += daySalary;
     if (day.breakMinutes) totalBreakMins += day.breakMinutes;
 
     row.getCell(1).value = fmtDate(day.date);
@@ -194,7 +198,7 @@ function buildEmployeeSheet(
     row.getCell(5).value = day.punchOut ? fmtTimeIST(day.punchOut) : "\u2014";
     row.getCell(6).value = day.breakMinutes ? fmtDur(day.breakMinutes) : "\u2014";
     row.getCell(7).value = day.durationMinutes ? fmtDur(day.durationMinutes) : "\u2014";
-    row.getCell(8).value = (isWorkDay || isSundayWorked) ? fmt(daySalary) : "\u2014";
+    row.getCell(8).value = (isWorkDay || isSundayWorked || isHalfDay) ? fmt(daySalary) : "\u2014";
 
     // Status cell coloring
     const sc = statusColors[day.status];
@@ -303,11 +307,11 @@ export async function generateAllEmployeesExcel(
   const summary = workbook.addWorksheet("Summary");
   summary.columns = [
     { width: 24 }, { width: 14 }, { width: 10 }, { width: 10 },
-    { width: 10 }, { width: 10 }, { width: 16 }, { width: 16 }, { width: 16 },
+    { width: 10 }, { width: 10 }, { width: 10 }, { width: 16 }, { width: 16 }, { width: 16 },
   ];
 
   // Summary title
-  summary.mergeCells("A1:I1");
+  summary.mergeCells("A1:J1");
   const sTitle = summary.getCell("A1");
   sTitle.value = `ATTENDANCE & SALARY REPORT \u2014 ${month}`;
   sTitle.font = { bold: true, size: 14, color: { argb: "FFFFFFFF" } };
@@ -316,7 +320,7 @@ export async function generateAllEmployeesExcel(
   summary.getRow(1).height = 32;
 
   // Summary header
-  const sHeaders = ["Employee", "ID", "Present", "Absent", "Late", "Leave", "Salary", "Deduction", "Net Pay"];
+  const sHeaders = ["Employee", "ID", "Present", "Half Day", "Absent", "Late", "Leave", "Salary", "Deduction", "Net Pay"];
   const sHeaderRow = summary.getRow(3);
   sHeaders.forEach((h, idx) => {
     const cell = sHeaderRow.getCell(idx + 1);
@@ -334,15 +338,16 @@ export async function generateAllEmployeesExcel(
     row.getCell(1).font = { bold: true, size: 10 };
     row.getCell(2).value = emp.id;
     row.getCell(3).value = emp.presentDays;
-    row.getCell(4).value = emp.absentDays;
-    row.getCell(5).value = emp.lateDays;
-    row.getCell(6).value = emp.leaveDays;
-    row.getCell(7).value = fmt(emp.monthlySalary);
-    row.getCell(8).value = emp.deduction > 0 ? `-${fmt(emp.deduction)}` : "\u2014";
-    row.getCell(8).font = { color: { argb: "FFC73333" } };
-    row.getCell(9).value = fmt(emp.netPay);
-    row.getCell(9).font = { bold: true };
-    for (let c = 1; c <= 9; c++) row.getCell(c).border = thinBorder();
+    row.getCell(4).value = emp.halfDays || 0;
+    row.getCell(5).value = emp.absentDays;
+    row.getCell(6).value = emp.lateDays;
+    row.getCell(7).value = emp.leaveDays;
+    row.getCell(8).value = fmt(emp.monthlySalary);
+    row.getCell(9).value = emp.deduction > 0 ? `-${fmt(emp.deduction)}` : "\u2014";
+    row.getCell(9).font = { color: { argb: "FFC73333" } };
+    row.getCell(10).value = fmt(emp.netPay);
+    row.getCell(10).font = { bold: true };
+    for (let c = 1; c <= 10; c++) row.getCell(c).border = thinBorder();
     totSalary += emp.monthlySalary;
     totDeduction += emp.deduction;
     totNet += emp.netPay;
@@ -351,10 +356,10 @@ export async function generateAllEmployeesExcel(
   // Summary totals
   const sTotalRow = summary.getRow(4 + employees.length);
   sTotalRow.getCell(1).value = "TOTALS";
-  sTotalRow.getCell(7).value = fmt(totSalary);
-  sTotalRow.getCell(8).value = totDeduction > 0 ? `-${fmt(totDeduction)}` : "\u2014";
-  sTotalRow.getCell(9).value = fmt(totNet);
-  for (let c = 1; c <= 9; c++) {
+  sTotalRow.getCell(8).value = fmt(totSalary);
+  sTotalRow.getCell(9).value = totDeduction > 0 ? `-${fmt(totDeduction)}` : "\u2014";
+  sTotalRow.getCell(10).value = fmt(totNet);
+  for (let c = 1; c <= 10; c++) {
     sTotalRow.getCell(c).font = { bold: true, size: 10 };
     sTotalRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF9FAFB" } };
     sTotalRow.getCell(c).border = thinBorder();

@@ -120,7 +120,9 @@ export async function GET(request: Request) {
     let uhDays = 0;
     let sundayWorkedDays = 0;
     let shortDays = 0;
-    const minHoursMinutes = empRules.minimum_hours_for_present * 60;
+    let halfDays = 0;
+    const halfDayMinutes = empRules.minimum_hours_for_half_day * 60;
+    const fullDayMinutes = empRules.minimum_hours_for_full_day * 60;
 
     // Count leave days
     let leaveDays = 0;
@@ -163,12 +165,16 @@ export async function GET(request: Request) {
       // If punch-out is missing on a past day, treat as absent
       if (!entry.punchOut && dateStr < today) continue;
 
-      // Check minimum hours requirement
-      if (minHoursMinutes > 0 && dateStr < today) {
+      // Three-tier check: short-day / half-day / present
+      if (dateStr < today) {
         const sorted = [...entry.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
         const totalDur = calculateTotalDuration(sorted);
-        if (totalDur > 0 && totalDur < minHoursMinutes) {
+        if (totalDur > 0 && totalDur < halfDayMinutes) {
           shortDays++;
+          continue;
+        }
+        if (totalDur > 0 && totalDur < fullDayMinutes) {
+          halfDays++;
           continue;
         }
       }
@@ -188,10 +194,11 @@ export async function GET(request: Request) {
     const presentDays = punchDates.size;
 
     const effectiveWorkDays = workingDays - uhDays - leaveDays;
-    const absentDays = Math.max(0, effectiveWorkDays - presentDays);
+    const absentDays = Math.max(0, effectiveWorkDays - presentDays - halfDays);
     // Late-to-absent conversion: every 3 lates = 0.5 day deduction (half-day steps)
     const lateDeductionDays = Math.floor(lateDays / 3) * 0.5;
-    const totalDeductionDays = absentDays + lateDeductionDays;
+    const halfDayDeduction = halfDays * 0.5;
+    const totalDeductionDays = absentDays + halfDayDeduction + lateDeductionDays;
     const perDayRate = workingDays > 0 ? emp.monthlySalary / workingDays : 0;
     const deduction = Math.round(perDayRate * totalDeductionDays);
     const sundayBonus = Math.round(sundayWorkedDays * perDayRate);
@@ -204,6 +211,7 @@ export async function GET(request: Request) {
       workingDays,
       presentDays,
       absentDays,
+      halfDays,
       lateAbsentDays: lateDeductionDays,
       lateDays,
       leaveDays,

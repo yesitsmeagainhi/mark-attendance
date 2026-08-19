@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { eq, sql, desc } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { employees, employeeRuleOverrides, attendance, leaveRequests, missPunchRequests } from "../../../db/schema";
+import { employees, employeeRuleOverrides, attendance, leaveRequests, missPunchRequests, sessions, dailyJournals, otpRequests } from "../../../db/schema";
 import { requireApiRole, getAppIdentity } from "../../authz";
 
 export async function GET() {
@@ -257,6 +257,9 @@ export async function DELETE(request: Request) {
   db.delete(leaveRequests).where(eq(leaveRequests.employeeId, body.id)).run();
   db.delete(missPunchRequests).where(eq(missPunchRequests.employeeId, body.id)).run();
   db.delete(employeeRuleOverrides).where(eq(employeeRuleOverrides.employeeId, body.id)).run();
+  db.delete(sessions).where(eq(sessions.employeeId, body.id)).run();
+  db.delete(dailyJournals).where(eq(dailyJournals.employeeId, body.id)).run();
+  db.delete(otpRequests).where(eq(otpRequests.employeeId, body.id)).run();
 
   // Delete the employee
   db.delete(employees).where(eq(employees.id, body.id)).run();

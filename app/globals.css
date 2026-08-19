@@ -3,6 +3,7 @@
 :root { --ink:#172033; --muted:#667085; --line:#e7e9ee; --purple:#6d45e5; --light:#f6f7fb; }
 *{box-sizing:border-box} body{margin:0;background:var(--light);color:var(--ink);font-family:Arial,Helvetica,sans-serif}button,input{font:inherit}button{cursor:pointer}
 .topbar{height:72px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 max(24px,calc((100vw - 1220px)/2));gap:48px;position:sticky;top:0;z-index:10}.brand{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:800}.brandmark{width:34px;height:34px;border-radius:10px;background:var(--purple);color:white;display:grid;place-items:center}.topbar nav{display:flex;gap:6px;height:100%;align-items:center}.topbar nav button{border:0;background:none;color:#667085;padding:12px 15px;border-radius:10px;font-weight:600}.topbar nav button.active{color:var(--purple);background:#f1edff}.user{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:13px}.user span:last-child{display:flex;flex-direction:column;gap:3px}.user small{color:var(--muted)}.avatar,.person{display:grid;place-items:center;border-radius:50%;font-weight:700;color:white}.avatar{width:38px;height:38px;background:#172033;font-size:12px}
+.switch-view-btn{display:inline-flex;align-items:center;padding:6px 14px;border-radius:8px;background:#f1edff;color:var(--purple);font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;transition:background .15s}.switch-view-btn:hover{background:#e4dcff}
 .employee-layout,.admin-layout{max-width:1220px;margin:auto;padding:38px 24px 48px}.admin-title{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:30px}.eyebrow{text-transform:uppercase;letter-spacing:.14em;color:var(--purple)!important;font-weight:700!important;font-size:11px!important;margin:0 0 8px!important}.admin-title h1{font-size:32px;letter-spacing:-.03em;margin:0 0 8px}.admin-title p{margin:0;color:var(--muted);font-size:15px}
 
 /* Hero banner */
@@ -351,7 +352,15 @@
 .fco-capture-out .fco-capture-ring{background:#ef4444}
 .fco-capture-disabled{opacity:.4;cursor:not-allowed}
 .fco-capture-disabled:active{transform:none}
+.fco-capture-geoblocked{opacity:.6;border-color:rgba(255,77,79,.6)}.fco-capture-geoblocked .fco-capture-ring{background:#6b7280}
 .fco-capture-label{margin-top:10px;font-size:13px;font-weight:600;color:rgba(255,255,255,.85);text-align:center}
+.fco-capture-label-red{color:#ff4d4f;font-size:15px;font-weight:800;animation:pulseFade 1.5s ease-in-out infinite}
+
+/* Geo-fence alert banner on camera overlay */
+.fco-geofence-alert{position:absolute;top:70px;left:50%;transform:translateX(-50%);z-index:12;display:flex;align-items:center;gap:8px;background:rgba(220,38,38,.92);color:#fff;font-size:13px;font-weight:700;padding:10px 20px;border-radius:14px;max-width:92%;text-align:center;backdrop-filter:blur(6px);animation:slideDown .3s ease;box-shadow:0 4px 20px rgba(220,38,38,.4);border:1px solid rgba(255,255,255,.2);line-height:1.4}
+.fco-geofence-icon{font-size:20px;line-height:1;flex-shrink:0}
+@keyframes slideDown{from{transform:translateX(-50%) translateY(-10px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
+@keyframes pulseFade{0%,100%{opacity:1}50%{opacity:.5}}
 
 
 .employee-layout {

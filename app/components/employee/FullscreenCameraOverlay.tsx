@@ -23,6 +23,8 @@ type FullscreenCameraOverlayProps = {
   onRetryGPS: () => void;
   onFaceUpdate: (status: FaceEvalStatus, guidance: string) => void;
   saving: boolean;
+  withinGeoFence: boolean | null;
+  geoFenceInfo: { branchName: string; distance: number; allowedRadius: number } | null;
 };
 
 export default function FullscreenCameraOverlay({
@@ -44,6 +46,8 @@ export default function FullscreenCameraOverlay({
   onRetryGPS,
   onFaceUpdate,
   saving,
+  withinGeoFence,
+  geoFenceInfo,
 }: FullscreenCameraOverlayProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -168,7 +172,8 @@ export default function FullscreenCameraOverlay({
   }, [onCaptureFrame]);
 
   const isReady = faceStatus === "ready";
-  const canCapture = !saving && !!location && (isReady || !modelsLoaded || !!modelError);
+  const isOutsideGeoFence = withinGeoFence === false;
+  const canCapture = !saving && !!location && !isOutsideGeoFence && (isReady || !modelsLoaded || !!modelError);
 
   if (typeof document === "undefined") return null;
 
@@ -220,9 +225,18 @@ export default function FullscreenCameraOverlay({
         </div>
       )} */}
 
-      <div className={`fco-guidance fco-guidance-${faceStatus}`}>
+      {isOutsideGeoFence && geoFenceInfo && (
+        <div className="fco-geofence-alert">
+          <span className="fco-geofence-icon">&#9888;</span>
+          <span>Outside office range — {geoFenceInfo.distance >= 1000
+            ? `${(geoFenceInfo.distance / 1000).toFixed(1)} km`
+            : `${geoFenceInfo.distance} m`} from {geoFenceInfo.branchName} (allowed: {geoFenceInfo.allowedRadius} m)</span>
+        </div>
+      )}
+
+      <div className={`fco-guidance ${isOutsideGeoFence ? "fco-guidance-no-face" : `fco-guidance-${faceStatus}`}`}>
         <span className="fco-guidance-dot" />
-        {faceGuidance}
+        {isOutsideGeoFence ? "You are outside the office area" : faceGuidance}
       </div>
 
       {!modelsLoaded && !modelError && (
@@ -234,22 +248,24 @@ export default function FullscreenCameraOverlay({
 
       <div className="fco-bottom-area">
         <button
-          className={`fco-capture-btn ${nextPunchType === "OUT" ? "fco-capture-out" : ""} ${canCapture ? "" : "fco-capture-disabled"}`}
+          className={`fco-capture-btn ${nextPunchType === "OUT" ? "fco-capture-out" : ""} ${canCapture ? "" : "fco-capture-disabled"} ${isOutsideGeoFence ? "fco-capture-geoblocked" : ""}`}
           onClick={handleCapture}
           disabled={!canCapture}
         >
           <span className="fco-capture-ring" />
         </button>
-        <div className="fco-capture-label">
+        <div className={`fco-capture-label ${isOutsideGeoFence ? "fco-capture-label-red" : ""}`}>
           {saving
             ? "Saving..."
             : !location
               ? "Waiting for GPS..."
-              : modelsLoaded && !modelError && !isReady
-                ? faceGuidance
-                : nextPunchType === "IN"
-                  ? "Capture & Punch In"
-                  : "Capture & Punch Out"}
+              : isOutsideGeoFence
+                ? "Move closer to office to punch"
+                : modelsLoaded && !modelError && !isReady
+                  ? faceGuidance
+                  : nextPunchType === "IN"
+                    ? "Capture & Punch In"
+                    : "Capture & Punch Out"}
         </div>
       </div>
     </div>,

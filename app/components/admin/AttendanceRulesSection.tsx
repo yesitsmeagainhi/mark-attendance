@@ -52,7 +52,7 @@ export default function AttendanceRulesSection() {
       <div className="table-tools">
         <div>
           <h2>Attendance Rules</h2>
-          <p>Global defaults applied to all employees unless overridden</p>
+          <p>Global defaults for all employees. To customize per employee, go to Staff &rarr; employee menu &rarr; Rules.</p>
         </div>
       </div>
       <div className="table-wrap">
@@ -79,9 +79,9 @@ export default function AttendanceRulesSection() {
                     <input
                       className="salary-input"
                       type="number"
+                      step="0.5"
                       value={editValue}
                       onChange={(e) => setEditValue(e.target.value)}
-                      onBlur={() => saveRule(rule.id, editValue)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") saveRule(rule.id, editValue);
                         if (e.key === "Escape") setEditingRule(null);
@@ -108,6 +108,25 @@ export default function AttendanceRulesSection() {
                     >
                       {rule.defaultValue === "true" ? "Disable" : "Enable"}
                     </button>
+                  ) : editingRule === rule.id ? (
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        className="btn-approve"
+                        style={{ fontSize: 12 }}
+                        onClick={() => saveRule(rule.id, editValue)}
+                        disabled={saving}
+                      >
+                        {saving ? "..." : "Save"}
+                      </button>
+                      <button
+                        className="btn-reject"
+                        style={{ fontSize: 12 }}
+                        onClick={() => setEditingRule(null)}
+                        disabled={saving}
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   ) : (
                     <button
                       className="btn-approve"

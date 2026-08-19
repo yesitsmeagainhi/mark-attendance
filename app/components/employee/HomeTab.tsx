@@ -13,16 +13,17 @@ const menuItems = [
 ];
 
 export default function HomeTab({ displayName, onNavigate, onOpenCamera, todayStatus }: { displayName: string; onNavigate: (tab: string) => void; onOpenCamera: () => void; todayStatus: TodayStatus | null }) {
-  const [currentTime, setCurrentTime] = useState(getIST());
+  const [currentTime, setCurrentTime] = useState<ReturnType<typeof getIST> | null>(null);
 
   useEffect(() => {
+    setCurrentTime(getIST());
     const t = setInterval(() => setCurrentTime(getIST()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  const greeting = getGreeting(currentTime.hours);
-  const dateStr = currentTime.dateStr;
-  const timeStr = currentTime.timeStr;
+  const greeting = currentTime ? getGreeting(currentTime.hours) : "";
+  const dateStr = currentTime?.dateStr ?? "";
+  const timeStr = currentTime?.timeStr ?? "";
 
   const punchedIn = !!todayStatus?.punchIn;
   const punchedOut = !!todayStatus?.punchOut;

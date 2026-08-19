@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   const name = body.name?.trim();
   const latitude = body.latitude?.trim();
   const longitude = body.longitude?.trim();
-  const radius = Math.max(50, Math.min(5000, Math.round(Number(body.radius) || 200)));
+  const radius = Math.max(50, Math.round(Number(body.radius) || 200));
 
   if (!name || name.length < 2) {
     return Response.json({ error: "Branch name is required (minimum 2 characters)." }, { status: 400 });
@@ -117,8 +117,8 @@ export async function PATCH(request: Request) {
   }
   if (body.radius !== undefined) {
     const r = Math.round(Number(body.radius));
-    if (isNaN(r) || r < 50 || r > 5000) {
-      return Response.json({ error: "Radius must be between 50 and 5000 meters." }, { status: 400 });
+    if (isNaN(r) || r < 50) {
+      return Response.json({ error: "Radius must be at least 50 meters." }, { status: 400 });
     }
     updates.radius = r;
   }

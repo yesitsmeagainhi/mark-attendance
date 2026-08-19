@@ -61,17 +61,27 @@ export async function POST(request: Request) {
     );
   }
 
-  // Atomic: invalidate old sessions + create new session
+  // For admins: allow multi-device login (keep existing sessions)
+  // For employees: invalidate old sessions (single-device only)
   const token = randomUUID();
-  db.transaction((tx) => {
-    tx.delete(sessions).where(eq(sessions.employeeId, record.id)).run();
-    tx.insert(sessions).values({
+  if (record.role === "admin") {
+    db.insert(sessions).values({
       id: randomUUID(),
       employeeId: record.id,
       token,
       userAgent: request.headers.get("user-agent") || null,
     }).run();
-  });
+  } else {
+    db.transaction((tx) => {
+      tx.delete(sessions).where(eq(sessions.employeeId, record.id)).run();
+      tx.insert(sessions).values({
+        id: randomUUID(),
+        employeeId: record.id,
+        token,
+        userAgent: request.headers.get("user-agent") || null,
+      }).run();
+    });
+  }
 
   const cookieStore = await cookies();
   cookieStore.set("session", token, {

@@ -166,7 +166,7 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
               </div>
               <label>
                 <span>Geo-fence radius (meters)</span>
-                <input type="number" inputMode="numeric" value={form.radius} onChange={(e) => setForm({ ...form, radius: e.target.value })} placeholder="200" min={50} max={5000} required />
+                <input type="number" inputMode="numeric" value={form.radius} onChange={(e) => setForm({ ...form, radius: e.target.value })} placeholder="200" min={50} required />
               </label>
               <button type="button" className="secondary" onClick={useCurrentLocation} disabled={gettingLocation} style={{ width: "100%" }}>
                 {gettingLocation ? "Getting location..." : "\u{1F4CD} Use current location"}

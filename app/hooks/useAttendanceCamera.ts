@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import * as faceapi from "face-api.js";
 import { formatDuration, formatTimeIST } from "../../lib/time-utils";
+import { haversineDistance, GEO_FENCE_RADIUS_METERS } from "../../lib/geo-utils";
 import type { FaceEvalStatus, TodayStatus } from "../components/employee/attendance-types";
 
 export type GeoAlert = {
@@ -39,6 +40,8 @@ export type UseAttendanceCameraReturn = {
   handleCaptureFrame: (frame: string) => Promise<void>;
   geoAlert: GeoAlert | null;
   dismissGeoAlert: () => void;
+  withinGeoFence: boolean | null; // null = checking, true = inside, false = outside
+  geoFenceInfo: { branchName: string; distance: number; allowedRadius: number } | null;
 };
 
 export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = {}): UseAttendanceCameraReturn {
@@ -63,6 +66,49 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
   // Geo-fence alert
   const [geoAlert, setGeoAlert] = useState<GeoAlert | null>(null);
   const dismissGeoAlert = useCallback(() => setGeoAlert(null), []);
+
+  // Real-time geo-fence check
+  type BranchRecord = { id: string; name: string; latitude: string; longitude: string; radius: number };
+  const [activeBranches, setActiveBranches] = useState<BranchRecord[]>([]);
+  const [withinGeoFence, setWithinGeoFence] = useState<boolean | null>(null);
+  const [geoFenceInfo, setGeoFenceInfo] = useState<{ branchName: string; distance: number; allowedRadius: number } | null>(null);
+  const branchesFetchedRef = useRef(false);
+
+  // Fetch active branches once
+  useEffect(() => {
+    if (!enabled || branchesFetchedRef.current) return;
+    branchesFetchedRef.current = true;
+    fetch("/api/branches/active")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { branches?: BranchRecord[] } | null) => {
+        if (data?.branches) setActiveBranches(data.branches);
+      })
+      .catch(() => undefined);
+  }, [enabled]);
+
+  // Recompute geo-fence status whenever location or branches change
+  useEffect(() => {
+    if (!location || activeBranches.length === 0) {
+      setWithinGeoFence(null);
+      setGeoFenceInfo(null);
+      return;
+    }
+    let closest: { branchName: string; distance: number; allowedRadius: number } | null = null;
+    let isWithin = false;
+    for (const branch of activeBranches) {
+      const brLat = parseFloat(branch.latitude);
+      const brLon = parseFloat(branch.longitude);
+      if (isNaN(brLat) || isNaN(brLon)) continue;
+      const branchRadius = branch.radius || GEO_FENCE_RADIUS_METERS;
+      const distance = haversineDistance(location.latitude, location.longitude, brLat, brLon);
+      if (!closest || distance < closest.distance) {
+        closest = { branchName: branch.name, distance: Math.round(distance), allowedRadius: branchRadius };
+      }
+      if (distance <= branchRadius) isWithin = true;
+    }
+    setWithinGeoFence(isWithin);
+    setGeoFenceInfo(closest);
+  }, [location, activeBranches]);
 
   const fetchStatus = useCallback(() => {
     if (!enabled) return;
@@ -233,5 +279,6 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
     nextPunchType, currentlyIn, lastPunchTime, shiftDisplay, elapsed,
     handleCaptureFrame,
     geoAlert, dismissGeoAlert,
+    withinGeoFence, geoFenceInfo,
   };
 }

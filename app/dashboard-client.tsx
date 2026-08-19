@@ -56,6 +56,14 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
         <Brand />
         <nav><span className="portal-label">{view === "admin" ? "Admin" : "Employee"}</span></nav>
         <div className="user">
+          {role === "admin" && (
+            <a
+              href={view === "admin" ? "/employee" : "/admin"}
+              className="switch-view-btn"
+            >
+              {view === "admin" ? "My Attendance" : "Admin Panel"}
+            </a>
+          )}
           <span className="avatar">{displayName.slice(0, 2).toUpperCase()}</span>
           <span><b>{displayName}</b><small>{role === "admin" ? "Administrator" : employeeId}</small></span>
           <button className="signout" onClick={handleSignOut}>Sign out</button>
@@ -115,6 +123,8 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
           onRetryGPS={camera.acquireLocation}
           onFaceUpdate={camera.setFaceUpdate}
           saving={camera.saving}
+          withinGeoFence={camera.withinGeoFence}
+          geoFenceInfo={camera.geoFenceInfo}
         />
       )}
 

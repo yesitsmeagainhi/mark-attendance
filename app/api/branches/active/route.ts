@@ -16,6 +16,7 @@ export async function GET() {
       name: branches.name,
       latitude: branches.latitude,
       longitude: branches.longitude,
+      radius: branches.radius,
     })
     .from(branches)
     .where(eq(branches.active, true))
