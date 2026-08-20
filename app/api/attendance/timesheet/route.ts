@@ -2,6 +2,8 @@ import { eq, and, sql, gte, lte } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { attendance, employees, leaveRequests, holidays } from "../../../../db/schema";
 import { getAppIdentity } from "../../../authz";
+import { getEffectiveRules } from "../../../../lib/rules";
+import { calculateTotalDuration } from "../../../../lib/time-utils";
 
 export async function GET(request: Request) {
   const identity = await getAppIdentity();
@@ -26,14 +28,19 @@ export async function GET(request: Request) {
 
   const db = getDb();
 
-  // Get employee work schedule
+  // Get employee work schedule + flexibleHours
   const emp = db
-    .select({ workStartTime: employees.workStartTime, workEndTime: employees.workEndTime })
+    .select({ workStartTime: employees.workStartTime, workEndTime: employees.workEndTime, flexibleHours: employees.flexibleHours })
     .from(employees)
     .where(eq(employees.id, identity.employeeId))
     .get();
 
-  // Get attendance records for this month (include source + photoKey for priority logic)
+  const isFlexible = emp?.flexibleHours ?? false;
+  const empRules = getEffectiveRules(identity.employeeId);
+  const halfDayMinutes = empRules.minimum_hours_for_half_day * 60;
+  const fullDayMinutes = empRules.minimum_hours_for_full_day * 60;
+
+  // Get attendance records for this month
   const records = db
     .select({
       punchType: attendance.punchType,
@@ -76,27 +83,36 @@ export async function GET(request: Request) {
     .all();
   const holidayDates = new Set(holidayRecords.map((h) => h.date));
 
-  // Group attendance by date, preferring selfie records over admin records
-  const byDate: Record<string, { punchIn?: string; punchOut?: string; isAdminUH?: boolean }> = {};
+  // Group attendance by date, tracking all punches for multi-session duration
+  type DayPunches = {
+    punchIn?: string;
+    punchOut?: string;
+    isAdminUH?: boolean;
+    allPunches: { punchType: string; serverTimestamp: string }[];
+  };
+  const byDate: Record<string, DayPunches> = {};
   for (const r of records) {
     const date = r.serverTimestamp.slice(0, 10);
-    if (!byDate[date]) byDate[date] = {};
+    if (!byDate[date]) byDate[date] = { allPunches: [] };
+    byDate[date].allPunches.push({ punchType: r.punchType, serverTimestamp: r.serverTimestamp });
 
-    // Skip admin UH records if a selfie record already exists for this date+type
+    // Handle admin UH records
     if (r.photoKey === "admin/unpaid-holiday") {
-      // Only mark as UH if no real punch exists yet
       if (!byDate[date].punchIn) byDate[date].isAdminUH = true;
       continue;
     }
 
     if (r.punchType === "IN") {
-      // Prefer non-admin (selfie) records — overwrite admin records
+      // Keep earliest IN, prefer non-admin (selfie) records
       if (!byDate[date].punchIn || r.source !== "admin") {
-        byDate[date].punchIn = r.serverTimestamp;
-        byDate[date].isAdminUH = false; // real punch overrides UH
+        if (!byDate[date].punchIn || r.serverTimestamp < byDate[date].punchIn!) {
+          byDate[date].punchIn = r.serverTimestamp;
+        }
+        byDate[date].isAdminUH = false;
       }
-    } else {
-      if (!byDate[date].punchOut || r.source !== "admin") {
+    } else if (r.punchType === "OUT") {
+      // Keep latest OUT
+      if (!byDate[date].punchOut || r.serverTimestamp > byDate[date].punchOut!) {
         byDate[date].punchOut = r.serverTimestamp;
       }
     }
@@ -128,6 +144,8 @@ export async function GET(request: Request) {
   let absentDays = 0;
   let leaveDaysCount = 0;
   let uhDays = 0;
+  let halfDays = 0;
+  let sundayWorkedDays = 0;
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${month}-${String(d).padStart(2, "0")}`;
@@ -142,7 +160,21 @@ export async function GET(request: Request) {
     }
 
     if (isSunday) {
-      days.push({ date: dateStr, dayOfWeek, status: "holiday", punchIn: null, punchOut: null, duration: null });
+      // Check if employee worked on Sunday
+      const sundayData = byDate[dateStr];
+      if (sundayData?.punchIn && sundayData?.punchOut) {
+        const sorted = [...sundayData.allPunches]
+          .filter((p) => p.punchType === "IN" || p.punchType === "OUT")
+          .sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
+        const totalDur = calculateTotalDuration(sorted);
+        const duration: number | null = totalDur > 0 ? totalDur : null;
+        sundayWorkedDays++;
+        presentDays++;
+        if (duration) totalMinutesWorked += totalDur;
+        days.push({ date: dateStr, dayOfWeek, status: "extra-pay", punchIn: sundayData.punchIn, punchOut: sundayData.punchOut, duration });
+      } else {
+        days.push({ date: dateStr, dayOfWeek, status: "sunday", punchIn: null, punchOut: null, duration: null });
+      }
       continue;
     }
 
@@ -154,8 +186,7 @@ export async function GET(request: Request) {
 
     const dayData = byDate[dateStr];
 
-    // Check for unpaid holiday — either from holidays table or admin UH record
-    // Only apply if the employee has no real punch for this day
+    // No punch at all — check for UH/holiday or mark absent
     if (!dayData?.punchIn) {
       if (holidayDates.has(dateStr) || dayData?.isAdminUH) {
         uhDays++;
@@ -174,14 +205,30 @@ export async function GET(request: Request) {
       continue;
     }
 
-    presentDays++;
-    let duration: number | null = null;
-    if (dayData.punchOut) {
-      const inDate = new Date(dayData.punchIn.replace(" ", "T") + (dayData.punchIn.includes("Z") ? "" : "Z"));
-      const outDate = new Date(dayData.punchOut.replace(" ", "T") + (dayData.punchOut.includes("Z") ? "" : "Z"));
-      duration = Math.floor((outDate.getTime() - inDate.getTime()) / 60000);
-      totalMinutesWorked += duration;
+    // Calculate total duration across all IN/OUT pairs (multi-session)
+    const sorted = [...dayData.allPunches]
+      .filter((p) => p.punchType === "IN" || p.punchType === "OUT")
+      .sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
+    const totalDur = calculateTotalDuration(sorted);
+    const duration: number | null = totalDur > 0 ? totalDur : null;
+
+    // Three-tier check for past completed days (skip for flexible-hours employees)
+    if (!isFlexible && dateStr < today && dayData.punchOut) {
+      if (totalDur < halfDayMinutes) {
+        // Short day — counts as absent
+        absentDays++;
+        days.push({ date: dateStr, dayOfWeek, status: "short", punchIn: dayData.punchIn, punchOut: dayData.punchOut, duration });
+        continue;
+      }
+      if (totalDur < fullDayMinutes) {
+        halfDays++;
+        days.push({ date: dateStr, dayOfWeek, status: "half", punchIn: dayData.punchIn, punchOut: dayData.punchOut, duration });
+        continue;
+      }
     }
+
+    presentDays++;
+    if (duration) totalMinutesWorked += totalDur;
 
     days.push({
       date: dateStr,
@@ -199,7 +246,9 @@ export async function GET(request: Request) {
     totalHoursWorked: Math.round((totalMinutesWorked / 60) * 10) / 10,
     presentDays,
     absentDays,
+    halfDays,
     leaveDays: leaveDaysCount,
     uhDays,
+    sundayWorkedDays,
   });
 }

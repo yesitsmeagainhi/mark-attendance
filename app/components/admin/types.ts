@@ -11,6 +11,7 @@ export type EmployeeRow = {
   department: string;
   active: boolean;
   monthlySalary: number;
+  flexibleHours: boolean;
   createdAt: string;
 };
 
@@ -18,8 +19,8 @@ export type DailyEmployee = {
   id: string;
   name: string;
   workStartTime: string;
-  punchIn: { time: string; photoKey: string; source: string } | null;
-  punchOut: { time: string; photoKey: string; source: string } | null;
+  punchIn: { time: string; photoKey: string; source: string; office: string; latitude: string | null; longitude: string | null } | null;
+  punchOut: { time: string; photoKey: string; source: string; office: string; latitude: string | null; longitude: string | null } | null;
   durationMinutes: number | null;
   status: string;
   source: string | null;

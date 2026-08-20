@@ -50,14 +50,14 @@ export async function POST(request: Request) {
 
   // Mark all present: for each active employee without an attendance record, create one
   const allEmployees = db
-    .select({ id: employees.id, workStartTime: employees.workStartTime, office: employees.office })
+    .select({ id: employees.id, workStartTime: employees.workStartTime, workEndTime: employees.workEndTime, office: employees.office })
     .from(employees)
     .where(eq(employees.active, true))
     .all();
 
   let affected = 0;
   for (const emp of allEmployees) {
-    const existing = db
+    const existingIn = db
       .select({ id: attendance.id })
       .from(attendance)
       .where(and(
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
       ))
       .get();
 
-    if (!existing) {
+    if (!existingIn) {
       db.insert(attendance).values({
         id: crypto.randomUUID(),
         employeeId: emp.id,
@@ -79,6 +79,30 @@ export async function POST(request: Request) {
         source: "admin",
       }).run();
       affected++;
+    }
+
+    // Also create punch OUT if missing (needed for past dates)
+    const existingOut = db
+      .select({ id: attendance.id })
+      .from(attendance)
+      .where(and(
+        eq(attendance.employeeId, emp.id),
+        eq(attendance.punchType, "OUT"),
+        sql`date(${attendance.serverTimestamp}) = ${date}`,
+      ))
+      .get();
+
+    if (!existingOut) {
+      db.insert(attendance).values({
+        id: crypto.randomUUID(),
+        employeeId: emp.id,
+        punchType: "OUT",
+        serverTimestamp: istToUTC(date, emp.workEndTime),
+        photoKey: "admin-marked",
+        contentType: "text/plain",
+        office: emp.office,
+        source: "admin",
+      }).run();
     }
   }
 

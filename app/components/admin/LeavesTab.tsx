@@ -12,6 +12,8 @@ const leaveTypeLabels: Record<string, string> = {
 export default function LeavesTab() {
   const [requests, setRequests] = useState<LeaveRow[]>([]);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   function fetchRequests() {
     fetch("/api/leave")
@@ -44,12 +46,32 @@ export default function LeavesTab() {
           <h2>Leave Requests {pending > 0 && <span className="badge-pending" style={{ marginLeft: 8 }}>{pending} pending</span>}</h2>
           <p>{requests.length} total</p>
         </div>
+        <div className="attendance-filters">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search employee or ID"
+            aria-label="Search leave requests"
+          />
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
+            <option value="all">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
       </div>
       <div className="table-wrap">
         <table>
           <thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
-            {requests.map((r) => (
+            {requests.filter((r) => {
+              if (statusFilter !== "all" && r.status !== statusFilter) return false;
+              if (!search.trim()) return true;
+              const q = search.trim().toLowerCase();
+              return `${r.employeeName} ${r.employeeId}`.toLowerCase().includes(q);
+            }).map((r) => (
               <tr key={r.id}>
                 <td><b>{r.employeeName}</b><br /><small>{r.employeeId}</small></td>
                 <td>{leaveTypeLabels[r.leaveType] || r.leaveType}</td>

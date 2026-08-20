@@ -44,9 +44,10 @@ export async function GET(request: Request) {
       name: employees.name,
       monthlySalary: employees.monthlySalary,
       workStartTime: employees.workStartTime,
+      flexibleHours: employees.flexibleHours,
     })
     .from(employees)
-    .where(eq(employees.active, true))
+    .where(and(eq(employees.active, true), sql`${employees.role} != 'admin'`))
     .orderBy(employees.name)
     .all();
 
@@ -166,7 +167,8 @@ export async function GET(request: Request) {
       if (!entry.punchOut) continue;
 
       // Three-tier check: short-day / half-day / present
-      if (dateStr < today) {
+      // Skip for flexible-hours employees
+      if (!emp.flexibleHours && dateStr < today) {
         const sorted = [...entry.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
         const totalDur = calculateTotalDuration(sorted);
         if (totalDur < halfDayMinutes) {
@@ -182,12 +184,15 @@ export async function GET(request: Request) {
       punchDates.add(dateStr);
 
       // Use selfie record for late calculation when available
-      const bestPunch = entry.inRecords.find((r) => r.source !== "admin") || entry.inRecords[0];
-      if (bestPunch) {
-        const ts = bestPunch.serverTimestamp;
-        const punchDate = new Date(ts.replace(" ", "T") + (ts.includes("Z") ? "" : "Z"));
-        const punchMin = ((punchDate.getUTCHours() + 5) * 60 + punchDate.getUTCMinutes() + 30) % (24 * 60);
-        if (punchMin > graceMin) lateDays++;
+      // Skip for flexible-hours employees
+      if (!emp.flexibleHours) {
+        const bestPunch = entry.inRecords.find((r) => r.source !== "admin") || entry.inRecords[0];
+        if (bestPunch) {
+          const ts = bestPunch.serverTimestamp;
+          const punchDate = new Date(ts.replace(" ", "T") + (ts.includes("Z") ? "" : "Z"));
+          const punchMin = ((punchDate.getUTCHours() + 5) * 60 + punchDate.getUTCMinutes() + 30) % (24 * 60);
+          if (punchMin > graceMin) lateDays++;
+        }
       }
     }
 

@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { getDb } from "../db";
 import { employees, sessions } from "../db/schema";
 
@@ -12,8 +12,19 @@ export type AppIdentity = {
 };
 
 export async function getAppIdentity(): Promise<AppIdentity | null> {
+  // 1. Try cookie first (web app)
   const cookieStore = await cookies();
-  const sessionToken = cookieStore.get("session")?.value;
+  let sessionToken = cookieStore.get("session")?.value ?? null;
+
+  // 2. If no cookie, try Authorization: Bearer <token> header (mobile app)
+  if (!sessionToken) {
+    const headerStore = await headers();
+    const authHeader = headerStore.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      sessionToken = authHeader.slice(7);
+    }
+  }
+
   if (!sessionToken) return null;
 
   const db = getDb();

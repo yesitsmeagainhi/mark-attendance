@@ -190,6 +190,14 @@
 .calendar-day.holiday .day-times{color:var(--muted)}
 .calendar-day.uh{background:#fffbeb}
 .calendar-day.uh .day-times{color:#b45309}
+.calendar-day.half{background:#fffbeb}
+.calendar-day.half .day-times{color:#b45309}
+.calendar-day.short{background:#fef2f2}
+.calendar-day.short .day-times{color:#c73333}
+.calendar-day.extra-pay{background:#eff6ff}
+.calendar-day.extra-pay .day-times{color:#2563eb}
+.calendar-day.sunday{background:#f9fafb}
+.calendar-day.sunday .day-times{color:var(--muted)}
 .calendar-day.future{background:#fafafa;color:#ccc}
 .calendar-day.empty{background:#fafafa}
 .timesheet-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:18px}

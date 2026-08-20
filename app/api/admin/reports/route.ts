@@ -31,10 +31,11 @@ export async function GET(request: Request) {
       jobRole: employees.jobRole,
       office: employees.office,
       monthlySalary: employees.monthlySalary,
+      flexibleHours: employees.flexibleHours,
       createdAt: employees.createdAt,
     })
     .from(employees)
-    .where(eq(employees.active, true))
+    .where(and(eq(employees.active, true), sql`${employees.role} != 'admin'`))
     .orderBy(employees.name)
     .all();
 
@@ -229,7 +230,8 @@ export async function GET(request: Request) {
       if (brk > 0) breakMinutes = brk;
 
       // Three-tier check: short-day / half-day / present (only for past completed days)
-      if (dateStr < today) {
+      // Skip for flexible-hours employees
+      if (!emp.flexibleHours && dateStr < today) {
         if (totalDur < halfDayMinutes) {
           shortDays++;
           dailyDetails.push({ date: dateStr, punchIn: entry.punchIn, punchOut: entry.punchOut, durationMinutes, breakMinutes, status: "short-day" });
@@ -244,9 +246,9 @@ export async function GET(request: Request) {
 
       presentDays++;
 
-      // Check late
+      // Check late (skip for flexible-hours employees)
       let isLate = false;
-      if (entry.punchIn) {
+      if (!emp.flexibleHours && entry.punchIn) {
         const ts = entry.punchIn;
         const punchDate = new Date(ts.replace(" ", "T") + (ts.includes("Z") ? "" : "Z"));
         const punchMin = ((punchDate.getUTCHours() + 5) * 60 + punchDate.getUTCMinutes() + 30) % (24 * 60);

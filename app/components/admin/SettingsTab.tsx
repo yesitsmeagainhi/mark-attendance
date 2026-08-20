@@ -14,6 +14,9 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
   const [editing, setEditing] = useState<BranchRow | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
 
+  // Admin users state
+  const [adminList, setAdminList] = useState<{ id: string; name: string; email: string; active: boolean; createdAt: string }[]>([]);
+
   // Department state
   const [deptList, setDeptList] = useState<DepartmentRow[]>([]);
   const [showDeptModal, setShowDeptModal] = useState(false);
@@ -37,7 +40,14 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
       .catch(() => undefined);
   }
 
-  useEffect(() => { fetchBranches(); fetchDepartments(); }, []);
+  function fetchAdmins() {
+    fetch("/api/employees?role=admin")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data?.employees) setAdminList(data.employees); })
+      .catch(() => undefined);
+  }
+
+  useEffect(() => { fetchBranches(); fetchDepartments(); fetchAdmins(); }, []);
 
   function useCurrentLocation() {
     if (!navigator.geolocation) {
@@ -260,6 +270,29 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
       )}
 
       <AttendanceRulesSection />
+
+      {/* Admin Users section */}
+      <section className="table-card" style={{ marginTop: 24 }}>
+        <div className="table-tools">
+          <div><h2>Admin Users</h2><p>{adminList.length} total</p></div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Added</th></tr></thead>
+            <tbody>
+              {adminList.map((a) => (
+                <tr key={a.id}>
+                  <td><b>{a.name}</b></td>
+                  <td>{a.email}</td>
+                  <td><span className={`status ${a.active ? "" : "absent"}`}>&#9679; {a.active ? "Active" : "Inactive"}</span></td>
+                  <td><small>{new Date(a.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</small></td>
+                </tr>
+              ))}
+              {adminList.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No admin users found.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <section className="table-card" style={{ marginTop: 24, textAlign: "center", padding: 24 }}>
         <button className="signout" onClick={onSignOut} style={{ width: "100%" }}>Sign out</button>

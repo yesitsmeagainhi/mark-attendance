@@ -21,6 +21,7 @@ export default function StaffTab() {
   const [datewiseEmployee, setDatewiseEmployee] = useState<{ id: string; name: string } | null>(null);
   const [editEmployee, setEditEmployee] = useState<EmployeeRow | null>(null);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [search, setSearch] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
 
   function fetchEmployees() {
@@ -94,21 +95,63 @@ export default function StaffTab() {
     fetchEmployees();
   }
 
+  function exportEmployees() {
+    if (employeeList.length === 0) return;
+    const headers = ["ID", "Name", "Email", "Mobile Number", "Job Role", "Department", "Work Start", "Work End", "Office", "Monthly Salary", "Status", "Added On"];
+    const rows = employeeList.map((emp) => [
+      emp.id,
+      emp.name,
+      emp.email,
+      emp.mobileNumber || "",
+      emp.jobRole || "",
+      emp.department || "",
+      emp.workStartTime || "",
+      emp.workEndTime || "",
+      emp.office || "",
+      String(emp.monthlySalary || 0),
+      emp.active ? "Active" : "Inactive",
+      new Date(emp.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+    ]);
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((v) => `"${v.replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `employees_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <>
       <section className="table-card">
         <div className="table-tools">
           <div><h2>Registered employees</h2><p>{employeeList.length} total</p></div>
-          <div className="filters" style={{ gap: 8, display: "flex" }}>
-            <button className="secondary" style={{ fontSize: 13, padding: "6px 14px" }} onClick={() => setShowBulkModal(true)}>Import</button>
-            <button className="primary" style={{ fontSize: 13, padding: "6px 14px" }} onClick={() => setShowAddModal(true)}>+ Add employee</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, ID or email"
+              aria-label="Search employees"
+              style={{ minWidth: 180, padding: "9px 10px", border: "1px solid var(--line)", borderRadius: 9, fontSize: 13, outline: "none" }}
+            />
+            <button className="secondary" style={{ width: "auto", fontSize: 13, padding: "6px 14px" }} onClick={exportEmployees} disabled={employeeList.length === 0}>Export</button>
+            <button className="secondary" style={{ width: "auto", fontSize: 13, padding: "6px 14px" }} onClick={() => setShowBulkModal(true)}>Import</button>
+            <button className="primary" style={{ width: "auto", fontSize: 13, padding: "6px 14px" }} onClick={() => setShowAddModal(true)}>+ Add employee</button>
           </div>
         </div>
         <div className="table-wrap">
           <table>
             <thead><tr><th>Employee</th><th>Contact</th><th>Job role</th><th>Department</th><th>Work hours</th><th>Office</th><th>Salary</th><th>Rules</th><th>Status</th><th>Added</th></tr></thead>
             <tbody>
-              {employeeList.map((emp) => {
+              {employeeList.filter((emp) => {
+                if (!search.trim()) return true;
+                const q = search.trim().toLowerCase();
+                return `${emp.name} ${emp.id} ${emp.email} ${emp.mobileNumber || ""}`.toLowerCase().includes(q);
+              }).map((emp) => {
                 const initials = emp.name.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
                 const color = ["#7c3aed", "#2563eb", "#059669", "#db2777", "#ea580c"][emp.id.charCodeAt(emp.id.length - 1) % 5];
                 return (
@@ -118,10 +161,8 @@ export default function StaffTab() {
                     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                     setMenuEmployee({ emp, x: e.clientX, y: rect.bottom });
                   }}>
-                    <td className="cell-flex"><span className="person" style={{ background: color }}>{initials}</span><span><b>{emp.name}</b><small>{emp.id}</small></span></td>
+                    <td className="cell-flex"><span className="person" style={{ background: color }}>{initials}</span><span><b>{emp.name}</b>{emp.flexibleHours && <span style={{ fontSize: 10, background: "#ede9fe", color: "#7c3aed", padding: "1px 6px", borderRadius: 6, marginLeft: 6, fontWeight: 600 }}>Flex</span>}<small>{emp.id}</small></span></td>
                     <td className="cell-flex"><span><b>{emp.email}</b><small>{emp.mobileNumber || "\u2014"}</small></span></td>
-                    <td>{emp.mobileNumber || "\u2014"}</td>
-
                     <td>{emp.jobRole || "\u2014"}</td>
                     <td>{emp.department || "\u2014"}</td>
                     <td>{emp.workStartTime && emp.workEndTime ? `${emp.workStartTime} \u2013 ${emp.workEndTime}` : "\u2014"}</td>

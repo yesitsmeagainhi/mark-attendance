@@ -21,6 +21,7 @@ const emptyForm = {
   office: "",
   department: "",
   monthlySalary: "",
+  flexibleHours: false,
   role: "employee" as const,
 };
 
@@ -88,6 +89,7 @@ export default function AddEmployeeModal({
           department: form.department.trim(),
           role: form.role,
           monthlySalary: parseInt(form.monthlySalary, 10) || 0,
+          flexibleHours: form.flexibleHours,
           ruleOverrides: Object.entries(ruleOverrides)
             .filter(([, v]) => v !== "")
             .map(([ruleId, value]) => ({ ruleId, value })),
@@ -176,6 +178,20 @@ export default function AddEmployeeModal({
           <label>
             <span>Monthly salary</span>
             <input type="number" inputMode="numeric" value={form.monthlySalary} onChange={(e) => setForm({ ...form, monthlySalary: e.target.value })} placeholder="e.g. 25000" min="0" />
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 10, flexDirection: "row" }}>
+            <span style={{ flex: 1 }}>
+              Flexible hours
+              <small style={{ display: "block", color: "#9ca3af", fontWeight: 400 }}>Exempt from late &amp; duration rules</small>
+            </span>
+            <button
+              type="button"
+              className={form.flexibleHours ? "btn-approve" : "btn-reject"}
+              style={{ fontSize: 12 }}
+              onClick={() => setForm({ ...form, flexibleHours: !form.flexibleHours })}
+            >
+              {form.flexibleHours ? "Enabled" : "Disabled"}
+            </button>
           </label>
           <div style={{ borderTop: "1px solid #f0f0f3", paddingTop: 12 }}>
             <button type="button" className="secondary" style={{ width: "100%", fontSize: 13 }} onClick={() => setShowRules(!showRules)}>

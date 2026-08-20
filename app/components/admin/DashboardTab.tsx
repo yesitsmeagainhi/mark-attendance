@@ -175,7 +175,7 @@
 //             </thead>
 //             <tbody>
 //               {loading && !data ? (
-//                 <tr><td colSpan={8} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>Loading...</td></tr>
+//                 <tr><td colSpan={9} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>Loading...</td></tr>
 //               ) : data?.employees.map((emp) => {
 //                 const initials = emp.name.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
 //                 const color = ["#7c3aed", "#2563eb", "#059669", "#db2777", "#ea580c"][emp.id.charCodeAt(emp.id.length - 1) % 5];
@@ -228,7 +228,7 @@
 //                 );
 //               })}
 //               {data && data.employees.length === 0 && (
-//                 <tr><td colSpan={8} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No employees registered.</td></tr>
+//                 <tr><td colSpan={9} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No employees registered.</td></tr>
 //               )}
 //             </tbody>
 //           </table>
@@ -604,13 +604,14 @@ export default function DashboardTab() {
                 <th>Punch In</th>
                 <th>Punch Out</th>
                 <th>Duration</th>
+                <th>Location</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading && !data ? (
-                <tr><td colSpan={8} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>Loading...</td></tr>
+                <tr><td colSpan={9} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>Loading...</td></tr>
               ) : visibleEmployees.map((emp) => {
                 const initials = emp.name.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
                 const color = ["#7c3aed", "#2563eb", "#059669", "#db2777", "#ea580c"][emp.id.charCodeAt(emp.id.length - 1) % 5];
@@ -655,6 +656,27 @@ export default function DashboardTab() {
                     <td data-label="Punch In">{emp.punchIn ? formatTime(emp.punchIn.time) : "\u2014"}</td>
                     <td data-label="Punch Out">{emp.punchOut ? formatTime(emp.punchOut.time) : "\u2014"}</td>
                     <td data-label="Duration" style={{ fontWeight: 600, color: emp.durationMinutes !== null ? "#6d45e5" : undefined }}>{formatDuration(emp.durationMinutes)}</td>
+                    <td data-label="Location" style={{ fontSize: 12, maxWidth: 160 }}>
+                      {emp.punchIn?.office ? (
+                        <>
+                          <div>{emp.punchIn.office}</div>
+                          {emp.punchIn.latitude && emp.punchIn.longitude && (
+                            <a
+                              href={`https://www.google.com/maps?q=${emp.punchIn.latitude},${emp.punchIn.longitude}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ fontSize: 10, color: "#2563eb", textDecoration: "none" }}
+                              onClick={(e) => e.stopPropagation()}
+                              title={`${emp.punchIn.latitude}, ${emp.punchIn.longitude}`}
+                            >
+                              View on Map
+                            </a>
+                          )}
+                        </>
+                      ) : (
+                        <span style={{ color: "#c9cbd4" }}>{"\u2014"}</span>
+                      )}
+                    </td>
                     <td data-label="Status">{statusBadge(emp.status)}</td>
                     <td data-label="Actions">
                       <div className="review-actions" style={{ gap: 4 }}>
@@ -670,7 +692,7 @@ export default function DashboardTab() {
                 );
               })}
               {data && visibleEmployees.length === 0 && (
-                <tr><td colSpan={8} className="attendance-empty">
+                <tr><td colSpan={9} className="attendance-empty">
                   {data.employees.length === 0 ? "No employees registered." : "No employees match these filters."}
                 </td></tr>
               )}

@@ -12,6 +12,8 @@ type PayrollRow = {
   lateAbsentDays: number;
   lateDays: number;
   leaveDays: number;
+  sundayWorkedDays: number;
+  sundayBonus: number;
   deduction: number;
   netPay: number;
 };
@@ -26,6 +28,7 @@ export default function PayrollTab() {
   const [loading, setLoading] = useState(true);
   const [editingSalary, setEditingSalary] = useState<string | null>(null);
   const [salaryValue, setSalaryValue] = useState("");
+  const [search, setSearch] = useState("");
 
   function fetchPayroll() {
     setLoading(true);
@@ -61,6 +64,7 @@ export default function PayrollTab() {
 
   const totalSalary = rows.reduce((s, r) => s + r.monthlySalary, 0);
   const totalDeduction = rows.reduce((s, r) => s + r.deduction, 0);
+  const totalSundayBonus = rows.reduce((s, r) => s + (r.sundayBonus || 0), 0);
   const totalNetPay = rows.reduce((s, r) => s + r.netPay, 0);
 
   return (
@@ -75,16 +79,30 @@ export default function PayrollTab() {
       <section className="table-card">
         <div className="table-tools">
           <div><h2>Payroll</h2><p>{month} &middot; {rows.length} employees</p></div>
+          <div className="filters">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search employee or ID"
+              aria-label="Search payroll"
+              style={{ minWidth: 180 }}
+            />
+          </div>
         </div>
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Employee</th><th>Monthly Salary</th><th>Present</th><th>Absent</th><th>Late</th><th>Leave</th><th>Deduction</th><th>Net Pay</th></tr>
+              <tr><th>Employee</th><th>Monthly Salary</th><th>Present</th><th>Absent</th><th>Late</th><th>Leave</th><th>Sun Work</th><th>Deduction</th><th>Sun Bonus</th><th>Net Pay</th></tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>Loading...</td></tr>
-              ) : rows.map((r) => (
+                <tr><td colSpan={10} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>Loading...</td></tr>
+              ) : rows.filter((r) => {
+                if (!search.trim()) return true;
+                const q = search.trim().toLowerCase();
+                return `${r.name} ${r.id}`.toLowerCase().includes(q);
+              }).map((r) => (
                 <tr key={r.id}>
                   <td><b>{r.name}</b><br /><small>{r.id}</small></td>
                   <td>
@@ -117,7 +135,9 @@ export default function PayrollTab() {
                     )}
                   </td>
                   <td>{r.leaveDays}</td>
+                  <td>{r.sundayWorkedDays > 0 ? <span className="grace-badge grace">{r.sundayWorkedDays}</span> : <span style={{ color: "#b0b5c0" }}>0</span>}</td>
                   <td style={{ color: r.deduction > 0 ? "#c73333" : undefined }}>{r.deduction > 0 ? `-${fmt(r.deduction)}` : "\u2014"}</td>
+                  <td style={{ color: r.sundayBonus > 0 ? "#168052" : undefined }}>{r.sundayBonus > 0 ? `+${fmt(r.sundayBonus)}` : "\u2014"}</td>
                   <td><b>{fmt(r.netPay)}</b></td>
                 </tr>
               ))}
@@ -125,13 +145,14 @@ export default function PayrollTab() {
                 <tr className="totals-row">
                   <td><b>TOTALS</b></td>
                   <td><b>{fmt(totalSalary)}</b></td>
-                  <td></td><td></td><td></td><td></td>
+                  <td></td><td></td><td></td><td></td><td></td>
                   <td style={{ color: "#c73333" }}><b>{totalDeduction > 0 ? `-${fmt(totalDeduction)}` : "\u2014"}</b></td>
+                  <td style={{ color: "#168052" }}><b>{totalSundayBonus > 0 ? `+${fmt(totalSundayBonus)}` : "\u2014"}</b></td>
                   <td><b>{fmt(totalNetPay)}</b></td>
                 </tr>
               )}
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No data for this month.</td></tr>
+                <tr><td colSpan={10} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No data for this month.</td></tr>
               )}
             </tbody>
           </table>

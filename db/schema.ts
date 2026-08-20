@@ -15,6 +15,7 @@ export const employees = sqliteTable("employees", {
   department: text("department").notNull().default(""),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   monthlySalary: integer("monthly_salary").notNull().default(0),
+  flexibleHours: integer("flexible_hours", { mode: "boolean" }).notNull().default(false),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 

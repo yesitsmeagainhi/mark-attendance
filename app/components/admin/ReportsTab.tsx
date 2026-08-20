@@ -148,6 +148,7 @@ export default function ReportsTab() {
   const [loading, setLoading] = useState(true);
   const [selectedEmp, setSelectedEmp] = useState<ReportRow | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [search, setSearch] = useState("");
 
   async function handleExcelExport(emp: ReportRow) {
     setGenerating(true);
@@ -352,6 +353,16 @@ export default function ReportsTab() {
       <section className="table-card">
         <div className="table-tools">
           <div><h2>Attendance Report</h2><p>{month} &middot; {rows.length} employees</p></div>
+          <div className="filters">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search employee or ID"
+              aria-label="Search reports"
+              style={{ minWidth: 180 }}
+            />
+          </div>
         </div>
         <div className="table-wrap">
           <table>
@@ -361,7 +372,11 @@ export default function ReportsTab() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={9} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>Loading...</td></tr>
-              ) : rows.map((r) => (
+              ) : rows.filter((r) => {
+                if (!search.trim()) return true;
+                const q = search.trim().toLowerCase();
+                return `${r.name} ${r.id}`.toLowerCase().includes(q);
+              }).map((r) => (
                 <tr
                   key={r.id}
                   onClick={() => setSelectedEmp(r)}

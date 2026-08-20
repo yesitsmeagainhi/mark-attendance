@@ -69,6 +69,30 @@ export async function POST(request: Request) {
         source: "admin",
       }).run();
     }
+
+    // Also create punch OUT if missing (needed for past dates to avoid "absent" status)
+    const existingOut = db
+      .select({ id: attendance.id })
+      .from(attendance)
+      .where(and(
+        eq(attendance.employeeId, employeeId),
+        eq(attendance.punchType, "OUT"),
+        sql`date(${attendance.serverTimestamp}) = ${date}`,
+      ))
+      .get();
+
+    if (!existingOut) {
+      db.insert(attendance).values({
+        id: crypto.randomUUID(),
+        employeeId,
+        punchType: "OUT",
+        serverTimestamp: istToUTC(date, emp.workEndTime),
+        photoKey: "admin-marked",
+        contentType: "text/plain",
+        office: emp.office,
+        source: "admin",
+      }).run();
+    }
   } else if (action === "absent") {
     // Delete only admin-marked records
     db.delete(attendance)

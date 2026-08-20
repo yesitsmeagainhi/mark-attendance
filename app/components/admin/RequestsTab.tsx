@@ -6,6 +6,8 @@ import type { MissPunchRow } from "./types";
 export default function RequestsTab() {
   const [requests, setRequests] = useState<MissPunchRow[]>([]);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   function fetchRequests() {
     fetch("/api/miss-punch")
@@ -38,12 +40,32 @@ export default function RequestsTab() {
           <h2>Miss Punch Requests {pending > 0 && <span className="badge-pending" style={{ marginLeft: 8 }}>{pending} pending</span>}</h2>
           <p>{requests.length} total</p>
         </div>
+        <div className="attendance-filters">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search employee or ID"
+            aria-label="Search requests"
+          />
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
+            <option value="all">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
       </div>
       <div className="table-wrap">
         <table>
           <thead><tr><th>Employee</th><th>Date</th><th>Type</th><th>Time</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
-            {requests.map((r) => (
+            {requests.filter((r) => {
+              if (statusFilter !== "all" && r.status !== statusFilter) return false;
+              if (!search.trim()) return true;
+              const q = search.trim().toLowerCase();
+              return `${r.employeeName} ${r.employeeId}`.toLowerCase().includes(q);
+            }).map((r) => (
               <tr key={r.id}>
                 <td><b>{r.employeeName}</b><br /><small>{r.employeeId}</small></td>
                 <td>{new Date(r.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</td>

@@ -27,6 +27,7 @@ export default function EditEmployeeModal({
     office: employee.office,
     department: employee.department || "",
     monthlySalary: String(employee.monthlySalary || ""),
+    flexibleHours: employee.flexibleHours ?? false,
     active: employee.active,
   });
   const [error, setError] = useState("");
@@ -61,6 +62,7 @@ export default function EditEmployeeModal({
         office: form.office.trim(),
         department: form.department.trim(),
         monthlySalary: parseInt(form.monthlySalary, 10) || 0,
+        flexibleHours: form.flexibleHours,
         active: form.active,
       };
 
@@ -157,6 +159,20 @@ export default function EditEmployeeModal({
           <label>
             <span>Monthly salary</span>
             <input type="number" inputMode="numeric" value={form.monthlySalary} onChange={(e) => setForm({ ...form, monthlySalary: e.target.value })} placeholder="e.g. 25000" min="0" />
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 10, flexDirection: "row" }}>
+            <span style={{ flex: 1 }}>
+              Flexible hours
+              <small style={{ display: "block", color: "#9ca3af", fontWeight: 400 }}>Exempt from late &amp; duration rules</small>
+            </span>
+            <button
+              type="button"
+              className={form.flexibleHours ? "btn-approve" : "btn-reject"}
+              style={{ fontSize: 12 }}
+              onClick={() => setForm({ ...form, flexibleHours: !form.flexibleHours })}
+            >
+              {form.flexibleHours ? "Enabled" : "Disabled"}
+            </button>
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: 10, flexDirection: "row" }}>
             <span style={{ flex: 1 }}>Status</span>

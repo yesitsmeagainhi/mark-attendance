@@ -20,9 +20,10 @@ export async function GET(request: Request) {
       name: employees.name,
       workStartTime: employees.workStartTime,
       workEndTime: employees.workEndTime,
+      flexibleHours: employees.flexibleHours,
     })
     .from(employees)
-    .where(eq(employees.active, true))
+    .where(and(eq(employees.active, true), sql`${employees.role} != 'admin'`))
     .orderBy(employees.name)
     .all();
 
@@ -36,6 +37,8 @@ export async function GET(request: Request) {
       office: attendance.office,
       photoKey: attendance.photoKey,
       source: attendance.source,
+      latitude: attendance.latitude,
+      longitude: attendance.longitude,
     })
     .from(attendance)
     .where(sql`date(${attendance.serverTimestamp}) = ${date}`)
@@ -84,15 +87,20 @@ export async function GET(request: Request) {
           const punchMin = punchDate.getUTCMinutes() + 30;
           const totalPunchMin = (punchHour * 60 + punchMin) % (24 * 60);
 
-          const [startH, startM] = emp.workStartTime.split(":").map(Number);
-          const shiftStartMin = startH * 60 + startM;
-          const empRules = rulesByEmp.get(emp.id)!;
-          const graceMin = shiftStartMin + empRules.grace_period;
-
-          if (totalPunchMin <= graceMin) {
+          // Flexible-hours employees always marked present
+          if (emp.flexibleHours) {
             status = "present";
           } else {
-            status = "late";
+            const [startH, startM] = emp.workStartTime.split(":").map(Number);
+            const shiftStartMin = startH * 60 + startM;
+            const empRules = rulesByEmp.get(emp.id)!;
+            const graceMin = shiftStartMin + empRules.grace_period;
+
+            if (totalPunchMin <= graceMin) {
+              status = "present";
+            } else {
+              status = "late";
+            }
           }
         }
       }
@@ -125,10 +133,10 @@ export async function GET(request: Request) {
       name: emp.name,
       workStartTime: emp.workStartTime,
       punchIn: punchIn
-        ? { time: punchIn.serverTimestamp, photoKey: punchIn.photoKey, source: punchIn.source }
+        ? { time: punchIn.serverTimestamp, photoKey: punchIn.photoKey, source: punchIn.source, office: punchIn.office, latitude: punchIn.latitude, longitude: punchIn.longitude }
         : null,
       punchOut: punchOut
-        ? { time: punchOut.serverTimestamp, photoKey: punchOut.photoKey, source: punchOut.source }
+        ? { time: punchOut.serverTimestamp, photoKey: punchOut.photoKey, source: punchOut.source, office: punchOut.office, latitude: punchOut.latitude, longitude: punchOut.longitude }
         : null,
       durationMinutes,
       status,

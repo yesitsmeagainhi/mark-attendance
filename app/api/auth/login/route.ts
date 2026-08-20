@@ -102,5 +102,7 @@ export async function POST(request: Request) {
   return Response.json({
     role: record.role,
     name: record.name,
+    token,
+    employeeId: record.id,
   });
 }

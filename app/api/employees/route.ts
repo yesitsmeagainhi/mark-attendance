@@ -1,12 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { employees, employeeRuleOverrides, attendance, leaveRequests, missPunchRequests, sessions, dailyJournals, otpRequests } from "../../../db/schema";
 import { requireApiRole, getAppIdentity } from "../../authz";
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await requireApiRole("admin");
   if ("error" in auth) return auth.error;
+
+  const url = new URL(request.url);
+  const roleFilter = url.searchParams.get("role");
 
   const db = getDb();
   const records = db
@@ -23,9 +26,11 @@ export async function GET() {
       department: employees.department,
       active: employees.active,
       monthlySalary: employees.monthlySalary,
+      flexibleHours: employees.flexibleHours,
       createdAt: employees.createdAt,
     })
     .from(employees)
+    .where(roleFilter === "admin" ? eq(employees.role, "admin") : sql`${employees.role} != 'admin'`)
     .orderBy(desc(employees.createdAt))
     .all();
 
@@ -49,6 +54,7 @@ export async function PATCH(request: Request) {
     department?: string;
     monthlySalary?: number;
     active?: boolean;
+    flexibleHours?: boolean;
   };
   try {
     body = await request.json();
@@ -98,6 +104,7 @@ export async function PATCH(request: Request) {
   if (body.department !== undefined) updates.department = body.department.trim();
   if (body.monthlySalary !== undefined) updates.monthlySalary = Math.max(0, Math.round(Number(body.monthlySalary) || 0));
   if (body.active !== undefined) updates.active = body.active;
+  if (body.flexibleHours !== undefined) updates.flexibleHours = body.flexibleHours;
 
   if (Object.keys(updates).length > 0) {
     db.update(employees).set(updates).where(eq(employees.id, body.id)).run();
@@ -121,6 +128,7 @@ export async function POST(request: Request) {
     workEndTime?: string;
     office?: string;
     department?: string;
+    flexibleHours?: boolean;
     ruleOverrides?: { ruleId: string; value: string }[];
   };
   try {
@@ -139,6 +147,7 @@ export async function POST(request: Request) {
   const workEndTime = body.workEndTime || "18:00";
   const office = body.office?.trim() || "Bhayandar Office";
   const department = body.department?.trim() || "";
+  const flexibleHours = body.flexibleHours === true;
 
   if (!name) {
     return Response.json({ error: "Name is required." }, { status: 400 });
@@ -200,6 +209,7 @@ export async function POST(request: Request) {
       workEndTime,
       office,
       department,
+      flexibleHours,
     })
     .run();
 
