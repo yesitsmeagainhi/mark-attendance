@@ -43,7 +43,7 @@ export default function AttendanceTab({ employeeId, displayName, camera }: { emp
   }
   const progressPct = expectedMinutes > 0 ? Math.min(100, Math.round((workedMinutes / expectedMinutes) * 100)) : 0;
   const gracePeriod = todayStatus?.rules?.gracePeriod ?? 15;
-  const graceInfo = todayStatus?.punchIn ? getGraceStatus(todayStatus.punchIn.time, todayStatus.workStartTime, gracePeriod) : null;
+  const graceInfo = (todayStatus?.punchIn && !todayStatus.flexibleHours) ? getGraceStatus(todayStatus.punchIn.time, todayStatus.workStartTime, gracePeriod) : null;
 
   const ampm = currentTime.timeStr.includes("AM") || currentTime.timeStr.includes("am") ? "AM" : "PM";
   const timeOnly = currentTime.timeStr.replace(/(am|pm)/i, "").trim();

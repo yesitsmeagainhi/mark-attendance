@@ -43,7 +43,7 @@ export default function HomeTab({ displayName, onNavigate, onOpenCamera, todaySt
   }
 
   let graceLabel = "";
-  if (todayStatus?.punchIn && todayStatus.workStartTime) {
+  if (todayStatus?.punchIn && todayStatus.workStartTime && !todayStatus.flexibleHours) {
     const g = getGraceStatus(todayStatus.punchIn.time, todayStatus.workStartTime, todayStatus.rules?.gracePeriod ?? 0);
     graceLabel = g.label;
   }

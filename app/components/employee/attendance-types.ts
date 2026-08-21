@@ -6,6 +6,7 @@ export type TodayStatus = {
   workStartTime: string;
   workEndTime: string;
   office: string;
+  flexibleHours: boolean;
   punchIn: { time: string; office: string; photoKey?: string } | null;
   punchOut: { time: string; office: string; photoKey?: string } | null;
   punches: PunchRecord[];

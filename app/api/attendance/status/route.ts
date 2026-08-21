@@ -19,6 +19,7 @@ export async function GET() {
       workStartTime: employees.workStartTime,
       workEndTime: employees.workEndTime,
       office: employees.office,
+      flexibleHours: employees.flexibleHours,
     })
     .from(employees)
     .where(eq(employees.id, identity.employeeId))
@@ -104,6 +105,7 @@ export async function GET() {
       ? { time: punchOut.serverTimestamp, office: punchOut.office, photoKey: punchOut.photoKey }
       : null,
     punches: orderedPunches,
+    flexibleHours: emp?.flexibleHours ?? false,
     rules: {
       gracePeriod: empRules.grace_period,
       lunchBreakEnabled: empRules.lunch_break_enabled,
