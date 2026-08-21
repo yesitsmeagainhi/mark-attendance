@@ -145,7 +145,7 @@ export default function StaffTab() {
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Employee</th><th>Contact</th><th>Job role</th><th>Department</th><th>Work hours</th><th>Office</th><th>Salary</th><th>Rules</th><th>Status</th><th>Added</th></tr></thead>
+            <thead><tr><th>Employee</th><th>Job role</th><th>Department</th><th>Work hours</th><th>Office</th><th>Salary</th><th>Rules</th><th>Status</th><th>Added</th><th>Edit</th><th style={{ width: 48 }}></th></tr></thead>
             <tbody>
               {employeeList.filter((emp) => {
                 if (!search.trim()) return true;
@@ -155,12 +155,7 @@ export default function StaffTab() {
                 const initials = emp.name.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
                 const color = ["#7c3aed", "#2563eb", "#059669", "#db2777", "#ea580c"][emp.id.charCodeAt(emp.id.length - 1) % 5];
                 return (
-                  <tr key={emp.id} style={{ cursor: "pointer" }} onClick={(e) => {
-                    // Don't open menu if clicking salary edit or rules button
-                    if ((e.target as HTMLElement).closest("input, button")) return;
-                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    setMenuEmployee({ emp, x: e.clientX, y: rect.bottom });
-                  }}>
+                  <tr key={emp.id}>
                     <td className="cell-flex"><span className="person" style={{ background: color }}>{initials}</span><span><b>{emp.name}</b>{emp.flexibleHours && <span style={{ fontSize: 10, background: "#ede9fe", color: "#7c3aed", padding: "1px 6px", borderRadius: 6, marginLeft: 6, fontWeight: 600 }}>Flex</span>}<small>{emp.id}</small></span></td>
                     <td className="cell-flex"><span><b>{emp.email}</b><small>{emp.mobileNumber || "\u2014"}</small></span></td>
                     <td>{emp.jobRole || "\u2014"}</td>
@@ -193,10 +188,28 @@ export default function StaffTab() {
                     </td>
                     <td><span className={`status ${emp.active ? "" : "absent"}`}>&#9679; {emp.active ? "Active" : "Inactive"}</span></td>
                     <td><small>{new Date(emp.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</small></td>
+                    <td>
+                      <button
+                        style={{
+                          background: "none", border: "1px solid #e7e9ee", borderRadius: 8,
+                          width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
+                          cursor: "pointer", fontSize: 15, color: "#6b7280", transition: "all .15s",
+                        }}
+                        title="Actions"
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "#f3f4f6"; e.currentTarget.style.borderColor = "#c9cbd4"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.borderColor = "#e7e9ee"; }}
+                        onClick={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setMenuEmployee({ emp, x: rect.right, y: rect.bottom + 4 });
+                        }}
+                      >
+                        &#9998;
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
-              {employeeList.length === 0 && <tr><td colSpan={10} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No employees registered yet.</td></tr>}
+              {employeeList.length === 0 && <tr><td colSpan={11} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No employees registered yet.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -219,111 +232,88 @@ export default function StaffTab() {
         />
       )}
 
-      {/* Row click popup menu */}
+      {/* Actions dropdown menu */}
       {menuEmployee && (() => {
         const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
-        const menuW = 240, menuH = 260;
+        const menuW = 220, menuH = 280;
         const vw = typeof window !== "undefined" ? window.innerWidth : 1000;
         const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-        const left = Math.min(menuEmployee.x, vw - menuW - 8);
-        const top = menuEmployee.y + menuH > vh ? Math.max(8, menuEmployee.y - menuH) : menuEmployee.y;
+        const left = Math.min(menuEmployee.x - menuW, vw - menuW - 8);
+        const top = menuEmployee.y + menuH > vh ? Math.max(8, menuEmployee.y - menuH - 40) : menuEmployee.y;
+
+        const menuItemStyle = (color?: string): React.CSSProperties => ({
+          display: "flex", alignItems: "center", gap: 10, width: "100%",
+          padding: isMobile ? "14px 18px" : "10px 14px",
+          background: "none", border: "none", textAlign: "left",
+          fontSize: 13, fontWeight: 500, cursor: "pointer",
+          color: color || "#374151", borderRadius: 6,
+        });
+
+        const items: { icon: string; label: string; color?: string; onClick: () => void }[] = [
+          { icon: "\uD83D\uDCC5", label: "Datewise Status", onClick: () => { setDatewiseEmployee({ id: menuEmployee.emp.id, name: menuEmployee.emp.name }); setMenuEmployee(null); } },
+          { icon: "\uD83D\uDC64", label: "View Details", onClick: () => { setDetailEmployee(menuEmployee.emp); setMenuEmployee(null); } },
+          { icon: "\u270F\uFE0F", label: "Edit Employee", onClick: () => { setEditEmployee(menuEmployee.emp); setMenuEmployee(null); } },
+          { icon: menuEmployee.emp.active ? "\u23F8" : "\u25B6", label: menuEmployee.emp.active ? "Deactivate" : "Activate", color: menuEmployee.emp.active ? "#a86400" : "#168052", onClick: () => toggleActive(menuEmployee.emp) },
+          { icon: "\uD83D\uDDD1", label: "Delete", color: "#c73333", onClick: () => deleteEmployee(menuEmployee.emp) },
+        ];
+
         return (
           <>
-            {/* Backdrop for mobile */}
-            {isMobile && (
-              <div
-                style={{
-                  position: "fixed",
-                  inset: 0,
-                  background: "rgba(0,0,0,.4)",
-                  zIndex: 999,
-                }}
-                onClick={() => setMenuEmployee(null)}
-              />
-            )}
+            {/* Backdrop */}
+            <div
+              style={{
+                position: "fixed", inset: 0,
+                background: isMobile ? "rgba(0,0,0,.4)" : "transparent",
+                zIndex: 999,
+              }}
+              onClick={() => setMenuEmployee(null)}
+            />
             <div
               ref={menuRef}
               style={isMobile ? {
-                position: "fixed",
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: "#fff",
-                borderRadius: "16px 16px 0 0",
+                position: "fixed", left: 0, right: 0, bottom: 0,
+                background: "#fff", borderRadius: "16px 16px 0 0",
                 boxShadow: "0 -4px 30px rgba(0,0,0,.15)",
-                zIndex: 1000,
-                overflow: "hidden",
+                zIndex: 1000, overflow: "hidden",
                 paddingBottom: "env(safe-area-inset-bottom, 16px)",
               } : {
-                position: "fixed",
-                left,
-                top,
-                background: "#fff",
-                borderRadius: 12,
-                boxShadow: "0 8px 30px rgba(0,0,0,.15)",
-                border: "1px solid #e7e9ee",
-                zIndex: 1000,
-                minWidth: 200,
-                overflow: "hidden",
+                position: "fixed", left, top,
+                background: "#fff", borderRadius: 10,
+                boxShadow: "0 4px 24px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.05)",
+                zIndex: 1000, minWidth: 200, padding: 4,
               }}
             >
-              {/* Mobile handle bar */}
+              {/* Mobile handle + name header */}
               {isMobile && (
-                <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
-                  <div style={{ width: 36, height: 4, borderRadius: 2, background: "#d1d5db" }} />
+                <>
+                  <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
+                    <div style={{ width: 36, height: 4, borderRadius: 2, background: "#d1d5db" }} />
+                  </div>
+                  <div style={{ padding: "6px 18px 12px", borderBottom: "1px solid #f0f0f0" }}>
+                    <b style={{ fontSize: 15 }}>{menuEmployee.emp.name}</b>
+                    <div style={{ fontSize: 12, color: "#8990a0" }}>{menuEmployee.emp.id}</div>
+                  </div>
+                </>
+              )}
+              {/* Desktop: compact name header */}
+              {!isMobile && (
+                <div style={{ padding: "8px 14px 6px", borderBottom: "1px solid #f0f0f0", marginBottom: 4 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>{menuEmployee.emp.name}</div>
+                  <div style={{ fontSize: 11, color: "#9ca3af" }}>{menuEmployee.emp.id}</div>
                 </div>
               )}
-              {/* Employee name header on mobile */}
-              {isMobile && (
-                <div style={{ padding: "8px 20px 12px", borderBottom: "1px solid #e7e9ee" }}>
-                  <b style={{ fontSize: 15 }}>{menuEmployee.emp.name}</b>
-                  <div style={{ fontSize: 12, color: "#8990a0" }}>{menuEmployee.emp.id}</div>
-                </div>
-              )}
-              <button
-                style={{ display: "block", width: "100%", padding: isMobile ? "16px 20px" : "14px 20px", background: "none", border: "none", textAlign: "left", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                onClick={() => { setDatewiseEmployee({ id: menuEmployee.emp.id, name: menuEmployee.emp.name }); setMenuEmployee(null); }}
-              >
-                Employee Datewise Status
-              </button>
-              <div style={{ height: 1, background: "#e7e9ee" }} />
-              <button
-                style={{ display: "block", width: "100%", padding: isMobile ? "16px 20px" : "14px 20px", background: "none", border: "none", textAlign: "left", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                onClick={() => { setDetailEmployee(menuEmployee.emp); setMenuEmployee(null); }}
-              >
-                Employee Detail
-              </button>
-              <div style={{ height: 1, background: "#e7e9ee" }} />
-              <button
-                style={{ display: "block", width: "100%", padding: isMobile ? "16px 20px" : "14px 20px", background: "none", border: "none", textAlign: "left", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                onClick={() => { setEditEmployee(menuEmployee.emp); setMenuEmployee(null); }}
-              >
-                Edit Employee
-              </button>
-              <div style={{ height: 1, background: "#e7e9ee" }} />
-              <button
-                style={{ display: "block", width: "100%", padding: isMobile ? "16px 20px" : "14px 20px", background: "none", border: "none", textAlign: "left", fontSize: 14, fontWeight: 600, cursor: "pointer", color: menuEmployee.emp.active ? "#a86400" : "#168052" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                onClick={() => toggleActive(menuEmployee.emp)}
-              >
-                {menuEmployee.emp.active ? "Deactivate Employee" : "Activate Employee"}
-              </button>
-              <div style={{ height: 1, background: "#e7e9ee" }} />
-              <button
-                style={{ display: "block", width: "100%", padding: isMobile ? "16px 20px" : "14px 20px", background: "none", border: "none", textAlign: "left", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#c73333" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#fff5f5")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                onClick={() => deleteEmployee(menuEmployee.emp)}
-              >
-                Delete Employee
-              </button>
+              {items.map((item, idx) => (
+                <button
+                  key={idx}
+                  style={menuItemStyle(item.color)}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = item.color === "#c73333" ? "#fef2f2" : "#f5f5f5")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                  onClick={item.onClick}
+                >
+                  <span style={{ fontSize: 15, width: 20, textAlign: "center" }}>{item.icon}</span>
+                  {item.label}
+                </button>
+              ))}
             </div>
           </>
         );

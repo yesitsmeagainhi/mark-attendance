@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { formatTimeIST, formatDuration } from "../../../lib/time-utils";
 
 function isRealPhoto(key: string | null) {
-  return key && key !== "admin-marked" && key !== "admin/unpaid-holiday";
+  return key && key !== "admin-marked" && key !== "admin/unpaid-holiday" && !key.startsWith("miss-punch/");
 }
 
 type HistoryRecord = {
@@ -113,7 +113,7 @@ export default function HistoryTab() {
     if (s === "Absent" || s === "Short Day") return "absent";
     if (s === "Half Day") return "late";
     if (s === "Leave" || s === "UH") return "grace";
-    if (s === "Extra Pay") return "on-time";
+    if (s === "Overtime") return "overtime";
     if (s === "Sunday") return "grace";
     return "";
   };
@@ -218,6 +218,7 @@ export default function HistoryTab() {
                     )}
                     {cell.status === "extra-pay" && cell.punchIn && (
                       <div className="day-times">
+                        <span style={{ color: "#6d45e5", fontWeight: 700 }}>OT</span>{" "}
                         {formatTimeIST(cell.punchIn)}
                         {cell.punchOut ? ` - ${formatTimeIST(cell.punchOut)}` : ""}
                       </div>
@@ -262,6 +263,12 @@ export default function HistoryTab() {
                     <div className="emp-status-detail"><strong>{tsData.uhDays}</strong><span className="pending-text">days</span></div>
                   </article>
                 )}
+                {(tsData.sundayWorkedDays ?? 0) > 0 && (
+                  <article className="emp-status-card">
+                    <div className="emp-status-header"><b>Overtime</b></div>
+                    <div className="emp-status-detail"><strong>{tsData.sundayWorkedDays}</strong><span className="pending-text">days</span></div>
+                  </article>
+                )}
               </section>
             )}
           </div>
@@ -288,6 +295,9 @@ export default function HistoryTab() {
           <article><span className="metric-icon purple">&#9673;</span><div><small>Leave</small><strong>{data.leaveDays}</strong><em>days</em></div></article>
           {(data.uhDays ?? 0) > 0 && (
             <article><span className="metric-icon amber">&#9632;</span><div><small>UH</small><strong>{data.uhDays}</strong><em>days</em></div></article>
+          )}
+          {(data.sundayWorkedDays ?? 0) > 0 && (
+            <article><span className="metric-icon purple">&#9201;</span><div><small>Overtime</small><strong>{data.sundayWorkedDays}</strong><em>days</em></div></article>
           )}
         </section>
 

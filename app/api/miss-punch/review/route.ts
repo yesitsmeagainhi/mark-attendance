@@ -93,7 +93,7 @@ export async function PATCH(request: Request) {
       if (otherExists) {
         // Both IN and OUT exist — update the existing record's timestamp
         db.update(attendance)
-          .set({ serverTimestamp: timestamp, photoKey: `miss-punch/approved/${requestId}` })
+          .set({ serverTimestamp: timestamp, photoKey: `miss-punch/approved/${requestId}`, source: "miss-punch" })
           .where(eq(attendance.id, duplicate.id))
           .run();
       } else {
@@ -114,6 +114,7 @@ export async function PATCH(request: Request) {
             photoKey: `miss-punch/approved/${requestId}`,
             contentType: "text/plain",
             office: emp?.office || "Bhayandar Office",
+            source: "miss-punch",
           })
           .run();
       }
@@ -128,6 +129,7 @@ export async function PATCH(request: Request) {
           photoKey: `miss-punch/approved/${requestId}`,
           contentType: "text/plain",
           office: emp?.office || "Bhayandar Office",
+          source: "miss-punch",
         })
         .run();
     }

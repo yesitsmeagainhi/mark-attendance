@@ -270,7 +270,7 @@ type DailyResponse = {
 };
 
 function isRealPhoto(key: string) {
-  return key && key !== "admin-marked" && key !== "admin/unpaid-holiday";
+  return key && key !== "admin-marked" && key !== "admin/unpaid-holiday" && !key.startsWith("miss-punch/");
 }
 
 function getIndiaDate() {

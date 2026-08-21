@@ -199,7 +199,7 @@ export async function GET(request: Request) {
         const duration: number | null = totalDur > 0 ? totalDur : null;
         sundayWorkedDays++;
         presentDays++;
-        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut, duration, status: "Extra Pay", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null });
+        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut, duration, status: "Overtime", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null });
       } else {
         // Regular Sunday off
         result.push({ date: dateStr, punchInTime: null, punchOutTime: null, duration: null, status: "Sunday", lateByMinutes: null, office: null, photoKeyIn: null, photoKeyOut: null });
@@ -226,8 +226,9 @@ export async function GET(request: Request) {
       continue;
     }
 
-    // If punch-out is missing, treat as absent (incomplete record)
-    if (!dayData.punchOut) {
+    // If punch-out is missing on a past day, treat as absent (incomplete record)
+    // For today, treat as present (still working)
+    if (!dayData.punchOut && dateStr < today) {
       result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: null, duration: null, status: "Absent", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: null });
       continue;
     }
@@ -241,12 +242,12 @@ export async function GET(request: Request) {
     // Skip for flexible-hours employees
     if (!isFlexible && dateStr < today) {
       if (totalDur < halfDayMinutes) {
-        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut, duration, status: "Short Day", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null });
+        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut || null, duration, status: "Short Day", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null });
         continue;
       }
       if (totalDur < fullDayMinutes) {
         halfDays++;
-        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut, duration, status: "Half Day", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null });
+        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut || null, duration, status: "Half Day", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null });
         continue;
       }
     }
