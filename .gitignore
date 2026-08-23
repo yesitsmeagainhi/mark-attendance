@@ -41,3 +41,4 @@ next-env.d.ts
 
 # data (SQLite database and uploaded photos)
 /data/
+tsconfig.tsbuildinfo

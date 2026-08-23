@@ -2,6 +2,7 @@ import { randomUUID, randomInt } from "node:crypto";
 import { eq, and, sql } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { employees, otpRequests } from "../../../../db/schema";
+import { sendToAdmins } from "../../../../lib/push";
 
 export async function POST(request: Request) {
   let body: { mobileNumber?: string };
@@ -63,6 +64,22 @@ export async function POST(request: Request) {
     status: "pending",
     expiresAt,
   }).run();
+
+  // Tell the admins, now. This is the only notification in the app that cannot
+  // wait for the phone's next background wake-up: the code dies in five minutes
+  // and Android will not wake a closed app sooner than about fifteen, by which
+  // point this row has already been expired and is no longer returned by
+  // /api/admin/otp-requests. Push is the only delivery that arrives in time.
+  //
+  // Deliberately not awaited: a Firebase outage, a slow token exchange or a
+  // missing FCM_SERVICE_ACCOUNT must never delay or fail the employee's sign-in.
+  sendToAdmins({
+    title: `${employee.name} needs a login code`,
+    body: `Code ${otpCode} · expires in 5 minutes`,
+    data: { kind: "otp" },
+  }).catch((e) => {
+    console.warn("[push] could not notify admins of an OTP:", e instanceof Error ? e.message : e);
+  });
 
   return Response.json({
     ok: true,

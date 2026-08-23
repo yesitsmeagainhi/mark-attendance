@@ -4,6 +4,35 @@ import { useEffect, useState } from "react";
 import type { BranchRow, DepartmentRow } from "./types";
 import AttendanceRulesSection from "./AttendanceRulesSection";
 
+const settingsLabelStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--ink)" };
+const settingsInputStyle: React.CSSProperties = { padding: "12px 14px", border: "1px solid var(--line)", borderRadius: 10, fontSize: 14, outline: "none", background: "#fff" };
+
+/**
+ * Nothing but an http(s) address may ever reach an href. PATCH /api/app-settings
+ * refuses anything else, but a row written straight into app_settings (a restored
+ * backup, a maintenance script) never passes through that check, so the value is
+ * re-validated here before it becomes clickable. Returns the browser-normalised
+ * URL so the string we validated is exactly the string we render.
+ */
+function safeHttpLink(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+    return parsed.href;
+  } catch {
+    return "";
+  }
+}
+
+// The input box shows exactly what is stored, so the admin can see and correct a
+// bad value; only the clickable href goes through safeHttpLink above.
+function asText(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
   const [branchList, setBranchList] = useState<BranchRow[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -26,6 +55,14 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
   const [deptSaving, setDeptSaving] = useState(false);
   const [editingDept, setEditingDept] = useState<DepartmentRow | null>(null);
 
+  // Employee form link state
+  const [formUrl, setFormUrl] = useState("");
+  const [formLabel, setFormLabel] = useState("");
+  const [savedFormUrl, setSavedFormUrl] = useState("");
+  const [linkError, setLinkError] = useState("");
+  const [linkSuccess, setLinkSuccess] = useState("");
+  const [linkSaving, setLinkSaving] = useState(false);
+
   function fetchBranches() {
     fetch("/api/branches")
       .then((r) => (r.ok ? r.json() : null))
@@ -47,7 +84,19 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
       .catch(() => undefined);
   }
 
-  useEffect(() => { fetchBranches(); fetchDepartments(); fetchAdmins(); }, []);
+  function fetchAppSettings() {
+    fetch("/api/app-settings")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data?.settings) return;
+        setFormUrl(asText(data.settings.employeeFormUrl));
+        setFormLabel(asText(data.settings.employeeFormLabel));
+        setSavedFormUrl(safeHttpLink(data.settings.employeeFormUrl));
+      })
+      .catch(() => undefined);
+  }
+
+  useEffect(() => { fetchBranches(); fetchDepartments(); fetchAdmins(); fetchAppSettings(); }, []);
 
   function useCurrentLocation() {
     if (!navigator.geolocation) {
@@ -115,6 +164,37 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
       body: JSON.stringify({ id: branch.id, active: !branch.active }),
     });
     fetchBranches();
+  }
+
+  async function saveEmployeeForm(e: React.FormEvent) {
+    e.preventDefault();
+    setLinkError("");
+    setLinkSuccess("");
+    setLinkSaving(true);
+    const nextUrl = formUrl.trim();
+    try {
+      const res = await fetch("/api/app-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeFormUrl: nextUrl, employeeFormLabel: formLabel.trim() }),
+      });
+      const data = (await res.json()) as { error?: string; settings?: { employeeFormUrl: string; employeeFormLabel: string } };
+      if (!res.ok) { setLinkError(data.error || "Could not save the form link."); return; }
+      if (data.settings) {
+        setFormUrl(asText(data.settings.employeeFormUrl));
+        setFormLabel(asText(data.settings.employeeFormLabel));
+        setSavedFormUrl(safeHttpLink(data.settings.employeeFormUrl));
+      } else {
+        setFormUrl(nextUrl);
+        setSavedFormUrl(safeHttpLink(nextUrl));
+      }
+      setLinkSuccess(nextUrl ? "Saved. Every employee now sees this link in their Profile." : "Cleared. The link is now hidden from every employee.");
+      setTimeout(() => setLinkSuccess(""), 4000);
+    } catch {
+      setLinkError("Could not connect to server.");
+    } finally {
+      setLinkSaving(false);
+    }
   }
 
   return (
@@ -292,6 +372,39 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
             </tbody>
           </table>
         </div>
+      </section>
+
+      {/* Employee form link section */}
+      <section className="table-card" style={{ marginTop: 24 }}>
+        <div className="table-tools">
+          <div>
+            <h2>Employee form link</h2>
+            <p>One link for the whole office. Every employee sees it in their Profile.</p>
+          </div>
+        </div>
+        <form onSubmit={saveEmployeeForm} style={{ padding: "0 22px 22px", display: "flex", flexDirection: "column", gap: 16, maxWidth: 560 }}>
+          <label style={settingsLabelStyle}>
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              Form link (URL)
+              {savedFormUrl && (
+                <a href={savedFormUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--purple)", fontSize: 11, fontWeight: 700, textDecoration: "none" }}>Open &#8599;</a>
+              )}
+            </span>
+            <input type="text" inputMode="url" value={formUrl} onChange={(e) => setFormUrl(e.target.value)} placeholder={"https://forms.gle/…"} style={settingsInputStyle} />
+          </label>
+          <label style={settingsLabelStyle}>
+            <span>Link label (optional)</span>
+            <input type="text" value={formLabel} onChange={(e) => setFormLabel(e.target.value)} placeholder="Employee information form" maxLength={80} style={settingsInputStyle} />
+          </label>
+          <p style={{ margin: 0, fontSize: 11, color: "var(--muted)", lineHeight: 1.6 }}>
+            Clear the URL and save to hide the link from every employee. Only http:// and https:// links are accepted.
+          </p>
+          {linkError && <p className="form-message" style={{ textAlign: "left", margin: 0 }}>{linkError}</p>}
+          {linkSuccess && <p className="form-message success-text" style={{ textAlign: "left", margin: 0 }}>{linkSuccess}</p>}
+          <div>
+            <button className="primary" type="submit" disabled={linkSaving} style={{ width: "auto", fontSize: 13, padding: "9px 20px" }}>{linkSaving ? "Saving..." : "Save link"}</button>
+          </div>
+        </form>
       </section>
 
       <section className="table-card" style={{ marginTop: 24, textAlign: "center", padding: 24 }}>

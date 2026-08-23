@@ -16,6 +16,10 @@ export const employees = sqliteTable("employees", {
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   monthlySalary: integer("monthly_salary").notNull().default(0),
   flexibleHours: integer("flexible_hours", { mode: "boolean" }).notNull().default(false),
+  /** 'YYYY-MM-DD'; empty when not recorded. Only month+day are matched on. */
+  dateOfBirth: text("date_of_birth").notNull().default(""),
+  /** Self-edits of the profile used so far; capped at 2, only an admin resets it. */
+  profileEditCount: integer("profile_edit_count").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -132,11 +136,36 @@ export const activityLog = sqliteTable("activity_log", {
   timestamp: text("timestamp").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+/**
+ * One row per device that has agreed to receive notifications. Keyed by the FCM
+ * token: the same app install keeps its token, and a shared phone simply
+ * re-points the row at whoever signed in last.
+ */
+export const pushTokens = sqliteTable("push_tokens", {
+  token: text("token").primaryKey(),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  platform: text("platform").notNull().default("android"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const employeeRuleOverrides = sqliteTable("employee_rule_overrides", {
   id: text("id").primaryKey(),
   employeeId: text("employee_id").notNull().references(() => employees.id),
   ruleId: text("rule_id").notNull().references(() => attendanceRules.id),
   value: text("value").notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+/**
+ * Office-wide settings that are plain strings, one row per key. attendance_rules
+ * only models number/boolean rules that an admin can override per employee, so
+ * shared text like the employee information form link lives here instead.
+ * Keys in use: 'employee_form_url', 'employee_form_label'.
+ */
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull().default(""),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

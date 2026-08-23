@@ -4,6 +4,25 @@ import { getDb } from "../../../db";
 import { employees, employeeRuleOverrides, attendance, leaveRequests, missPunchRequests, sessions, dailyJournals, otpRequests } from "../../../db/schema";
 import { requireApiRole, getAppIdentity } from "../../authz";
 
+const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+/**
+ * Same rule the employee's own profile endpoint applies, so an admin cannot
+ * store a date the employee would be refused for. The shape check alone lets
+ * 2026-02-31 and 0000-00-00 through, and the birthday match is on month+day,
+ * so an impossible date silently means the wish never fires.
+ */
+function isValidDateOfBirth(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(5, 7));
+  const day = Number(value.slice(8, 10));
+  if (month < 1 || month > 12) return false;
+  const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const maxDay = month === 2 && isLeapYear ? 29 : DAYS_IN_MONTH[month - 1];
+  return day >= 1 && day <= maxDay;
+}
+
 export async function GET(request: Request) {
   const auth = await requireApiRole("admin");
   if ("error" in auth) return auth.error;
@@ -27,6 +46,8 @@ export async function GET(request: Request) {
       active: employees.active,
       monthlySalary: employees.monthlySalary,
       flexibleHours: employees.flexibleHours,
+      dateOfBirth: employees.dateOfBirth,
+      profileEditCount: employees.profileEditCount,
       createdAt: employees.createdAt,
     })
     .from(employees)
@@ -55,6 +76,8 @@ export async function PATCH(request: Request) {
     monthlySalary?: number;
     active?: boolean;
     flexibleHours?: boolean;
+    dateOfBirth?: string;
+    profileEditCount?: number;
   };
   try {
     body = await request.json();
@@ -105,6 +128,18 @@ export async function PATCH(request: Request) {
   if (body.monthlySalary !== undefined) updates.monthlySalary = Math.max(0, Math.round(Number(body.monthlySalary) || 0));
   if (body.active !== undefined) updates.active = body.active;
   if (body.flexibleHours !== undefined) updates.flexibleHours = body.flexibleHours;
+  if (body.dateOfBirth !== undefined) {
+    const dob = body.dateOfBirth.trim();
+    if (dob && !isValidDateOfBirth(dob)) {
+      return Response.json({ error: "Date of birth must be YYYY-MM-DD." }, { status: 400 });
+    }
+    updates.dateOfBirth = dob;
+  }
+  if (body.profileEditCount !== undefined) {
+    // Clamped to the 0..2 allowance, so an admin can hand back one or both self-edits.
+    const used = Math.round(Number(body.profileEditCount) || 0);
+    updates.profileEditCount = Math.min(2, Math.max(0, used));
+  }
 
   if (Object.keys(updates).length > 0) {
     db.update(employees).set(updates).where(eq(employees.id, body.id)).run();
@@ -128,7 +163,9 @@ export async function POST(request: Request) {
     workEndTime?: string;
     office?: string;
     department?: string;
+    monthlySalary?: number;
     flexibleHours?: boolean;
+    dateOfBirth?: string;
     ruleOverrides?: { ruleId: string; value: string }[];
   };
   try {
@@ -147,7 +184,12 @@ export async function POST(request: Request) {
   const workEndTime = body.workEndTime || "18:00";
   const office = body.office?.trim() || "Bhayandar Office";
   const department = body.department?.trim() || "";
+  const monthlySalary = Math.max(0, Math.round(Number(body.monthlySalary) || 0));
   const flexibleHours = body.flexibleHours === true;
+  const dateOfBirth = body.dateOfBirth?.trim() || "";
+  if (dateOfBirth && !isValidDateOfBirth(dateOfBirth)) {
+    return Response.json({ error: "Date of birth must be YYYY-MM-DD." }, { status: 400 });
+  }
 
   if (!name) {
     return Response.json({ error: "Name is required." }, { status: 400 });
@@ -209,7 +251,11 @@ export async function POST(request: Request) {
       workEndTime,
       office,
       department,
+      // Was silently missing here, so every employee created via the form was
+      // saved with the column default of 0. Keep it: create must match PATCH.
+      monthlySalary,
       flexibleHours,
+      dateOfBirth,
     })
     .run();
 

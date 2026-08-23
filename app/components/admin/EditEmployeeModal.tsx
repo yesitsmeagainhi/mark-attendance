@@ -10,7 +10,7 @@ export default function EditEmployeeModal({
   onClose,
   onUpdated,
 }: {
-  employee: EmployeeRow;
+  employee: EmployeeRow & { dateOfBirth?: string; profileEditCount?: number };
   branches: BranchRow[];
   departments: DepartmentRow[];
   onClose: () => void;
@@ -21,6 +21,7 @@ export default function EditEmployeeModal({
     email: employee.email,
     password: "",
     jobRole: employee.jobRole,
+    dateOfBirth: employee.dateOfBirth || "",
     mobileNumber: employee.mobileNumber,
     workStartTime: employee.workStartTime || "09:00",
     workEndTime: employee.workEndTime || "18:00",
@@ -33,6 +34,9 @@ export default function EditEmployeeModal({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
+  const [resetProfileEdits, setResetProfileEdits] = useState(false);
+
+  const selfEditsUsed = typeof employee.profileEditCount === "number" ? employee.profileEditCount : null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -66,9 +70,21 @@ export default function EditEmployeeModal({
         active: form.active,
       };
 
+      // Only send dateOfBirth when the admin actually changed it. The employee can
+      // set their own from their phone, so a list loaded before that would otherwise
+      // write the old value straight back over it.
+      if (form.dateOfBirth !== (employee.dateOfBirth || "")) {
+        payload.dateOfBirth = form.dateOfBirth;
+      }
+
       // Only send password if user entered a new one
       if (form.password.length > 0) {
         payload.password = form.password;
+      }
+
+      // Only send profileEditCount when admin ticked the reset box
+      if (resetProfileEdits) {
+        payload.profileEditCount = 0;
       }
 
       const res = await fetch("/api/employees", {
@@ -113,6 +129,19 @@ export default function EditEmployeeModal({
             <span>Job role</span>
             <input type="text" value={form.jobRole} onChange={(e) => setForm({ ...form, jobRole: e.target.value })} placeholder="e.g. Counsellor" required maxLength={80} />
           </label>
+          <label>
+            <span>Date of birth</span>
+            <input type="date" value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} />
+            {selfEditsUsed !== null && (
+              <small style={{ color: "#9ca3af", fontWeight: 400 }}>Employee self-edits used: {selfEditsUsed} of 2</small>
+            )}
+          </label>
+          {selfEditsUsed !== null && selfEditsUsed > 0 && (
+            <label style={{ display: "flex", alignItems: "center", gap: 8, flexDirection: "row", fontWeight: 400, color: "#9ca3af" }}>
+              <input type="checkbox" checked={resetProfileEdits} onChange={(e) => setResetProfileEdits(e.target.checked)} style={{ width: 15, height: 15, padding: 0 }} />
+              <span>Reset their edit allowance</span>
+            </label>
+          )}
           <label>
             <span>Department</span>
             <select value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>

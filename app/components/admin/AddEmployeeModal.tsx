@@ -13,6 +13,7 @@ type RuleDefault = {
 const emptyForm = {
   name: "",
   jobRole: "",
+  dateOfBirth: "",
   email: "",
   password: "",
   mobileNumber: "",
@@ -80,6 +81,7 @@ export default function AddEmployeeModal({
         body: JSON.stringify({
           name: form.name.trim(),
           jobRole: form.jobRole.trim(),
+          dateOfBirth: form.dateOfBirth,
           email: form.email.trim().toLowerCase(),
           password: form.password,
           mobileNumber: normalizedMobile,
@@ -131,6 +133,10 @@ export default function AddEmployeeModal({
           <label>
             <span>Job role</span>
             <input type="text" value={form.jobRole} onChange={(e) => setForm({ ...form, jobRole: e.target.value })} placeholder="e.g. Counsellor" required maxLength={80} autoComplete="off" />
+          </label>
+          <label>
+            <span>Date of birth</span>
+            <input type="date" value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} autoComplete="off" />
           </label>
           <label>
             <span>Department</span>
