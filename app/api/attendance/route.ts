@@ -92,6 +92,15 @@ export async function POST(request: Request) {
     );
   }
 
+  // Validate GPS accuracy — reject readings too inaccurate for geo-fencing
+  const accuracy = parseFloat(form.get("accuracy") as string || "0");
+  if (accuracy > 150) {
+    return Response.json(
+      { error: `GPS accuracy is too low (±${Math.round(accuracy)}m). Please move to an open area or wait for a better GPS signal and try again.` },
+      { status: 400 },
+    );
+  }
+
   const activeBranches = db
     .select({ id: branches.id, name: branches.name, latitude: branches.latitude, longitude: branches.longitude, radius: branches.radius })
     .from(branches)
@@ -105,7 +114,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const matchedBranch = findNearestBranch(empLat, empLon, activeBranches);
+  const matchedBranch = findNearestBranch(empLat, empLon, activeBranches, accuracy);
   if (!matchedBranch) {
     const closest = findClosestBranch(empLat, empLon, activeBranches);
     return Response.json(

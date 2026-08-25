@@ -26,14 +26,21 @@ export const GEO_FENCE_RADIUS_METERS = 200;
 /**
  * Find the nearest branch within its configured geo-fence radius.
  * Each branch can have its own radius; defaults to 200m if not set.
+ * When GPS accuracy is provided, adds a tolerance (half of accuracy, capped
+ * at 50m) to account for position uncertainty — important on iOS devices
+ * that may report WiFi/cell-tower positions instead of true GPS.
  * Returns the branch info + distance, or null if none are within range.
  */
 export function findNearestBranch(
   empLat: number,
   empLon: number,
   branchList: Array<{ id: string; name: string; latitude: string; longitude: string; radius: number }>,
+  gpsAccuracy: number = 0,
 ): { id: string; name: string; distance: number } | null {
   let nearest: { id: string; name: string; distance: number } | null = null;
+
+  // Add a tolerance based on GPS accuracy: half of reported accuracy, capped at 50m
+  const accuracyTolerance = gpsAccuracy > 0 ? Math.min(gpsAccuracy / 2, 50) : 0;
 
   for (const branch of branchList) {
     const brLat = parseFloat(branch.latitude);
@@ -41,8 +48,9 @@ export function findNearestBranch(
     if (isNaN(brLat) || isNaN(brLon)) continue;
 
     const branchRadius = branch.radius || GEO_FENCE_RADIUS_METERS;
+    const effectiveRadius = branchRadius + accuracyTolerance;
     const distance = haversineDistance(empLat, empLon, brLat, brLon);
-    if (distance <= branchRadius) {
+    if (distance <= effectiveRadius) {
       if (!nearest || distance < nearest.distance) {
         nearest = { id: branch.id, name: branch.name, distance };
       }

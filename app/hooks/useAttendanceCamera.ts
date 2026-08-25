@@ -95,16 +95,19 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
     }
     let closest: { branchName: string; distance: number; allowedRadius: number } | null = null;
     let isWithin = false;
+    // Add tolerance for GPS accuracy: half of reported accuracy, capped at 50m
+    const accuracyTolerance = location.accuracy > 0 ? Math.min(location.accuracy / 2, 50) : 0;
     for (const branch of activeBranches) {
       const brLat = parseFloat(branch.latitude);
       const brLon = parseFloat(branch.longitude);
       if (isNaN(brLat) || isNaN(brLon)) continue;
       const branchRadius = branch.radius || GEO_FENCE_RADIUS_METERS;
+      const effectiveRadius = branchRadius + accuracyTolerance;
       const distance = haversineDistance(location.latitude, location.longitude, brLat, brLon);
       if (!closest || distance < closest.distance) {
         closest = { branchName: branch.name, distance: Math.round(distance), allowedRadius: branchRadius };
       }
-      if (distance <= branchRadius) isWithin = true;
+      if (distance <= effectiveRadius) isWithin = true;
     }
     setWithinGeoFence(isWithin);
     setGeoFenceInfo(closest);
@@ -147,7 +150,7 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
           setLocationError("Could not determine your location. Please try again.");
         }
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
     );
   }, [enabled]);
 
@@ -251,6 +254,7 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
       form.append("office", todayStatus?.office || "");
       form.append("latitude", location.latitude.toString());
       form.append("longitude", location.longitude.toString());
+      form.append("accuracy", location.accuracy.toString());
       const response = await fetch("/api/attendance", { method: "POST", body: form });
       const result = await response.json() as { error?: string; geoAlert?: GeoAlert };
       if (!response.ok) {
