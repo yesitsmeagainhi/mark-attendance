@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { timeToMinutes, formatTimeIST, getIST, getGreeting, getGraceStatus } from "../../../lib/time-utils";
+import { timeToMinutes, formatTimeIST, formatDuration, getIST, getGreeting, getGraceStatus } from "../../../lib/time-utils";
 import type { UseAttendanceCameraReturn } from "../../hooks/useAttendanceCamera";
 
 export default function AttendanceTab({ employeeId, displayName, camera }: { employeeId: string; displayName: string; camera: UseAttendanceCameraReturn }) {
@@ -23,11 +23,25 @@ export default function AttendanceTab({ employeeId, displayName, camera }: { emp
     return () => clearInterval(interval);
   }, []);
 
+  const isFlexible = todayStatus?.flexibleHours === true;
   const hasPunchedIn = !!todayStatus?.punchIn;
   const punches = todayStatus?.punches || [];
-  const dayComplete = (todayStatus?.nextPunchType ?? "IN") === null;
+  const dayComplete = !isFlexible && (todayStatus?.nextPunchType ?? "IN") === null;
   const lastPunch = punches.length > 0 ? punches[punches.length - 1] : null;
   const hasPunchedOut = lastPunch?.type === "OUT" && hasPunchedIn;
+  const currentlyInLecture = isFlexible && lastPunch?.type === "IN";
+
+  // Build lecture sessions for flex employees
+  const sessions: { inTime: string; outTime: string | null }[] = [];
+  if (isFlexible) {
+    for (let i = 0; i < punches.length; i++) {
+      if (punches[i].type === "IN") {
+        const out = punches[i + 1]?.type === "OUT" ? punches[i + 1].time : null;
+        sessions.push({ inTime: punches[i].time, outTime: out });
+        if (out) i++;
+      }
+    }
+  }
 
   const expectedMinutes = todayStatus ? timeToMinutes(todayStatus.workEndTime) - timeToMinutes(todayStatus.workStartTime) : 0;
   let workedMinutes = 0;
@@ -43,7 +57,7 @@ export default function AttendanceTab({ employeeId, displayName, camera }: { emp
   }
   const progressPct = expectedMinutes > 0 ? Math.min(100, Math.round((workedMinutes / expectedMinutes) * 100)) : 0;
   const gracePeriod = todayStatus?.rules?.gracePeriod ?? 15;
-  const graceInfo = (todayStatus?.punchIn && !todayStatus.flexibleHours) ? getGraceStatus(todayStatus.punchIn.time, todayStatus.workStartTime, gracePeriod) : null;
+  const graceInfo = (todayStatus?.punchIn && !isFlexible) ? getGraceStatus(todayStatus.punchIn.time, todayStatus.workStartTime, gracePeriod) : null;
 
   const ampm = currentTime.timeStr.includes("AM") || currentTime.timeStr.includes("am") ? "AM" : "PM";
   const timeOnly = currentTime.timeStr.replace(/(am|pm)/i, "").trim();
@@ -54,7 +68,10 @@ export default function AttendanceTab({ employeeId, displayName, camera }: { emp
         <div className="hero-content">
           <p className="hero-date">{currentTime.dateStr}</p>
           <h1 className="hero-greeting">{getGreeting(currentTime.hours)}, {displayName.split(/\s+/)[0]}</h1>
-          <p className="hero-sub">{dayComplete ? "Your workday is complete. See you tomorrow!" : currentlyIn ? "You're clocked in. Don't forget to punch out." : hasPunchedOut ? "On break. Punch back in when you return." : "Ready to start? Take a selfie to mark attendance."}</p>
+          <p className="hero-sub">{isFlexible
+            ? (currentlyInLecture ? "Lecture in progress. Tap end when done." : sessions.length > 0 ? `${sessions.length} lecture${sessions.length > 1 ? "s" : ""} today \u00b7 ${formatDuration(workedMinutes)}` : "No lectures yet today. Start when ready.")
+            : dayComplete ? "Your workday is complete. See you tomorrow!" : currentlyIn ? "You're clocked in. Don't forget to punch out." : hasPunchedOut ? "On break. Punch back in when you return." : "Ready to start? Take a selfie to mark attendance."
+          }</p>
         </div>
         <div className="hero-clock">
           <span className="hero-clock-time">{timeOnly}</span>
@@ -63,49 +80,82 @@ export default function AttendanceTab({ employeeId, displayName, camera }: { emp
         </div>
       </section>
 
-      <section className="status-strip">
-        <article className={`status-chip ${hasPunchedIn ? "chip-done" : "chip-waiting"}`}>
-          <span className="chip-icon">{hasPunchedIn ? "\u2713" : "\u2192"}</span>
-          <div className="chip-info">
-            <small>Punch In</small>
-            {hasPunchedIn && todayStatus?.punchIn ? (
-              <b>{formatTimeIST(todayStatus.punchIn.time)}</b>
-            ) : (
-              <b className="chip-pending">Pending</b>
-            )}
-          </div>
-          {graceInfo && hasPunchedIn && <span className={`grace-badge ${graceInfo.className}`}>{graceInfo.label}</span>}
-        </article>
-
-        <article className={`status-chip ${dayComplete ? "chip-done" : currentlyIn ? "chip-active" : hasPunchedOut ? "chip-active" : "chip-waiting"}`}>
-          <span className="chip-icon">{dayComplete ? "\u2713" : "\u2190"}</span>
-          <div className="chip-info">
-            <small>Punch Out</small>
-            {todayStatus?.punchOut ? (
-              <b>{formatTimeIST(todayStatus.punchOut.time)}</b>
-            ) : (
-              <b className="chip-pending">{currentlyIn ? "Awaiting" : "\u2014"}</b>
-            )}
-          </div>
-          {dayComplete && <span className="grace-badge on-time">Done</span>}
-          {hasPunchedOut && !dayComplete && <span className="grace-badge grace">Break</span>}
-        </article>
-
-        <article className={`status-chip chip-duration ${dayComplete ? "chip-done" : hasPunchedIn ? "chip-active" : "chip-waiting"}`}>
-          <div className="chip-info" style={{ flex: 1 }}>
-            <small>Duration</small>
-            <b>{elapsed || "\u2014"}</b>
-          </div>
-          <div className="chip-progress">
-            <div className="chip-progress-bar">
-              <div className="chip-progress-fill" style={{ width: `${progressPct}%` }}></div>
+      {isFlexible ? (
+        <section style={{ padding: "0 16px 12px" }}>
+          {sessions.length === 0 ? (
+            <div style={{ background: "#f6f7fb", borderRadius: 12, padding: "12px 16px", color: "var(--muted)", fontSize: 15 }}>
+              No lectures recorded today.
             </div>
-            <span className="chip-progress-label">{progressPct}%</span>
-          </div>
-        </article>
-      </section>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {sessions.map((s, i) => {
+                const dur = s.outTime ? (() => {
+                  const inMs = new Date(s.inTime.replace(" ", "T") + (s.inTime.includes("Z") ? "" : "Z")).getTime();
+                  const outMs = new Date(s.outTime!.replace(" ", "T") + (s.outTime!.includes("Z") ? "" : "Z")).getTime();
+                  return formatDuration(Math.max(0, Math.floor((outMs - inMs) / 60000)));
+                })() : null;
+                return (
+                  <div key={i} style={{ background: "#fff", border: "1px solid var(--line)", borderRadius: 12, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "var(--muted)", minWidth: 68 }}>Lecture {i + 1}</span>
+                    <span style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)" }}>
+                      {formatTimeIST(s.inTime)} &ndash; {s.outTime ? formatTimeIST(s.outTime) : <span style={{ color: "#2563eb" }}>ongoing</span>}
+                    </span>
+                    {dur && <span style={{ marginLeft: "auto", fontSize: 14, fontWeight: 600, color: "#059669" }}>{dur}</span>}
+                    {!s.outTime && <span style={{ marginLeft: "auto", fontSize: 13, background: "#eff6ff", color: "#2563eb", borderRadius: 6, padding: "2px 8px", fontWeight: 700 }}>IN</span>}
+                  </div>
+                );
+              })}
+              <div style={{ textAlign: "right", fontSize: 15, fontWeight: 700, color: "var(--muted)", paddingRight: 4 }}>
+                Total: {formatDuration(workedMinutes)}
+              </div>
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="status-strip">
+          <article className={`status-chip ${hasPunchedIn ? "chip-done" : "chip-waiting"}`}>
+            <span className="chip-icon">{hasPunchedIn ? "\u2713" : "\u2192"}</span>
+            <div className="chip-info">
+              <small>Punch In</small>
+              {hasPunchedIn && todayStatus?.punchIn ? (
+                <b>{formatTimeIST(todayStatus.punchIn.time)}</b>
+              ) : (
+                <b className="chip-pending">Pending</b>
+              )}
+            </div>
+            {graceInfo && hasPunchedIn && <span className={`grace-badge ${graceInfo.className}`}>{graceInfo.label}</span>}
+          </article>
 
-      {!dayComplete && (
+          <article className={`status-chip ${dayComplete ? "chip-done" : currentlyIn ? "chip-active" : hasPunchedOut ? "chip-active" : "chip-waiting"}`}>
+            <span className="chip-icon">{dayComplete ? "\u2713" : "\u2190"}</span>
+            <div className="chip-info">
+              <small>Punch Out</small>
+              {todayStatus?.punchOut ? (
+                <b>{formatTimeIST(todayStatus.punchOut.time)}</b>
+              ) : (
+                <b className="chip-pending">{currentlyIn ? "Awaiting" : "\u2014"}</b>
+              )}
+            </div>
+            {dayComplete && <span className="grace-badge on-time">Done</span>}
+            {hasPunchedOut && !dayComplete && <span className="grace-badge grace">Break</span>}
+          </article>
+
+          <article className={`status-chip chip-duration ${dayComplete ? "chip-done" : hasPunchedIn ? "chip-active" : "chip-waiting"}`}>
+            <div className="chip-info" style={{ flex: 1 }}>
+              <small>Duration</small>
+              <b>{elapsed || "\u2014"}</b>
+            </div>
+            <div className="chip-progress">
+              <div className="chip-progress-bar">
+                <div className="chip-progress-fill" style={{ width: `${progressPct}%` }}></div>
+              </div>
+              <span className="chip-progress-label">{progressPct}%</span>
+            </div>
+          </article>
+        </section>
+      )}
+
+      {(isFlexible || !dayComplete) && (
         <section className="punch-section">
           <article className="punch-compact-card">
             <div className={`camera-frame compact ${photo ? "has-photo" : ""}`}>
@@ -126,17 +176,17 @@ export default function AttendanceTab({ employeeId, displayName, camera }: { emp
               <span>{shiftDisplay}</span>
               <span className="punch-info-sep">&middot;</span>
               {locationLoading && <span className="pending-text">GPS...</span>}
-              {location && <span className="grace-badge on-time" style={{ fontSize: 11, padding: "1px 6px" }}>GPS {"\u00B1"}{Math.round(location.accuracy)}m</span>}
+              {location && <span className="grace-badge on-time" style={{ fontSize: 13, padding: "1px 6px" }}>GPS {"\u00B1"}{Math.round(location.accuracy)}m</span>}
               {locationError && !locationLoading && (
-                <button className="secondary" onClick={acquireLocation} style={{ padding: "2px 8px", fontSize: 11 }}>Enable GPS</button>
+                <button className="secondary" onClick={acquireLocation} style={{ padding: "2px 8px", fontSize: 13 }}>Enable GPS</button>
               )}
               {!location && !locationLoading && !locationError && (
-                <button className="secondary" onClick={acquireLocation} style={{ padding: "2px 8px", fontSize: 11 }}>Enable GPS</button>
+                <button className="secondary" onClick={acquireLocation} style={{ padding: "2px 8px", fontSize: 13 }}>Enable GPS</button>
               )}
             </div>
 
             {currentlyIn && lastPunch && (
-              <div className="punch-info-bar" style={{ fontSize: 12, color: "#6b7280" }}>
+              <div className="punch-info-bar" style={{ fontSize: 14, color: "#6b7280" }}>
                 <span>In: {formatTimeIST(lastPunch.time)}</span>
                 {elapsed && <><span className="punch-info-sep">&middot;</span><span>{elapsed} elapsed</span></>}
               </div>
@@ -147,18 +197,20 @@ export default function AttendanceTab({ employeeId, displayName, camera }: { emp
               onClick={openCamera}
               disabled={saving}
             >
-              {photo ? "Retake" : nextPunchType === "IN" ? "Open Camera to Punch In" : "Open Camera to Punch Out"}
+              {photo ? "Retake" : isFlexible
+                ? (currentlyInLecture ? "Open Camera to End Lecture" : "Open Camera to Start Lecture")
+                : nextPunchType === "IN" ? "Open Camera to Punch In" : "Open Camera to Punch Out"}
             </button>
 
             {locationError && !locationLoading && (
-              <button className="secondary" onClick={acquireLocation} style={{ marginTop: 4, width: "100%", fontSize: 12 }}>Retry GPS</button>
+              <button className="secondary" onClick={acquireLocation} style={{ marginTop: 4, width: "100%", fontSize: 14 }}>Retry GPS</button>
             )}
-            {message && <p className={`form-message ${!message.includes("Could not") && !message.includes("Waiting") && !message.includes("not within") ? "success-text" : ""}`} style={{ margin: "6px 0 0", fontSize: 13 }}>{message}</p>}
+            {message && <p className={`form-message ${!message.includes("Could not") && !message.includes("Waiting") && !message.includes("not within") ? "success-text" : ""}`} style={{ margin: "6px 0 0", fontSize: 15 }}>{message}</p>}
           </article>
         </section>
       )}
 
-      {dayComplete && (
+      {!isFlexible && dayComplete && (
         <section className="day-complete-card">
           <div className="day-complete-icon">&#10003;</div>
           <h2>Workday complete</h2>

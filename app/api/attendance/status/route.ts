@@ -1,6 +1,6 @@
 import { eq, and, sql, desc } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { attendance, employees } from "../../../../db/schema";
+import { attendance, employees, employeeBranches } from "../../../../db/schema";
 import { getAppIdentity } from "../../../authz";
 import { getEffectiveRules } from "../../../../lib/rules";
 
@@ -76,8 +76,13 @@ export async function GET() {
       canPunchIn = false;
       canPunchOut = true;
     } else {
-      // Last punch is OUT — check if re-entry is allowed
-      if (empRules.lunch_break_enabled) {
+      // Last punch is OUT
+      if (emp?.flexibleHours) {
+        // Flex/lecture employees can always start another session
+        nextPunchType = "IN";
+        canPunchIn = true;
+      } else if (empRules.lunch_break_enabled) {
+        // Regular employees: check time gap since first IN
         const firstIn = orderedPunches.find((p) => p.type === "IN");
         if (firstIn) {
           const firstInDate = new Date(firstIn.time.replace(" ", "T") + (firstIn.time.includes("Z") ? "" : "Z"));
@@ -93,11 +98,20 @@ export async function GET() {
     }
   }
 
+  // Fetch employee's assigned branch IDs for client-side geo-fence
+  const branchAssignments = db
+    .select({ branchId: employeeBranches.branchId })
+    .from(employeeBranches)
+    .where(eq(employeeBranches.employeeId, identity.employeeId))
+    .all();
+  const assignedBranchIds = branchAssignments.map((a) => a.branchId);
+
   return Response.json({
     employeeId: identity.employeeId,
     workStartTime: emp?.workStartTime || "09:00",
     workEndTime: emp?.workEndTime || "18:00",
     office: emp?.office || "",
+    assignedBranchIds,
     punchIn: punchIn
       ? { time: punchIn.serverTimestamp, office: punchIn.office, photoKey: punchIn.photoKey }
       : null,

@@ -136,11 +136,11 @@ export default function StaffTab() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search name, ID or email"
               aria-label="Search employees"
-              style={{ minWidth: 180, padding: "9px 10px", border: "1px solid var(--line)", borderRadius: 9, fontSize: 13, outline: "none" }}
+              style={{ minWidth: 180, padding: "9px 10px", border: "1px solid var(--line)", borderRadius: 9, fontSize: 15, outline: "none" }}
             />
-            <button className="secondary" style={{ width: "auto", fontSize: 13, padding: "6px 14px" }} onClick={exportEmployees} disabled={employeeList.length === 0}>Export</button>
-            <button className="secondary" style={{ width: "auto", fontSize: 13, padding: "6px 14px" }} onClick={() => setShowBulkModal(true)}>Import</button>
-            <button className="primary" style={{ width: "auto", fontSize: 13, padding: "6px 14px" }} onClick={() => setShowAddModal(true)}>+ Add employee</button>
+            <button className="secondary" style={{ width: "auto", fontSize: 15, padding: "6px 14px" }} onClick={exportEmployees} disabled={employeeList.length === 0}>Export</button>
+            <button className="secondary" style={{ width: "auto", fontSize: 15, padding: "6px 14px" }} onClick={() => setShowBulkModal(true)}>Import</button>
+            <button className="primary" style={{ width: "auto", fontSize: 15, padding: "6px 14px" }} onClick={() => setShowAddModal(true)}>+ Add employee</button>
           </div>
         </div>
         <div className="table-wrap">
@@ -156,7 +156,7 @@ export default function StaffTab() {
                 const color = ["#7c3aed", "#2563eb", "#059669", "#db2777", "#ea580c"][emp.id.charCodeAt(emp.id.length - 1) % 5];
                 return (
                   <tr key={emp.id}>
-                    <td className="cell-flex"><span className="person" style={{ background: color }}>{initials}</span><span><b>{emp.name}</b>{emp.flexibleHours && <span style={{ fontSize: 10, background: "#ede9fe", color: "#7c3aed", padding: "1px 6px", borderRadius: 6, marginLeft: 6, fontWeight: 600 }}>Flex</span>}<small>{emp.id}</small></span></td>
+                    <td className="cell-flex"><span className="person" style={{ background: color }}>{initials}</span><span><b>{emp.name}</b>{emp.flexibleHours && <span style={{ fontSize: 12, background: "#ede9fe", color: "#7c3aed", padding: "1px 6px", borderRadius: 6, marginLeft: 6, fontWeight: 600 }}>Flex</span>}<small>{emp.id}</small></span></td>
                     <td className="cell-flex"><span><b>{emp.email}</b><small>{emp.mobileNumber || "\u2014"}</small></span></td>
                     <td>{emp.jobRole || "\u2014"}</td>
                     <td>{emp.department || "\u2014"}</td>
@@ -184,7 +184,7 @@ export default function StaffTab() {
                       )}
                     </td>
                     <td>
-                      <button className="btn-approve" style={{ fontSize: 12 }} onClick={() => setRulesEmployee({ id: emp.id, name: emp.name })}>Rules</button>
+                      <button className="btn-approve" style={{ fontSize: 14 }} onClick={() => setRulesEmployee({ id: emp.id, name: emp.name })}>Rules</button>
                     </td>
                     <td><span className={`status ${emp.active ? "" : "absent"}`}>&#9679; {emp.active ? "Active" : "Inactive"}</span></td>
                     <td><small>{new Date(emp.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</small></td>
@@ -193,7 +193,7 @@ export default function StaffTab() {
                         style={{
                           background: "none", border: "1px solid #e7e9ee", borderRadius: 8,
                           width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
-                          cursor: "pointer", fontSize: 15, color: "#6b7280", transition: "all .15s",
+                          cursor: "pointer", fontSize: 17, color: "#6b7280", transition: "all .15s",
                         }}
                         title="Actions"
                         onMouseEnter={(e) => { e.currentTarget.style.background = "#f3f4f6"; e.currentTarget.style.borderColor = "#c9cbd4"; }}
@@ -245,7 +245,7 @@ export default function StaffTab() {
           display: "flex", alignItems: "center", gap: 10, width: "100%",
           padding: isMobile ? "14px 18px" : "10px 14px",
           background: "none", border: "none", textAlign: "left",
-          fontSize: 13, fontWeight: 500, cursor: "pointer",
+          fontSize: 15, fontWeight: 500, cursor: "pointer",
           color: color || "#374151", borderRadius: 6,
         });
 
@@ -290,16 +290,16 @@ export default function StaffTab() {
                     <div style={{ width: 36, height: 4, borderRadius: 2, background: "#d1d5db" }} />
                   </div>
                   <div style={{ padding: "6px 18px 12px", borderBottom: "1px solid #f0f0f0" }}>
-                    <b style={{ fontSize: 15 }}>{menuEmployee.emp.name}</b>
-                    <div style={{ fontSize: 12, color: "#8990a0" }}>{menuEmployee.emp.id}</div>
+                    <b style={{ fontSize: 17 }}>{menuEmployee.emp.name}</b>
+                    <div style={{ fontSize: 14, color: "#8990a0" }}>{menuEmployee.emp.id}</div>
                   </div>
                 </>
               )}
               {/* Desktop: compact name header */}
               {!isMobile && (
                 <div style={{ padding: "8px 14px 6px", borderBottom: "1px solid #f0f0f0", marginBottom: 4 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>{menuEmployee.emp.name}</div>
-                  <div style={{ fontSize: 11, color: "#9ca3af" }}>{menuEmployee.emp.id}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#111" }}>{menuEmployee.emp.name}</div>
+                  <div style={{ fontSize: 13, color: "#9ca3af" }}>{menuEmployee.emp.id}</div>
                 </div>
               )}
               {items.map((item, idx) => (
@@ -310,7 +310,7 @@ export default function StaffTab() {
                   onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
                   onClick={item.onClick}
                 >
-                  <span style={{ fontSize: 15, width: 20, textAlign: "center" }}>{item.icon}</span>
+                  <span style={{ fontSize: 17, width: 20, textAlign: "center" }}>{item.icon}</span>
                   {item.label}
                 </button>
               ))}
@@ -514,25 +514,25 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
         <div className="modal-form" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {!result && (
             <>
-              <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>
+              <p style={{ margin: 0, fontSize: 15, color: "#6b7280" }}>
                 Upload a <b>.csv</b> or <b>.xlsx</b> file with employee details. Required columns: <b>name</b>, <b>email</b>, <b>password</b>. Optional: jobRole, department, mobileNumber, workStartTime, workEndTime, office, monthlySalary.
               </p>
-              <button type="button" className="secondary" onClick={downloadTemplate} style={{ alignSelf: "flex-start", fontSize: 13 }}>
+              <button type="button" className="secondary" onClick={downloadTemplate} style={{ alignSelf: "flex-start", fontSize: 15 }}>
                 Download CSV template
               </button>
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>Choose file (.csv or .xlsx)</span>
+                <span style={{ fontSize: 15, fontWeight: 600 }}>Choose file (.csv or .xlsx)</span>
                 <input type="file" accept=".csv,.xlsx" onChange={handleFile} />
               </label>
 
               {/* CSV preview */}
               {fileName && !isXlsx && rows.length > 0 && (
                 <>
-                  <p style={{ margin: 0, fontSize: 13 }}>
+                  <p style={{ margin: 0, fontSize: 15 }}>
                     <b>{rows.length}</b> employee{rows.length !== 1 ? "s" : ""} found in <b>{fileName}</b>
                   </p>
                   <div style={{ maxHeight: 250, overflow: "auto", border: "1px solid #e7e9ee", borderRadius: 8 }}>
-                    <table style={{ fontSize: 12 }}>
+                    <table style={{ fontSize: 14 }}>
                       <thead>
                         <tr>
                           <th style={{ padding: "6px 10px" }}>#</th>
@@ -564,7 +564,7 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
 
               {/* XLSX file selected indicator */}
               {fileName && isXlsx && (
-                <p style={{ margin: 0, fontSize: 13 }}>
+                <p style={{ margin: 0, fontSize: 15 }}>
                   Selected: <b>{fileName}</b> (Excel file &mdash; will be parsed on import)
                 </p>
               )}
@@ -574,7 +574,7 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
                 className="primary"
                 onClick={handleImport}
                 disabled={importing || !canImport}
-                style={{ fontSize: 14 }}
+                style={{ fontSize: 16 }}
               >
                 {importing ? "Importing..." : isXlsx ? "Import from Excel" : `Import ${rows.length} employee${rows.length !== 1 ? "s" : ""}`}
               </button>
@@ -586,7 +586,7 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
               {result.created.length > 0 && (
                 <div style={{ padding: 16, background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
                   <b style={{ color: "#166534" }}>{result.created.length} employee{result.created.length !== 1 ? "s" : ""} imported successfully</b>
-                  <ul style={{ margin: "8px 0 0", paddingLeft: 20, fontSize: 13 }}>
+                  <ul style={{ margin: "8px 0 0", paddingLeft: 20, fontSize: 15 }}>
                     {result.created.map((c) => (
                       <li key={c.id}>{c.name} ({c.id}) &mdash; {c.email}</li>
                     ))}
@@ -596,14 +596,14 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
               {result.errors.length > 0 && (
                 <div style={{ padding: 16, background: "#fef2f2", borderRadius: 8, border: "1px solid #fecaca" }}>
                   <b style={{ color: "#991b1b" }}>{result.errors.length} error{result.errors.length !== 1 ? "s" : ""}</b>
-                  <ul style={{ margin: "8px 0 0", paddingLeft: 20, fontSize: 13 }}>
+                  <ul style={{ margin: "8px 0 0", paddingLeft: 20, fontSize: 15 }}>
                     {result.errors.map((err, i) => (
                       <li key={i} style={{ color: "#991b1b" }}>Row {err.row}: {err.message}</li>
                     ))}
                   </ul>
                 </div>
               )}
-              <button className="primary" onClick={onClose} style={{ fontSize: 14 }}>Close</button>
+              <button className="primary" onClick={onClose} style={{ fontSize: 16 }}>Close</button>
             </>
           )}
         </div>

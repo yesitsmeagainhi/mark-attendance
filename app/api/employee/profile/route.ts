@@ -22,6 +22,7 @@ export async function GET() {
       office: employees.office,
       role: employees.role,
       createdAt: employees.createdAt,
+      profilePhotoKey: employees.profilePhotoKey,
     })
     .from(employees)
     .where(eq(employees.id, identity.employeeId))
@@ -31,5 +32,8 @@ export async function GET() {
     return Response.json({ error: "Employee not found." }, { status: 404 });
   }
 
-  return Response.json({ profile: emp });
+  const { profilePhotoKey, ...rest } = emp;
+  const photoUrl = profilePhotoKey ? "/api/employee/profile/photo" : null;
+
+  return Response.json({ profile: { ...rest, photoUrl } });
 }

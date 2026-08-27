@@ -24,9 +24,10 @@ export default function EditEmployeeModal({
     mobileNumber: employee.mobileNumber,
     workStartTime: employee.workStartTime || "09:00",
     workEndTime: employee.workEndTime || "18:00",
-    office: employee.office,
+    assignedBranchIds: employee.assignedBranchIds || [],
     department: employee.department || "",
     monthlySalary: String(employee.monthlySalary || ""),
+    hourlyRate: String((employee as { hourlyRate?: number }).hourlyRate || ""),
     flexibleHours: employee.flexibleHours ?? false,
     active: employee.active,
   });
@@ -59,9 +60,10 @@ export default function EditEmployeeModal({
         mobileNumber: normalizedMobile,
         workStartTime: form.workStartTime,
         workEndTime: form.workEndTime,
-        office: form.office.trim(),
+        assignedBranchIds: form.assignedBranchIds,
         department: form.department.trim(),
-        monthlySalary: parseInt(form.monthlySalary, 10) || 0,
+        monthlySalary: form.flexibleHours ? 0 : (parseInt(form.monthlySalary, 10) || 0),
+        hourlyRate: form.flexibleHours ? (parseInt(form.hourlyRate, 10) || 0) : 0,
         flexibleHours: form.flexibleHours,
         active: form.active,
       };
@@ -102,7 +104,7 @@ export default function EditEmployeeModal({
           <button className="modal-close" onClick={onClose}>&times;</button>
         </div>
         <form className="modal-form" onSubmit={handleSubmit}>
-          <div style={{ background: "#f8f9fb", borderRadius: 10, padding: "10px 14px", marginBottom: 4, fontSize: 13, color: "#666" }}>
+          <div style={{ background: "#f8f9fb", borderRadius: 10, padding: "10px 14px", marginBottom: 4, fontSize: 15, color: "#666" }}>
             Employee ID: <b style={{ color: "#333" }}>{employee.id}</b>
           </div>
           <label>
@@ -144,42 +146,63 @@ export default function EditEmployeeModal({
               <input type="time" value={form.workEndTime} onChange={(e) => setForm({ ...form, workEndTime: e.target.value })} required />
             </label>
           </div>
-          <label>
-            <span>Office location</span>
-            <select value={form.office} onChange={(e) => setForm({ ...form, office: e.target.value })}>
-              {branches.filter((b) => b.active).length > 0 ? (
-                branches.filter((b) => b.active).map((b) => (
-                  <option key={b.id} value={b.name}>{b.name}</option>
-                ))
-              ) : (
-                <option value="">No branches configured</option>
-              )}
-            </select>
-          </label>
-          <label>
-            <span>Monthly salary</span>
-            <input type="number" inputMode="numeric" value={form.monthlySalary} onChange={(e) => setForm({ ...form, monthlySalary: e.target.value })} placeholder="e.g. 25000" min="0" />
-          </label>
+          <div>
+            <span style={{ display: "block", fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Assigned branches</span>
+            <small style={{ display: "block", color: "#9ca3af", fontWeight: 400, marginBottom: 8 }}>Employee can only punch from selected branches. Leave empty for any branch.</small>
+            {branches.filter((b) => b.active).length > 0 ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                {branches.filter((b) => b.active).map((b) => (
+                  <label key={b.id} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "6px 10px", borderRadius: 8, background: form.assignedBranchIds.includes(b.id) ? "#f0ecff" : "#f8f9fb", border: `1px solid ${form.assignedBranchIds.includes(b.id) ? "#7c3aed" : "#e7e9ee"}`, transition: "all .15s" }}>
+                    <input
+                      type="checkbox"
+                      checked={form.assignedBranchIds.includes(b.id)}
+                      onChange={() => {
+                        const ids = form.assignedBranchIds.includes(b.id)
+                          ? form.assignedBranchIds.filter((id) => id !== b.id)
+                          : [...form.assignedBranchIds, b.id];
+                        setForm({ ...form, assignedBranchIds: ids });
+                      }}
+                      style={{ accentColor: "#7c3aed" }}
+                    />
+                    <span style={{ fontSize: 15, fontWeight: 600, color: form.assignedBranchIds.includes(b.id) ? "#7c3aed" : "#344054" }}>{b.name}</span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 15, color: "#9ca3af", padding: "8px 0" }}>No branches configured</div>
+            )}
+          </div>
           <label style={{ display: "flex", alignItems: "center", gap: 10, flexDirection: "row" }}>
             <span style={{ flex: 1 }}>
               Flexible hours
-              <small style={{ display: "block", color: "#9ca3af", fontWeight: 400 }}>Exempt from late &amp; duration rules</small>
+              <small style={{ display: "block", color: "#9ca3af", fontWeight: 400 }}>Lecture/session-based schedule</small>
             </span>
             <button
               type="button"
               className={form.flexibleHours ? "btn-approve" : "btn-reject"}
-              style={{ fontSize: 12 }}
+              style={{ fontSize: 14 }}
               onClick={() => setForm({ ...form, flexibleHours: !form.flexibleHours })}
             >
               {form.flexibleHours ? "Enabled" : "Disabled"}
             </button>
           </label>
+          {form.flexibleHours ? (
+            <label>
+              <span>Hourly rate (&#8377;/hr)</span>
+              <input type="number" inputMode="numeric" value={form.hourlyRate} onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })} placeholder="e.g. 200" min="0" />
+            </label>
+          ) : (
+            <label>
+              <span>Monthly salary</span>
+              <input type="number" inputMode="numeric" value={form.monthlySalary} onChange={(e) => setForm({ ...form, monthlySalary: e.target.value })} placeholder="e.g. 25000" min="0" />
+            </label>
+          )}
           <label style={{ display: "flex", alignItems: "center", gap: 10, flexDirection: "row" }}>
             <span style={{ flex: 1 }}>Status</span>
             <button
               type="button"
               className={form.active ? "btn-approve" : "btn-reject"}
-              style={{ fontSize: 12 }}
+              style={{ fontSize: 14 }}
               onClick={() => setForm({ ...form, active: !form.active })}
             >
               {form.active ? "Active" : "Inactive"}

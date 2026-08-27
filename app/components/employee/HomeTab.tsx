@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getIST, getGreeting, formatTimeIST, getGraceStatus } from "../../../lib/time-utils";
+import { getIST, getGreeting, formatTimeIST, getGraceStatus, formatDuration } from "../../../lib/time-utils";
 import type { TodayStatus } from "./attendance-types";
 
 const menuItems = [
@@ -25,13 +25,46 @@ export default function HomeTab({ displayName, onNavigate, onOpenCamera, todaySt
   const dateStr = currentTime?.dateStr ?? "";
   const timeStr = currentTime?.timeStr ?? "";
 
+  const isFlexible = todayStatus?.flexibleHours === true;
+  const punches = todayStatus?.punches ?? [];
+
+  // Build lecture sessions from IN→OUT pairs
+  const sessions: { inTime: string; outTime: string | null }[] = [];
+  for (let i = 0; i < punches.length; i++) {
+    if (punches[i].type === "IN") {
+      const out = punches[i + 1]?.type === "OUT" ? punches[i + 1].time : null;
+      sessions.push({ inTime: punches[i].time, outTime: out });
+      if (out) i++; // skip the paired OUT
+    }
+  }
+
+  // Total minutes worked today (completed sessions only)
+  let totalMinutesToday = 0;
+  for (const s of sessions) {
+    if (s.outTime) {
+      const inMs = new Date(s.inTime.replace(" ", "T") + (s.inTime.includes("Z") ? "" : "Z")).getTime();
+      const outMs = new Date(s.outTime.replace(" ", "T") + (s.outTime.includes("Z") ? "" : "Z")).getTime();
+      totalMinutesToday += Math.max(0, Math.floor((outMs - inMs) / 60000));
+    }
+  }
+
+  const currentlyInLecture = sessions.length > 0 && sessions[sessions.length - 1].outTime === null;
+
   const punchedIn = !!todayStatus?.punchIn;
   const punchedOut = !!todayStatus?.punchOut;
-  const dayComplete = punchedIn && punchedOut && !todayStatus?.canPunchOut;
+  const dayComplete = !isFlexible && punchedIn && punchedOut && !todayStatus?.canPunchOut;
 
-  let statusText = "You haven\u2019t punched in yet";
+  let statusText = isFlexible ? "No lectures today" : "You haven\u2019t punched in yet";
   let statusColor = "#ea580c";
-  if (dayComplete) {
+  if (isFlexible) {
+    if (currentlyInLecture) {
+      statusText = "Lecture in progress";
+      statusColor = "#2563eb";
+    } else if (sessions.length > 0) {
+      statusText = `${sessions.length} lecture${sessions.length > 1 ? "s" : ""} today \u00b7 ${formatDuration(totalMinutesToday)}`;
+      statusColor = "#059669";
+    }
+  } else if (dayComplete) {
     statusText = "Day complete \u2014 Great work!";
     statusColor = "#059669";
   } else if (punchedIn && !punchedOut) {
@@ -43,7 +76,7 @@ export default function HomeTab({ displayName, onNavigate, onOpenCamera, todaySt
   }
 
   let graceLabel = "";
-  if (todayStatus?.punchIn && todayStatus.workStartTime && !todayStatus.flexibleHours) {
+  if (!isFlexible && todayStatus?.punchIn && todayStatus.workStartTime) {
     const g = getGraceStatus(todayStatus.punchIn.time, todayStatus.workStartTime, todayStatus.rules?.gracePeriod ?? 0);
     graceLabel = g.label;
   }
@@ -55,7 +88,7 @@ export default function HomeTab({ displayName, onNavigate, onOpenCamera, todaySt
         <div style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", letterSpacing: "-0.02em" }}>
           {greeting}, {displayName.split(" ")[0]}
         </div>
-        <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}>{dateStr}</div>
+        <div style={{ fontSize: 15, color: "var(--muted)", marginTop: 4 }}>{dateStr}</div>
         <div style={{ fontSize: 28, fontWeight: 700, color: "var(--purple)", marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{timeStr}</div>
       </div>
 
@@ -75,31 +108,60 @@ export default function HomeTab({ displayName, onNavigate, onOpenCamera, todaySt
             display: "inline-block",
             boxShadow: `0 0 0 3px ${statusColor}22`,
           }} />
-          <span style={{ fontSize: 14, fontWeight: 700, color: statusColor }}>{statusText}</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: statusColor }}>{statusText}</span>
           {graceLabel && (
             <span style={{
-              fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
+              fontSize: 13, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
               background: graceLabel === "On time" ? "#e8f7ef" : graceLabel === "Grace" ? "#fff4dc" : "#ffeded",
               color: graceLabel === "On time" ? "#168052" : graceLabel === "Grace" ? "#a86400" : "#c73333",
               marginLeft: "auto",
             }}>{graceLabel}</span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ flex: 1, background: "#f6f7fb", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Punch In</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 4 }}>
-              {todayStatus?.punchIn ? formatTimeIST(todayStatus.punchIn.time) : "\u2014"}
+        {isFlexible ? (
+          <div style={{ marginBottom: 4 }}>
+            {sessions.length === 0 ? (
+              <div style={{ background: "#f6f7fb", borderRadius: 10, padding: "10px 14px", color: "var(--muted)", fontSize: 15 }}>
+                No lectures recorded yet today.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {sessions.map((s, i) => {
+                  const dur = s.outTime ? (() => {
+                    const inMs = new Date(s.inTime.replace(" ", "T") + (s.inTime.includes("Z") ? "" : "Z")).getTime();
+                    const outMs = new Date(s.outTime!.replace(" ", "T") + (s.outTime!.includes("Z") ? "" : "Z")).getTime();
+                    return formatDuration(Math.max(0, Math.floor((outMs - inMs) / 60000)));
+                  })() : null;
+                  return (
+                    <div key={i} style={{ background: "#f6f7fb", borderRadius: 10, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: "var(--muted)", minWidth: 68 }}>Lecture {i + 1}</span>
+                      <span style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>
+                        {formatTimeIST(s.inTime)} &ndash; {s.outTime ? formatTimeIST(s.outTime) : <span style={{ color: "#2563eb" }}>ongoing</span>}
+                      </span>
+                      {dur && <span style={{ marginLeft: "auto", fontSize: 14, color: "var(--muted)" }}>{dur}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ flex: 1, background: "#f6f7fb", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--muted)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Punch In</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 4 }}>
+                {todayStatus?.punchIn ? formatTimeIST(todayStatus.punchIn.time) : "\u2014"}
+              </div>
+            </div>
+            <div style={{ flex: 1, background: "#f6f7fb", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--muted)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Punch Out</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 4 }}>
+                {todayStatus?.punchOut ? formatTimeIST(todayStatus.punchOut.time) : "\u2014"}
+              </div>
             </div>
           </div>
-          <div style={{ flex: 1, background: "#f6f7fb", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Punch Out</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 4 }}>
-              {todayStatus?.punchOut ? formatTimeIST(todayStatus.punchOut.time) : "\u2014"}
-            </div>
-          </div>
-        </div>
-        {!dayComplete && (
+        )}
+        {(isFlexible || !dayComplete) && (
           <button
             onClick={onOpenCamera}
             style={{
@@ -110,14 +172,15 @@ export default function HomeTab({ displayName, onNavigate, onOpenCamera, todaySt
               color: "#fff",
               border: "none",
               borderRadius: 10,
-              fontSize: 15,
+              fontSize: 17,
               fontWeight: 700,
               cursor: "pointer",
               letterSpacing: "0.01em",
             }}
-            
           >
-            {punchedIn ? "\u{1F4F7} Punch Out" : "\u{1F4F7} Mark Attendance"}
+            {isFlexible
+              ? (currentlyInLecture ? "\u{1F4F7} End Lecture" : "\u{1F4F7} Start Lecture")
+              : (punchedIn ? "\u{1F4F7} Punch Out" : "\u{1F4F7} Mark Attendance")}
           </button>
         )}
       </div>
@@ -143,8 +206,8 @@ export default function HomeTab({ displayName, onNavigate, onOpenCamera, todaySt
             }}
           >
             <span style={{ fontSize: 26 }}>{item.icon}</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: item.color }}>{item.label}</span>
-            <span style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.35 }}>{item.desc}</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: item.color }}>{item.label}</span>
+            <span style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.35 }}>{item.desc}</span>
           </button>
         ))}
       </div>

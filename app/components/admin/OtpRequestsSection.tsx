@@ -35,7 +35,7 @@ export default function OtpRequestsSection() {
         <span style={{ fontSize: 20 }}>&#128272;</span>
         <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Pending Login Requests</h3>
         <span style={{
-          background: "#ef4444", color: "#fff", fontSize: 11, fontWeight: 700,
+          background: "#ef4444", color: "#fff", fontSize: 13, fontWeight: 700,
           padding: "3px 10px", borderRadius: 99, minWidth: 20, textAlign: "center",
           animation: "pulse-glow 2s ease-in-out infinite"
         }}>{requests.length}</span>
@@ -88,16 +88,16 @@ function OtpCard({ request }: { request: OtpRequest }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <span style={{
           width: 42, height: 42, borderRadius: "50%", background: "#6d45e5", color: "#fff",
-          display: "grid", placeItems: "center", fontWeight: 700, fontSize: 14, flexShrink: 0,
+          display: "grid", placeItems: "center", fontWeight: 700, fontSize: 16, flexShrink: 0,
         }}>
           {request.employeeName.slice(0, 2).toUpperCase()}
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 14 }}>{request.employeeName}</div>
-          <div style={{ fontSize: 11, color: "#667085" }}>{request.employeeId}</div>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>{request.employeeName}</div>
+          <div style={{ fontSize: 13, color: "#667085" }}>{request.employeeId}</div>
         </div>
         <span style={{
-          fontSize: 13, fontWeight: 700,
+          fontSize: 15, fontWeight: 700,
           color: isExpired ? "#c73333" : "#6d45e5",
           background: isExpired ? "#ffeded" : "#eee9ff",
           padding: "5px 12px", borderRadius: 99, whiteSpace: "nowrap",
@@ -120,7 +120,7 @@ function OtpCard({ request }: { request: OtpRequest }) {
 
       {/* Hint */}
       <div style={{
-        textAlign: "center", fontSize: 11, color: "#667085", fontWeight: 500,
+        textAlign: "center", fontSize: 13, color: "#667085", fontWeight: 500,
       }}>
         {isExpired ? "This OTP has expired" : "Share this code with the employee"}
       </div>

@@ -141,7 +141,7 @@ export default function HistoryTab() {
         onClick={() => setViewMode("list")}
         style={{
           flex: 1, border: 0, borderRadius: 8, padding: "8px 14px",
-          fontSize: 13, fontWeight: 600, cursor: "pointer",
+          fontSize: 15, fontWeight: 600, cursor: "pointer",
           background: viewMode === "list" ? "#fff" : "transparent",
           color: viewMode === "list" ? "var(--purple)" : "var(--muted)",
           boxShadow: viewMode === "list" ? "0 1px 4px rgba(0,0,0,.08)" : "none",
@@ -153,7 +153,7 @@ export default function HistoryTab() {
         onClick={() => setViewMode("grid")}
         style={{
           flex: 1, border: 0, borderRadius: 8, padding: "8px 14px",
-          fontSize: 13, fontWeight: 600, cursor: "pointer",
+          fontSize: 15, fontWeight: 600, cursor: "pointer",
           background: viewMode === "grid" ? "#fff" : "transparent",
           color: viewMode === "grid" ? "var(--purple)" : "var(--muted)",
           boxShadow: viewMode === "grid" ? "0 1px 4px rgba(0,0,0,.08)" : "none",
@@ -358,7 +358,7 @@ export default function HistoryTab() {
                     <td>
                       <span className={`grace-badge ${statusClass(r.status)}`}>{r.status}</span>
                       {r.lateByMinutes !== null && r.lateByMinutes > 0 && (
-                        <small style={{ display: "block", color: "#e67e22", fontSize: 11, marginTop: 2 }}>
+                        <small style={{ display: "block", color: "#e67e22", fontSize: 13, marginTop: 2 }}>
                           by {r.lateByMinutes >= 60
                             ? `${Math.floor(r.lateByMinutes / 60)}h ${r.lateByMinutes % 60}m`
                             : `${r.lateByMinutes} mins`}

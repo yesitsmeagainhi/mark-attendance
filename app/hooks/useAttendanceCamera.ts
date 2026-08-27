@@ -21,7 +21,7 @@ export type UseAttendanceCameraReturn = {
   message: string;
   todayStatus: TodayStatus | null;
   fetchStatus: () => void;
-  location: { latitude: number; longitude: number; accuracy: number } | null;
+  location: { latitude: number; longitude: number; accuracy: number; timestamp: number } | null;
   locationError: string;
   locationLoading: boolean;
   acquireLocation: () => void;
@@ -53,7 +53,7 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
   const [elapsed, setElapsed] = useState("");
 
   // GPS
-  const [location, setLocation] = useState<{ latitude: number; longitude: number; accuracy: number } | null>(null);
+  const [location, setLocation] = useState<{ latitude: number; longitude: number; accuracy: number; timestamp: number } | null>(null);
   const [locationError, setLocationError] = useState("");
   const [locationLoading, setLocationLoading] = useState(false);
 
@@ -74,17 +74,30 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
   const [geoFenceInfo, setGeoFenceInfo] = useState<{ branchName: string; distance: number; allowedRadius: number } | null>(null);
   const branchesFetchedRef = useRef(false);
 
-  // Fetch active branches once
+  // Fetch all active branches once
+  const [allBranches, setAllBranches] = useState<BranchRecord[]>([]);
   useEffect(() => {
     if (!enabled || branchesFetchedRef.current) return;
     branchesFetchedRef.current = true;
     fetch("/api/branches/active")
       .then((r) => r.ok ? r.json() : null)
       .then((data: { branches?: BranchRecord[] } | null) => {
-        if (data?.branches) setActiveBranches(data.branches);
+        if (data?.branches) setAllBranches(data.branches);
       })
       .catch(() => undefined);
   }, [enabled]);
+
+  // Filter to employee's assigned branches (or all if none assigned)
+  useEffect(() => {
+    if (allBranches.length === 0) { setActiveBranches([]); return; }
+    const assigned = todayStatus?.assignedBranchIds;
+    if (assigned && assigned.length > 0) {
+      const ids = new Set(assigned);
+      setActiveBranches(allBranches.filter((b) => ids.has(b.id)));
+    } else {
+      setActiveBranches(allBranches);
+    }
+  }, [allBranches, todayStatus?.assignedBranchIds]);
 
   // Recompute geo-fence status whenever location or branches change
   useEffect(() => {
@@ -113,12 +126,16 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
     setGeoFenceInfo(closest);
   }, [location, activeBranches]);
 
-  const fetchStatus = useCallback(() => {
+  const fetchStatus = useCallback(async () => {
     if (!enabled) return;
-    fetch("/api/attendance/status")
-      .then((r) => r.ok ? r.json() : null)
-      .then((data: TodayStatus | null) => { if (data) setTodayStatus(data); })
-      .catch(() => undefined);
+    try {
+      const r = await fetch("/api/attendance/status");
+      if (!r.ok) return;
+      const data: TodayStatus | null = await r.json();
+      if (data) setTodayStatus(data);
+    } catch {
+      // ignore — status will be retried on next action
+    }
   }, [enabled]);
 
   const acquireLocation = useCallback(() => {
@@ -135,6 +152,7 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
           accuracy: position.coords.accuracy,
+          timestamp: position.timestamp,
         });
         setLocationLoading(false);
       },
@@ -224,8 +242,9 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
 
   const openCamera = useCallback(() => {
     setPhoto(null);
+    acquireLocation(); // refresh GPS so it's fresh when photo is captured
     setCameraOpen(true);
-  }, []);
+  }, [acquireLocation]);
 
   const closeCamera = useCallback(() => {
     setCameraOpen(false);
@@ -255,17 +274,47 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
       form.append("latitude", location.latitude.toString());
       form.append("longitude", location.longitude.toString());
       form.append("accuracy", location.accuracy.toString());
+      form.append("gpsTimestamp", location.timestamp.toString());
       const response = await fetch("/api/attendance", { method: "POST", body: form });
-      const result = await response.json() as { error?: string; geoAlert?: GeoAlert };
+      const result = await response.json() as { error?: string; geoAlert?: GeoAlert; serverTimestamp?: string };
       if (!response.ok) {
         if (result.geoAlert) setGeoAlert(result.geoAlert);
         throw new Error(result.error || "Could not mark attendance.");
       }
       setMessage(nextPunchType === "IN" ? "Punch in recorded successfully." : "Punch out recorded. Have a great evening!");
       setPhoto(null);
+      // Optimistically flip the punch state so the button text and next
+      // punchType update immediately — prevents the stale-closure race
+      // where a flex employee punches IN→OUT quickly and the second punch
+      // still sends "IN" because fetchStatus() hasn't resolved yet.
+      setTodayStatus((prev) => {
+        if (!prev) return prev;
+        const newPunch = {
+          type: nextPunchType as "IN" | "OUT",
+          time: result.serverTimestamp ?? new Date().toISOString().replace("T", " ").slice(0, 19),
+          office: prev.office || "",
+          photoKey: "",
+        };
+        const flippedType: "IN" | "OUT" | null =
+          nextPunchType === "IN" ? "OUT" : prev.flexibleHours ? "IN" : null;
+        return {
+          ...prev,
+          punches: [...(prev.punches || []), newPunch],
+          nextPunchType: flippedType,
+          canPunchIn: flippedType === "IN",
+          canPunchOut: flippedType === "OUT",
+          punchIn: prev.punchIn ?? (nextPunchType === "IN" ? newPunch : null),
+          punchOut: nextPunchType === "OUT" ? newPunch : prev.punchOut,
+        };
+      });
+      // Force a fresh GPS for the next punch so an employee can't reuse
+      // a stale "near office" reading after walking away.  acquireLocation()
+      // fires immediately and the camera-open call adds a second chance —
+      // the 10-30s face-detection window is plenty for GPS to arrive.
       setLocation(null);
       acquireLocation();
-      fetchStatus();
+      // Await the authoritative status refresh before re-enabling the button
+      await fetchStatus();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not mark attendance.");
     } finally {

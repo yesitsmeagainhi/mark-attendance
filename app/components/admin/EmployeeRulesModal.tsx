@@ -80,10 +80,10 @@ export default function EmployeeRulesModal({ open, employeeId, employeeName, onC
           {rules.map((rule) => (
             <div key={rule.ruleId} style={{ borderBottom: "1px solid #f0f0f3", padding: "14px 0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <strong style={{ fontSize: 14 }}>{rule.label}</strong>
+                <strong style={{ fontSize: 16 }}>{rule.label}</strong>
                 {rule.override !== null && (
                   <button
-                    style={{ fontSize: 11, color: "#6366f1", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                    style={{ fontSize: 13, color: "#6366f1", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
                     onClick={() => clearOverride(rule.ruleId)}
                     disabled={saving === rule.ruleId}
                   >
@@ -93,12 +93,12 @@ export default function EmployeeRulesModal({ open, employeeId, employeeName, onC
               </div>
               <small style={{ color: "#6b7280", display: "block", marginBottom: 8 }}>{rule.description}</small>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 12, color: "#9ca3af" }}>Default: {rule.valueType === "boolean" ? (rule.globalDefault === "true" ? "Enabled" : "Disabled") : rule.globalDefault}</span>
+                <span style={{ fontSize: 14, color: "#9ca3af" }}>Default: {rule.valueType === "boolean" ? (rule.globalDefault === "true" ? "Enabled" : "Disabled") : rule.globalDefault}</span>
                 <span style={{ color: "#d1d5db" }}>|</span>
                 {rule.valueType === "boolean" ? (
                   <button
                     className={rule.effectiveValue === "true" ? "btn-approve" : "btn-reject"}
-                    style={{ fontSize: 12 }}
+                    style={{ fontSize: 14 }}
                     onClick={() => setOverride(rule.ruleId, rule.effectiveValue === "true" ? "false" : "true")}
                     disabled={saving === rule.ruleId}
                   >
@@ -133,7 +133,7 @@ export default function EmployeeRulesModal({ open, employeeId, employeeName, onC
                   />
                 )}
                 {rule.override !== null && (
-                  <span className="grace-badge grace" style={{ fontSize: 11 }}>Overridden</span>
+                  <span className="grace-badge grace" style={{ fontSize: 13 }}>Overridden</span>
                 )}
               </div>
             </div>

@@ -18,9 +18,10 @@ const emptyForm = {
   mobileNumber: "",
   workStartTime: "09:00",
   workEndTime: "18:00",
-  office: "",
+  assignedBranchIds: [] as string[],
   department: "",
   monthlySalary: "",
+  hourlyRate: "",
   flexibleHours: false,
   role: "employee" as const,
 };
@@ -38,7 +39,7 @@ export default function AddEmployeeModal({
   branches: BranchRow[];
   departments: DepartmentRow[];
 }) {
-  const [form, setForm] = useState({ ...emptyForm, office: branches.find((b) => b.active)?.name || "" });
+  const [form, setForm] = useState({ ...emptyForm });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
@@ -85,10 +86,11 @@ export default function AddEmployeeModal({
           mobileNumber: normalizedMobile,
           workStartTime: form.workStartTime,
           workEndTime: form.workEndTime,
-          office: form.office.trim(),
+          assignedBranchIds: form.assignedBranchIds,
           department: form.department.trim(),
           role: form.role,
-          monthlySalary: parseInt(form.monthlySalary, 10) || 0,
+          monthlySalary: form.flexibleHours ? 0 : (parseInt(form.monthlySalary, 10) || 0),
+          hourlyRate: form.flexibleHours ? (parseInt(form.hourlyRate, 10) || 0) : 0,
           flexibleHours: form.flexibleHours,
           ruleOverrides: Object.entries(ruleOverrides)
             .filter(([, v]) => v !== "")
@@ -101,7 +103,7 @@ export default function AddEmployeeModal({
         return;
       }
       setSuccess(`${data.name} (${data.id}) created successfully.`);
-      setForm({ ...emptyForm, office: branches.find((b) => b.active)?.name || "" });
+      setForm({ ...emptyForm });
       setRuleOverrides({});
       setShowRules(false);
       onCreated();
@@ -163,38 +165,59 @@ export default function AddEmployeeModal({
               <input type="time" value={form.workEndTime} onChange={(e) => setForm({ ...form, workEndTime: e.target.value })} required />
             </label>
           </div>
-          <label>
-            <span>Office location</span>
-            <select value={form.office} onChange={(e) => setForm({ ...form, office: e.target.value })}>
-              {branches.filter((b) => b.active).length > 0 ? (
-                branches.filter((b) => b.active).map((b) => (
-                  <option key={b.id} value={b.name}>{b.name}</option>
-                ))
-              ) : (
-                <option value="">No branches configured</option>
-              )}
-            </select>
-          </label>
-          <label>
-            <span>Monthly salary</span>
-            <input type="number" inputMode="numeric" value={form.monthlySalary} onChange={(e) => setForm({ ...form, monthlySalary: e.target.value })} placeholder="e.g. 25000" min="0" />
-          </label>
+          <div>
+            <span style={{ display: "block", fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Assigned branches</span>
+            <small style={{ display: "block", color: "#9ca3af", fontWeight: 400, marginBottom: 8 }}>Employee can only punch from selected branches. Leave empty for any branch.</small>
+            {branches.filter((b) => b.active).length > 0 ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                {branches.filter((b) => b.active).map((b) => (
+                  <label key={b.id} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "6px 10px", borderRadius: 8, background: form.assignedBranchIds.includes(b.id) ? "#f0ecff" : "#f8f9fb", border: `1px solid ${form.assignedBranchIds.includes(b.id) ? "#7c3aed" : "#e7e9ee"}`, transition: "all .15s" }}>
+                    <input
+                      type="checkbox"
+                      checked={form.assignedBranchIds.includes(b.id)}
+                      onChange={() => {
+                        const ids = form.assignedBranchIds.includes(b.id)
+                          ? form.assignedBranchIds.filter((id) => id !== b.id)
+                          : [...form.assignedBranchIds, b.id];
+                        setForm({ ...form, assignedBranchIds: ids });
+                      }}
+                      style={{ accentColor: "#7c3aed" }}
+                    />
+                    <span style={{ fontSize: 15, fontWeight: 600, color: form.assignedBranchIds.includes(b.id) ? "#7c3aed" : "#344054" }}>{b.name}</span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 15, color: "#9ca3af", padding: "8px 0" }}>No branches configured</div>
+            )}
+          </div>
           <label style={{ display: "flex", alignItems: "center", gap: 10, flexDirection: "row" }}>
             <span style={{ flex: 1 }}>
               Flexible hours
-              <small style={{ display: "block", color: "#9ca3af", fontWeight: 400 }}>Exempt from late &amp; duration rules</small>
+              <small style={{ display: "block", color: "#9ca3af", fontWeight: 400 }}>Lecture/session-based schedule</small>
             </span>
             <button
               type="button"
               className={form.flexibleHours ? "btn-approve" : "btn-reject"}
-              style={{ fontSize: 12 }}
+              style={{ fontSize: 14 }}
               onClick={() => setForm({ ...form, flexibleHours: !form.flexibleHours })}
             >
               {form.flexibleHours ? "Enabled" : "Disabled"}
             </button>
           </label>
+          {form.flexibleHours ? (
+            <label>
+              <span>Hourly rate (&#8377;/hr)</span>
+              <input type="number" inputMode="numeric" value={form.hourlyRate} onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })} placeholder="e.g. 200" min="0" />
+            </label>
+          ) : (
+            <label>
+              <span>Monthly salary</span>
+              <input type="number" inputMode="numeric" value={form.monthlySalary} onChange={(e) => setForm({ ...form, monthlySalary: e.target.value })} placeholder="e.g. 25000" min="0" />
+            </label>
+          )}
           <div style={{ borderTop: "1px solid #f0f0f3", paddingTop: 12 }}>
-            <button type="button" className="secondary" style={{ width: "100%", fontSize: 13 }} onClick={() => setShowRules(!showRules)}>
+            <button type="button" className="secondary" style={{ width: "100%", fontSize: 15 }} onClick={() => setShowRules(!showRules)}>
               {showRules ? "\u25B2 Hide attendance rules" : "\u25BC Attendance rules (optional)"}
             </button>
             {showRules && ruleDefaults.length > 0 && (
@@ -208,7 +231,7 @@ export default function AddEmployeeModal({
                         <button
                           type="button"
                           className={(ruleOverrides[rule.id] || rule.defaultValue) === "true" ? "btn-approve" : "btn-reject"}
-                          style={{ fontSize: 12 }}
+                          style={{ fontSize: 14 }}
                           onClick={() => {
                             const current = ruleOverrides[rule.id] || rule.defaultValue;
                             setRuleOverrides({ ...ruleOverrides, [rule.id]: current === "true" ? "false" : "true" });

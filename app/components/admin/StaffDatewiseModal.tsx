@@ -114,13 +114,13 @@ export default function StaffDatewiseModal({ employeeId, employeeName, onClose }
             </span>
             <div>
               <div style={{ fontWeight: 700, fontSize: 16 }}>{employeeName}</div>
-              <div style={{ fontSize: 12, color: "#667085" }}>{employeeId}{data ? ` \u00B7 Shift: ${data.shift}` : ""}</div>
+              <div style={{ fontSize: 14, color: "#667085" }}>{employeeId}{data ? ` \u00B7 Shift: ${data.shift}` : ""}</div>
             </div>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button onClick={prevMonth} style={{ background: "none", border: "1px solid #e7e9ee", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontSize: 16 }}>&lsaquo;</button>
-            <span style={{ fontWeight: 600, fontSize: 14, minWidth: 140, textAlign: "center" }}>{fmtMonth(month)}</span>
+            <span style={{ fontWeight: 600, fontSize: 16, minWidth: 140, textAlign: "center" }}>{fmtMonth(month)}</span>
             <button onClick={nextMonth} style={{ background: "none", border: "1px solid #e7e9ee", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontSize: 16 }}>&rsaquo;</button>
           </div>
         </div>
@@ -142,7 +142,7 @@ export default function StaffDatewiseModal({ employeeId, employeeName, onClose }
                 { label: "Holiday", value: data.holidayCount, bg: "#f3f4f8", color: "#667085" },
               ].map((c) => (
                 <div key={c.label} style={{ background: c.bg, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
-                  <div style={{ fontSize: 9, fontWeight: 600, color: c.color, textTransform: "uppercase", letterSpacing: ".04em" }}>{c.label}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: c.color, textTransform: "uppercase", letterSpacing: ".04em" }}>{c.label}</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: c.color }}>{c.value}</div>
                 </div>
               ))}
@@ -177,7 +177,7 @@ export default function StaffDatewiseModal({ employeeId, employeeName, onClose }
                             display: "inline-block",
                             padding: "3px 10px",
                             borderRadius: 99,
-                            fontSize: 11,
+                            fontSize: 13,
                             fontWeight: 700,
                             background: badge.bg,
                             color: badge.color,

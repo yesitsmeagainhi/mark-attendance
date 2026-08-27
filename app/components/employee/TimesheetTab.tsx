@@ -82,7 +82,7 @@ export default function TimesheetTab() {
       </div>
 
       <div style={{ marginTop: 14 }}>
-        <span style={{ fontSize: 13, fontWeight: 600 }}>To-do list</span>
+        <span style={{ fontSize: 15, fontWeight: 600 }}>To-do list</span>
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           <input
             type="text"
@@ -90,7 +90,7 @@ export default function TimesheetTab() {
             onChange={(e) => setNewTodo(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTodo(); } }}
             placeholder="Add a to-do item..."
-            style={{ flex: 1, padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }}
+            style={{ flex: 1, padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 15 }}
           />
           <button type="button" className="secondary" onClick={addTodo} style={{ padding: "8px 16px" }}>Add</button>
         </div>
@@ -98,7 +98,7 @@ export default function TimesheetTab() {
           <ul style={{ listStyle: "none", padding: 0, marginTop: 8 }}>
             {todos.map((todo, i) => (
               <li key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
-                <span style={{ flex: 1, fontSize: 13 }}>{todo}</span>
+                <span style={{ flex: 1, fontSize: 15 }}>{todo}</span>
                 <button type="button" onClick={() => removeTodo(i)} style={{ background: "none", border: "none", color: "#c73333", cursor: "pointer", fontSize: 16 }}>&times;</button>
               </li>
             ))}

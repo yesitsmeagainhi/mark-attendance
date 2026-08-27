@@ -106,7 +106,7 @@ export default function HistoryTab() {
                 background: actionFilter === fg.value ? "#f3f0ff" : "#fff",
                 color: actionFilter === fg.value ? "#7c3aed" : "#555",
                 fontWeight: actionFilter === fg.value ? 700 : 500,
-                fontSize: 13,
+                fontSize: 15,
                 cursor: "pointer",
                 transition: "all .15s",
               }}
@@ -125,7 +125,7 @@ export default function HistoryTab() {
               padding: "8px 14px",
               border: "1px solid #e2e4ea",
               borderRadius: 10,
-              fontSize: 13,
+              fontSize: 15,
               width: 200,
               background: "#fff",
             }}
@@ -137,7 +137,7 @@ export default function HistoryTab() {
               borderRadius: 10,
               border: "1px solid #e2e4ea",
               background: "#f9fafb",
-              fontSize: 13,
+              fontSize: 15,
               cursor: "pointer",
             }}
           >
@@ -196,7 +196,7 @@ export default function HistoryTab() {
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                         <span
                           style={{
-                            fontSize: 11,
+                            fontSize: 13,
                             fontWeight: 600,
                             color: cfg.color,
                             background: cfg.color + "14",
@@ -209,18 +209,18 @@ export default function HistoryTab() {
                           {cfg.label}
                         </span>
                         <span
-                          style={{ fontSize: 12, color: "#8990a0" }}
+                          style={{ fontSize: 14, color: "#8990a0" }}
                           title={new Date(a.timestamp).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}
                         >
                           {timeAgo(a.timestamp)}
                         </span>
                       </div>
 
-                      <p style={{ margin: "4px 0 0", fontSize: 14, color: "#1a1d26", lineHeight: 1.5 }}>
+                      <p style={{ margin: "4px 0 0", fontSize: 16, color: "#1a1d26", lineHeight: 1.5 }}>
                         {a.description}
                       </p>
 
-                      <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 12, color: "#8990a0" }}>
+                      <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 14, color: "#8990a0" }}>
                         <span>by <b style={{ color: "#555" }}>{a.performedByName}</b></span>
                         {a.targetName && <span>&#x2192; <b style={{ color: "#555" }}>{a.targetName}</b></span>}
                       </div>
@@ -243,7 +243,7 @@ export default function HistoryTab() {
                   border: "1px solid #e2e4ea",
                   background: page <= 1 ? "#f9fafb" : "#fff",
                   color: page <= 1 ? "#c9cbd4" : "#333",
-                  fontSize: 13,
+                  fontSize: 15,
                   cursor: page <= 1 ? "default" : "pointer",
                 }}
               >
@@ -271,7 +271,7 @@ export default function HistoryTab() {
                       background: page === pageNum ? "#f3f0ff" : "#fff",
                       color: page === pageNum ? "#7c3aed" : "#333",
                       fontWeight: page === pageNum ? 700 : 400,
-                      fontSize: 13,
+                      fontSize: 15,
                       cursor: "pointer",
                     }}
                   >
@@ -288,7 +288,7 @@ export default function HistoryTab() {
                   border: "1px solid #e2e4ea",
                   background: page >= totalPages ? "#f9fafb" : "#fff",
                   color: page >= totalPages ? "#c9cbd4" : "#333",
-                  fontSize: 13,
+                  fontSize: 15,
                   cursor: page >= totalPages ? "default" : "pointer",
                 }}
               >

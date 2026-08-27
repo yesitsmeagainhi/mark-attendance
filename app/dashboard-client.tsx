@@ -89,7 +89,7 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
               borderBottom: "1px solid var(--line)", cursor: "pointer",
             }} onClick={() => setActiveTab("home")}>
               <span style={{ fontSize: 18, lineHeight: 1 }}>&larr;</span>
-              <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>Back to Home</span>
+              <span style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)" }}>Back to Home</span>
             </div>
           )}
 

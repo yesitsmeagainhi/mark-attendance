@@ -46,10 +46,10 @@ export default function JournalsSection() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search employee..."
-            style={{ padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 12, width: 160 }}
+            style={{ padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 14, width: 160 }}
           />
           <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)}
-            style={{ padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 12 }}
+            style={{ padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 14 }}
           />
         </div>
       </div>
@@ -75,7 +75,7 @@ export default function JournalsSection() {
                     className="journal-card-header"
                     onClick={() => setExpandedId(isOpen ? null : j.id)}
                   >
-                    <span className="person" style={{ background: color, width: 32, height: 32, fontSize: 10 }}>{initials}</span>
+                    <span className="person" style={{ background: color, width: 32, height: 32, fontSize: 12 }}>{initials}</span>
                     <span className="journal-card-name">
                       <b>{j.employeeName}</b>
                       <small>{j.employeeId}</small>

@@ -123,7 +123,7 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
         <div className="table-tools">
           <div><h2>Branch locations</h2><p>{branchList.length} total</p></div>
           <div className="filters">
-            <button className="primary" style={{ fontSize: 13, padding: "6px 14px" }} onClick={() => { setShowModal(true); setEditing(null); setForm({ name: "", latitude: "", longitude: "", radius: "200" }); setError(""); setSuccess(""); }}>+ Add branch</button>
+            <button className="primary" style={{ fontSize: 15, padding: "6px 14px" }} onClick={() => { setShowModal(true); setEditing(null); setForm({ name: "", latitude: "", longitude: "", radius: "200" }); setError(""); setSuccess(""); }}>+ Add branch</button>
           </div>
         </div>
         <div className="table-wrap">
@@ -140,8 +140,8 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
                   <td><small>{new Date(b.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</small></td>
                   <td>
                     <div className="review-actions">
-                      <button className="btn-approve" style={{ fontSize: 12 }} onClick={() => { setEditing(b); setForm({ name: b.name, latitude: b.latitude, longitude: b.longitude, radius: String(b.radius || 200) }); setShowModal(true); setError(""); setSuccess(""); }}>Edit</button>
-                      <button className={b.active ? "btn-reject" : "btn-approve"} style={{ fontSize: 12 }} onClick={() => toggleActive(b)}>{b.active ? "Deactivate" : "Activate"}</button>
+                      <button className="btn-approve" style={{ fontSize: 14 }} onClick={() => { setEditing(b); setForm({ name: b.name, latitude: b.latitude, longitude: b.longitude, radius: String(b.radius || 200) }); setShowModal(true); setError(""); setSuccess(""); }}>Edit</button>
+                      <button className={b.active ? "btn-reject" : "btn-approve"} style={{ fontSize: 14 }} onClick={() => toggleActive(b)}>{b.active ? "Deactivate" : "Activate"}</button>
                     </div>
                   </td>
                 </tr>
@@ -176,7 +176,7 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
               </div>
               <label>
                 <span>Geo-fence radius (meters)</span>
-                <input type="number" inputMode="numeric" value={form.radius} onChange={(e) => setForm({ ...form, radius: e.target.value })} placeholder="200" min={50} required />
+                <input type="number" inputMode="numeric" value={form.radius} onChange={(e) => setForm({ ...form, radius: e.target.value })} placeholder="200" min={50} max={500} required />
               </label>
               <button type="button" className="secondary" onClick={useCurrentLocation} disabled={gettingLocation} style={{ width: "100%" }}>
                 {gettingLocation ? "Getting location..." : "\u{1F4CD} Use current location"}
@@ -194,7 +194,7 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
         <div className="table-tools">
           <div><h2>Departments</h2><p>{deptList.length} total</p></div>
           <div className="filters">
-            <button className="primary" style={{ fontSize: 13, padding: "6px 14px" }} onClick={() => { setShowDeptModal(true); setEditingDept(null); setDeptForm({ name: "" }); setDeptError(""); setDeptSuccess(""); }}>+ Add department</button>
+            <button className="primary" style={{ fontSize: 15, padding: "6px 14px" }} onClick={() => { setShowDeptModal(true); setEditingDept(null); setDeptForm({ name: "" }); setDeptError(""); setDeptSuccess(""); }}>+ Add department</button>
           </div>
         </div>
         <div className="table-wrap">
@@ -208,8 +208,8 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
                   <td><small>{new Date(d.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</small></td>
                   <td>
                     <div className="review-actions">
-                      <button className="btn-approve" style={{ fontSize: 12 }} onClick={() => { setEditingDept(d); setDeptForm({ name: d.name }); setShowDeptModal(true); setDeptError(""); setDeptSuccess(""); }}>Edit</button>
-                      <button className={d.active ? "btn-reject" : "btn-approve"} style={{ fontSize: 12 }} onClick={async () => {
+                      <button className="btn-approve" style={{ fontSize: 14 }} onClick={() => { setEditingDept(d); setDeptForm({ name: d.name }); setShowDeptModal(true); setDeptError(""); setDeptSuccess(""); }}>Edit</button>
+                      <button className={d.active ? "btn-reject" : "btn-approve"} style={{ fontSize: 14 }} onClick={async () => {
                         await fetch("/api/departments", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: d.id, active: !d.active }) });
                         fetchDepartments();
                       }}>{d.active ? "Deactivate" : "Activate"}</button>

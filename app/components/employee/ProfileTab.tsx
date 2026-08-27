@@ -52,7 +52,7 @@ export default function ProfileTab({ onSignOut }: { onSignOut: () => void }) {
       <div className="profile-avatar">{initials}</div>
       <div className="profile-name">
         <h2>{profile.name}</h2>
-        <p>{profile.jobRole || profile.role === "admin" ? "Administrator" : "Employee"}</p>
+        <p>{profile.role === "admin" ? "Administrator" : "Employee"}</p>
       </div>
       <dl className="profile-grid">
         <div className="profile-field">

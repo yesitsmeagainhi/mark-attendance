@@ -12,16 +12,28 @@ export type EmployeeRow = {
   active: boolean;
   monthlySalary: number;
   flexibleHours: boolean;
+  assignedBranchIds: string[];
   createdAt: string;
+};
+
+export type FlexSession = {
+  inTime: string;
+  outTime: string | null;
+  inPhotoKey: string;
+  outPhotoKey: string | null;
+  durationMinutes: number | null;
+  office: string;
 };
 
 export type DailyEmployee = {
   id: string;
   name: string;
   workStartTime: string;
+  flexibleHours: boolean;
   punchIn: { time: string; photoKey: string; source: string; office: string; latitude: string | null; longitude: string | null } | null;
   punchOut: { time: string; photoKey: string; source: string; office: string; latitude: string | null; longitude: string | null } | null;
   durationMinutes: number | null;
+  sessions: FlexSession[];
   status: string;
   source: string | null;
 };

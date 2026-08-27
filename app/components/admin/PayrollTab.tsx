@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 type PayrollRow = {
   id: string;
   name: string;
+  isFlexible: boolean;
+  // Regular employee fields
   monthlySalary: number;
   workingDays: number;
   presentDays: number;
@@ -16,6 +18,9 @@ type PayrollRow = {
   sundayBonus: number;
   deduction: number;
   netPay: number;
+  // Flex/hourly employee fields
+  hourlyRate: number;
+  totalHours: number;
 };
 
 export default function PayrollTab() {
@@ -47,12 +52,12 @@ export default function PayrollTab() {
 
   useEffect(() => { fetchPayroll(); }, [month]);
 
-  async function saveSalary(empId: string) {
-    const salary = parseInt(salaryValue, 10) || 0;
+  async function saveSalary(empId: string, isFlexible: boolean) {
+    const value = parseInt(salaryValue, 10) || 0;
     await fetch("/api/employees", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: empId, monthlySalary: salary }),
+      body: JSON.stringify(isFlexible ? { id: empId, hourlyRate: value } : { id: empId, monthlySalary: value }),
     });
     setEditingSalary(null);
     fetchPayroll();
@@ -71,7 +76,7 @@ export default function PayrollTab() {
     <>
       <div className="date-picker-row">
         <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
-        <span style={{ fontSize: 13, color: "#667085" }}>
+        <span style={{ fontSize: 15, color: "#667085" }}>
           Working days: <b>{workingDays}</b> &middot; Holidays: <b>{totalHolidays}</b>
         </span>
       </div>
@@ -93,7 +98,7 @@ export default function PayrollTab() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Employee</th><th>Monthly Salary</th><th>Present</th><th>Absent</th><th>Late</th><th>Leave</th><th>Sun Work</th><th>Deduction</th><th>Sun Bonus</th><th>Net Pay</th></tr>
+              <tr><th>Employee</th><th>Salary / Rate</th><th>Present / Hours</th><th>Absent</th><th>Late</th><th>Leave</th><th>Sun Work</th><th>Deduction</th><th>Sun Bonus</th><th>Net Pay</th></tr>
             </thead>
             <tbody>
               {loading ? (
@@ -104,7 +109,11 @@ export default function PayrollTab() {
                 return `${r.name} ${r.id}`.toLowerCase().includes(q);
               }).map((r) => (
                 <tr key={r.id}>
-                  <td><b>{r.name}</b><br /><small>{r.id}</small></td>
+                  <td>
+                    <b>{r.name}</b>
+                    {r.isFlexible && <span style={{ marginLeft: 6, fontSize: 12, background: "#ede9fe", color: "#7c3aed", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>FLEX</span>}
+                    <br /><small>{r.id}</small>
+                  </td>
                   <td>
                     {editingSalary === r.id ? (
                       <input
@@ -112,10 +121,18 @@ export default function PayrollTab() {
                         type="number"
                         value={salaryValue}
                         onChange={(e) => setSalaryValue(e.target.value)}
-                        onBlur={() => saveSalary(r.id)}
-                        onKeyDown={(e) => { if (e.key === "Enter") saveSalary(r.id); if (e.key === "Escape") setEditingSalary(null); }}
+                        onBlur={() => saveSalary(r.id, r.isFlexible)}
+                        onKeyDown={(e) => { if (e.key === "Enter") saveSalary(r.id, r.isFlexible); if (e.key === "Escape") setEditingSalary(null); }}
                         autoFocus
                       />
+                    ) : r.isFlexible ? (
+                      <span
+                        style={{ cursor: "pointer", borderBottom: "1px dashed #c9cbd4" }}
+                        onClick={() => { setEditingSalary(r.id); setSalaryValue(String(r.hourlyRate)); }}
+                        title="Click to edit hourly rate"
+                      >
+                        {r.hourlyRate > 0 ? `${fmt(r.hourlyRate)}/hr` : "\u2014"}
+                      </span>
                     ) : (
                       <span
                         style={{ cursor: "pointer", borderBottom: "1px dashed #c9cbd4" }}
@@ -126,18 +143,32 @@ export default function PayrollTab() {
                       </span>
                     )}
                   </td>
-                  <td><span className="grace-badge on-time">{r.presentDays}</span></td>
-                  <td><span className="grace-badge late">{r.absentDays}</span></td>
-                  <td>
-                    {r.lateDays}
-                    {r.lateAbsentDays > 0 && (
-                      <div style={{ fontSize: 10, color: "#c73333", marginTop: 2 }}>= {r.lateAbsentDays} absent</div>
-                    )}
-                  </td>
-                  <td>{r.leaveDays}</td>
-                  <td>{r.sundayWorkedDays > 0 ? <span className="grace-badge grace">{r.sundayWorkedDays}</span> : <span style={{ color: "#b0b5c0" }}>0</span>}</td>
-                  <td style={{ color: r.deduction > 0 ? "#c73333" : undefined }}>{r.deduction > 0 ? `-${fmt(r.deduction)}` : "\u2014"}</td>
-                  <td style={{ color: r.sundayBonus > 0 ? "#168052" : undefined }}>{r.sundayBonus > 0 ? `+${fmt(r.sundayBonus)}` : "\u2014"}</td>
+                  {r.isFlexible ? (
+                    <>
+                      <td><span className="grace-badge on-time">{r.totalHours > 0 ? `${r.totalHours}h` : "0h"}</span></td>
+                      <td><span style={{ color: "#b0b5c0" }}>\u2014</span></td>
+                      <td><span style={{ color: "#b0b5c0" }}>\u2014</span></td>
+                      <td>{r.leaveDays}</td>
+                      <td><span style={{ color: "#b0b5c0" }}>\u2014</span></td>
+                      <td><span style={{ color: "#b0b5c0" }}>\u2014</span></td>
+                      <td><span style={{ color: "#b0b5c0" }}>\u2014</span></td>
+                    </>
+                  ) : (
+                    <>
+                      <td><span className="grace-badge on-time">{r.presentDays}</span></td>
+                      <td><span className="grace-badge late">{r.absentDays}</span></td>
+                      <td>
+                        {r.lateDays}
+                        {r.lateAbsentDays > 0 && (
+                          <div style={{ fontSize: 12, color: "#c73333", marginTop: 2 }}>= {r.lateAbsentDays} absent</div>
+                        )}
+                      </td>
+                      <td>{r.leaveDays}</td>
+                      <td>{r.sundayWorkedDays > 0 ? <span className="grace-badge grace">{r.sundayWorkedDays}</span> : <span style={{ color: "#b0b5c0" }}>0</span>}</td>
+                      <td style={{ color: r.deduction > 0 ? "#c73333" : undefined }}>{r.deduction > 0 ? `-${fmt(r.deduction)}` : "\u2014"}</td>
+                      <td style={{ color: r.sundayBonus > 0 ? "#168052" : undefined }}>{r.sundayBonus > 0 ? `+${fmt(r.sundayBonus)}` : "\u2014"}</td>
+                    </>
+                  )}
                   <td><b>{fmt(r.netPay)}</b></td>
                 </tr>
               ))}

@@ -103,7 +103,7 @@ export default function AttendanceRulesSection() {
                   {rule.valueType === "boolean" ? (
                     <button
                       className={rule.defaultValue === "true" ? "btn-reject" : "btn-approve"}
-                      style={{ fontSize: 12 }}
+                      style={{ fontSize: 14 }}
                       onClick={() => toggleBoolean(rule)}
                     >
                       {rule.defaultValue === "true" ? "Disable" : "Enable"}
@@ -112,7 +112,7 @@ export default function AttendanceRulesSection() {
                     <div style={{ display: "flex", gap: 6 }}>
                       <button
                         className="btn-approve"
-                        style={{ fontSize: 12 }}
+                        style={{ fontSize: 14 }}
                         onClick={() => saveRule(rule.id, editValue)}
                         disabled={saving}
                       >
@@ -120,7 +120,7 @@ export default function AttendanceRulesSection() {
                       </button>
                       <button
                         className="btn-reject"
-                        style={{ fontSize: 12 }}
+                        style={{ fontSize: 14 }}
                         onClick={() => setEditingRule(null)}
                         disabled={saving}
                       >
@@ -130,7 +130,7 @@ export default function AttendanceRulesSection() {
                   ) : (
                     <button
                       className="btn-approve"
-                      style={{ fontSize: 12 }}
+                      style={{ fontSize: 14 }}
                       onClick={() => { setEditingRule(rule.id); setEditValue(rule.defaultValue); }}
                     >
                       Edit

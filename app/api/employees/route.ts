@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { employees, employeeRuleOverrides, attendance, leaveRequests, missPunchRequests, sessions, dailyJournals, otpRequests } from "../../../db/schema";
+import { employees, employeeBranches, branches, employeeRuleOverrides, attendance, leaveRequests, missPunchRequests, sessions, dailyJournals, otpRequests } from "../../../db/schema";
 import { requireApiRole, getAppIdentity } from "../../authz";
 
 export async function GET(request: Request) {
@@ -26,6 +26,7 @@ export async function GET(request: Request) {
       department: employees.department,
       active: employees.active,
       monthlySalary: employees.monthlySalary,
+      hourlyRate: employees.hourlyRate,
       flexibleHours: employees.flexibleHours,
       createdAt: employees.createdAt,
     })
@@ -34,7 +35,25 @@ export async function GET(request: Request) {
     .orderBy(desc(employees.createdAt))
     .all();
 
-  return Response.json({ employees: records });
+  // Fetch branch assignments for all employees in one query
+  const allAssignments = db
+    .select({ employeeId: employeeBranches.employeeId, branchId: employeeBranches.branchId })
+    .from(employeeBranches)
+    .all();
+
+  const assignmentsByEmp = new Map<string, string[]>();
+  for (const a of allAssignments) {
+    const list = assignmentsByEmp.get(a.employeeId) || [];
+    list.push(a.branchId);
+    assignmentsByEmp.set(a.employeeId, list);
+  }
+
+  const enriched = records.map((emp) => ({
+    ...emp,
+    assignedBranchIds: assignmentsByEmp.get(emp.id) || [],
+  }));
+
+  return Response.json({ employees: enriched });
 }
 
 export async function PATCH(request: Request) {
@@ -53,8 +72,10 @@ export async function PATCH(request: Request) {
     office?: string;
     department?: string;
     monthlySalary?: number;
+    hourlyRate?: number;
     active?: boolean;
     flexibleHours?: boolean;
+    assignedBranchIds?: string[];
   };
   try {
     body = await request.json();
@@ -103,8 +124,24 @@ export async function PATCH(request: Request) {
   if (body.office !== undefined) updates.office = body.office.trim();
   if (body.department !== undefined) updates.department = body.department.trim();
   if (body.monthlySalary !== undefined) updates.monthlySalary = Math.max(0, Math.round(Number(body.monthlySalary) || 0));
+  if (body.hourlyRate !== undefined) updates.hourlyRate = Math.max(0, Math.round(Number(body.hourlyRate) || 0));
   if (body.active !== undefined) updates.active = body.active;
   if (body.flexibleHours !== undefined) updates.flexibleHours = body.flexibleHours;
+
+  // Sync branch assignments if provided
+  if (body.assignedBranchIds !== undefined) {
+    db.delete(employeeBranches).where(eq(employeeBranches.employeeId, body.id)).run();
+    for (const branchId of body.assignedBranchIds) {
+      db.insert(employeeBranches)
+        .values({ id: randomUUID(), employeeId: body.id, branchId })
+        .run();
+    }
+    // Derive office from first assigned branch
+    if (body.assignedBranchIds.length > 0) {
+      const firstBranch = db.select({ name: branches.name }).from(branches).where(eq(branches.id, body.assignedBranchIds[0])).get();
+      if (firstBranch) updates.office = firstBranch.name;
+    }
+  }
 
   if (Object.keys(updates).length > 0) {
     db.update(employees).set(updates).where(eq(employees.id, body.id)).run();
@@ -129,6 +166,7 @@ export async function POST(request: Request) {
     office?: string;
     department?: string;
     flexibleHours?: boolean;
+    assignedBranchIds?: string[];
     ruleOverrides?: { ruleId: string; value: string }[];
   };
   try {
@@ -196,6 +234,14 @@ export async function POST(request: Request) {
 
   const hashedPassword = createHash("sha256").update(password).digest("hex");
 
+  // Resolve office name from assigned branches (first branch name for display)
+  let resolvedOffice = office;
+  const assignedBranchIds = body.assignedBranchIds || [];
+  if (assignedBranchIds.length > 0) {
+    const firstBranch = db.select({ name: branches.name }).from(branches).where(eq(branches.id, assignedBranchIds[0])).get();
+    if (firstBranch) resolvedOffice = firstBranch.name;
+  }
+
   db.insert(employees)
     .values({
       id,
@@ -207,11 +253,18 @@ export async function POST(request: Request) {
       mobileNumber,
       workStartTime,
       workEndTime,
-      office,
+      office: resolvedOffice,
       department,
       flexibleHours,
     })
     .run();
+
+  // Insert branch assignments
+  for (const branchId of assignedBranchIds) {
+    db.insert(employeeBranches)
+      .values({ id: randomUUID(), employeeId: id, branchId })
+      .run();
+  }
 
   // Insert rule overrides if provided
   if (body.ruleOverrides && Array.isArray(body.ruleOverrides)) {
@@ -267,6 +320,7 @@ export async function DELETE(request: Request) {
   db.delete(leaveRequests).where(eq(leaveRequests.employeeId, body.id)).run();
   db.delete(missPunchRequests).where(eq(missPunchRequests.employeeId, body.id)).run();
   db.delete(employeeRuleOverrides).where(eq(employeeRuleOverrides.employeeId, body.id)).run();
+  db.delete(employeeBranches).where(eq(employeeBranches.employeeId, body.id)).run();
   db.delete(sessions).where(eq(sessions.employeeId, body.id)).run();
   db.delete(dailyJournals).where(eq(dailyJournals.employeeId, body.id)).run();
   db.delete(otpRequests).where(eq(otpRequests.employeeId, body.id)).run();

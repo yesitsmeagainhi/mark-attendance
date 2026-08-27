@@ -43,6 +43,7 @@ export async function GET(request: Request) {
       id: employees.id,
       name: employees.name,
       monthlySalary: employees.monthlySalary,
+      hourlyRate: employees.hourlyRate,
       workStartTime: employees.workStartTime,
       flexibleHours: employees.flexibleHours,
     })
@@ -122,6 +123,7 @@ export async function GET(request: Request) {
     let sundayWorkedDays = 0;
     let shortDays = 0;
     let halfDays = 0;
+    let totalMinutesWorked = 0; // for flex/hourly employees
     const halfDayMinutes = empRules.minimum_hours_for_half_day * 60;
     const fullDayMinutes = empRules.minimum_hours_for_full_day * 60;
 
@@ -163,8 +165,14 @@ export async function GET(request: Request) {
       const isUH = !hasSelfie && entry.photoKey === "admin/unpaid-holiday";
       if (isUH) { uhDays++; continue; }
 
-      // If punch-out is missing, treat as absent (incomplete record)
+      // If punch-out is missing, treat as absent/incomplete (no hours counted)
       if (!entry.punchOut) continue;
+
+      // Accumulate hours for flex/hourly employees
+      if (emp.flexibleHours && entry.allPunches.length > 0) {
+        const sorted = [...entry.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
+        totalMinutesWorked += calculateTotalDuration(sorted);
+      }
 
       // Three-tier check: short-day / half-day / present
       // Skip for flexible-hours employees
@@ -198,6 +206,33 @@ export async function GET(request: Request) {
 
     const presentDays = punchDates.size;
 
+    // Flex/lecture employees: pay = total hours worked × hourly rate
+    if (emp.flexibleHours) {
+      const totalHours = Math.round((totalMinutesWorked / 60) * 100) / 100;
+      const netPay = Math.round(totalHours * emp.hourlyRate);
+      return {
+        id: emp.id,
+        name: emp.name,
+        isFlexible: true,
+        hourlyRate: emp.hourlyRate,
+        totalHours,
+        totalMinutes: totalMinutesWorked,
+        leaveDays,
+        netPay,
+        // Unused fields set to 0 for type consistency
+        monthlySalary: 0,
+        workingDays,
+        presentDays,
+        absentDays: 0,
+        halfDays: 0,
+        lateAbsentDays: 0,
+        lateDays: 0,
+        sundayWorkedDays,
+        sundayBonus: 0,
+        deduction: 0,
+      };
+    }
+
     const effectiveWorkDays = workingDays - uhDays - leaveDays;
     const absentDays = Math.max(0, effectiveWorkDays - presentDays - halfDays);
     // Late-to-absent conversion: every 3 lates = 0.5 day deduction (half-day steps)
@@ -212,6 +247,10 @@ export async function GET(request: Request) {
     return {
       id: emp.id,
       name: emp.name,
+      isFlexible: false,
+      hourlyRate: 0,
+      totalHours: 0,
+      totalMinutes: 0,
       monthlySalary: emp.monthlySalary,
       workingDays,
       presentDays,

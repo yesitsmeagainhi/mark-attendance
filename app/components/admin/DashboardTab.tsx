@@ -115,7 +115,7 @@
 //         <div className="bulk-actions">
 //           <button
 //             className="btn-action btn-present"
-//             style={{ padding: "10px 18px", fontSize: 13 }}
+//             style={{ padding: "10px 18px", fontSize: 15 }}
 //             disabled={!!actionInProgress}
 //             onClick={() => markAll("present")}
 //           >
@@ -123,7 +123,7 @@
 //           </button>
 //           <button
 //             className="btn-action btn-uh"
-//             style={{ padding: "10px 18px", fontSize: 13 }}
+//             style={{ padding: "10px 18px", fontSize: 15 }}
 //             disabled={!!actionInProgress}
 //             onClick={() => markAll("unpaid_holiday")}
 //           >
@@ -255,7 +255,7 @@
 
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import type { DailyEmployee, BranchRow, DepartmentRow } from "./types";
 import AddEmployeeModal from "./AddEmployeeModal";
 import JournalsSection from "./JournalsSection";
@@ -301,6 +301,7 @@ export default function DashboardTab() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [confirmAction, setConfirmAction] = useState<{ label: string; detail: string; onConfirm: () => void } | null>(null);
+  const [expandedFlexIds, setExpandedFlexIds] = useState<Set<string>>(new Set());
 
   const fetchData = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -465,7 +466,7 @@ export default function DashboardTab() {
         <div className="bulk-actions">
           <button
             className="btn-action btn-present"
-            style={{ padding: "10px 18px", fontSize: 13 }}
+            style={{ padding: "10px 18px", fontSize: 15 }}
             disabled={!!actionInProgress}
             onClick={() => confirmMarkAll("present")}
           >
@@ -473,7 +474,7 @@ export default function DashboardTab() {
           </button>
           <button
             className="btn-action btn-uh"
-            style={{ padding: "10px 18px", fontSize: 13 }}
+            style={{ padding: "10px 18px", fontSize: 15 }}
             disabled={!!actionInProgress}
             onClick={() => confirmMarkAll("unpaid_holiday")}
           >
@@ -522,9 +523,9 @@ export default function DashboardTab() {
             <text x={48} y={60} textAnchor="middle" fontSize={9} fill="#667085" fontWeight={600}>ATTENDANCE</text>
           </svg>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#172033" }}>Attendance Rate</div>
-            <div style={{ fontSize: 12, color: "#667085", marginTop: 2 }}>{checkedIn} of {summary.total} staff checked in</div>
-            <div style={{ fontSize: 11, color: "#8990a0", marginTop: 4 }}>{selectedDate === today ? "Live \u00B7 Today" : selectedDate}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#172033" }}>Attendance Rate</div>
+            <div style={{ fontSize: 14, color: "#667085", marginTop: 2 }}>{checkedIn} of {summary.total} staff checked in</div>
+            <div style={{ fontSize: 13, color: "#8990a0", marginTop: 4 }}>{selectedDate === today ? "Live \u00B7 Today" : selectedDate}</div>
           </div>
         </div>
 
@@ -557,10 +558,10 @@ export default function DashboardTab() {
                   transition: "all .2s ease",
                 }}
               >
-                <div style={{ width: 32, height: 32, borderRadius: 10, background: isActive ? "#fff" : c.bg, color: c.color, display: "inline-grid", placeItems: "center", fontSize: 14, fontWeight: 700, marginBottom: 8 }}>{c.icon}</div>
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: isActive ? "#fff" : c.bg, color: c.color, display: "inline-grid", placeItems: "center", fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{c.icon}</div>
                 <div style={{ fontSize: 24, fontWeight: 800, color: "#172033" }}>{c.value}</div>
-                <div style={{ fontSize: 9, fontWeight: 600, color: c.color, textTransform: "uppercase", letterSpacing: ".04em", marginTop: 2 }}>{c.label}</div>
-                <div style={{ fontSize: 10, color: "#8990a0", marginTop: 2 }}>of {summary.total}</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: c.color, textTransform: "uppercase", letterSpacing: ".04em", marginTop: 2 }}>{c.label}</div>
+                <div style={{ fontSize: 12, color: "#8990a0", marginTop: 2 }}>of {summary.total}</div>
               </div>
             );
           })}
@@ -616,12 +617,35 @@ export default function DashboardTab() {
                 const initials = emp.name.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
                 const color = ["#7c3aed", "#2563eb", "#059669", "#db2777", "#ea580c"][emp.id.charCodeAt(emp.id.length - 1) % 5];
                 const isAdminMarked = emp.source === "admin";
+                const hasSessions = emp.flexibleHours && emp.sessions && emp.sessions.length > 1;
+                const isExpanded = expandedFlexIds.has(emp.id);
 
                 return (
-                  <tr key={emp.id}>
+                  <React.Fragment key={emp.id}>
+                  <tr>
                     <td data-label="Employee" className="employee-cell cell-flex">
+                      {hasSessions && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setExpandedFlexIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(emp.id)) next.delete(emp.id); else next.add(emp.id);
+                            return next;
+                          })}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.currentTarget.click(); }}
+                          style={{ cursor: "pointer", fontSize: 14, color: "#6d45e5", marginRight: 4, userSelect: "none", fontWeight: 700 }}
+                          title={isExpanded ? "Collapse sessions" : "Expand sessions"}
+                        >
+                          {isExpanded ? "\u25BE" : "\u25B8"}
+                        </span>
+                      )}
                       <span className="person" style={{ background: color }}>{initials}</span>
-                      <span><b>{emp.name}</b><small>{emp.id}</small></span>
+                      <span>
+                        <b>{emp.name}</b>
+                        <small>{emp.id}</small>
+                        {emp.flexibleHours && <small style={{ display: "block", color: "#7c3aed", fontSize: 12, fontWeight: 600 }}>Flex</small>}
+                      </span>
                     </td>
                     <td data-label="Photo In">
                       {emp.punchIn && isRealPhoto(emp.punchIn.photoKey) ? (
@@ -655,8 +679,15 @@ export default function DashboardTab() {
                     </td>
                     <td data-label="Punch In">{emp.punchIn ? formatTime(emp.punchIn.time) : "\u2014"}</td>
                     <td data-label="Punch Out">{emp.punchOut ? formatTime(emp.punchOut.time) : "\u2014"}</td>
-                    <td data-label="Duration" style={{ fontWeight: 600, color: emp.durationMinutes !== null ? "#6d45e5" : undefined }}>{formatDuration(emp.durationMinutes)}</td>
-                    <td data-label="Location" style={{ fontSize: 12, maxWidth: 160 }}>
+                    <td data-label="Duration" style={{ fontWeight: 600, color: emp.durationMinutes !== null ? "#6d45e5" : undefined }}>
+                      {formatDuration(emp.durationMinutes)}
+                      {hasSessions && (
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#8990a0", marginTop: 2 }}>
+                          {emp.sessions.length} sessions
+                        </div>
+                      )}
+                    </td>
+                    <td data-label="Location" style={{ fontSize: 14, maxWidth: 160 }}>
                       {emp.punchIn?.office ? (
                         <>
                           <div>{emp.punchIn.office}</div>
@@ -665,7 +696,7 @@ export default function DashboardTab() {
                               href={`https://www.google.com/maps?q=${emp.punchIn.latitude},${emp.punchIn.longitude}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              style={{ fontSize: 10, color: "#2563eb", textDecoration: "none" }}
+                              style={{ fontSize: 12, color: "#2563eb", textDecoration: "none" }}
                               onClick={(e) => e.stopPropagation()}
                               title={`${emp.punchIn.latitude}, ${emp.punchIn.longitude}`}
                             >
@@ -689,6 +720,31 @@ export default function DashboardTab() {
                       </div>
                     </td>
                   </tr>
+                  {/* Flex session summary row */}
+                  {hasSessions && isExpanded && (
+                    <tr className="flex-session-row">
+                      <td colSpan={9} style={{ padding: "8px 16px 8px 44px" }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {emp.sessions.map((session, si) => (
+                            <div key={si} style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "1px solid #e7e9ee", borderRadius: 8, padding: "6px 12px", fontSize: 14 }}>
+                              <span style={{ fontWeight: 700, color: "#7c3aed" }}>#{si + 1}</span>
+                              <span style={{ color: "#344054" }}>{formatTime(session.inTime)}</span>
+                              <span style={{ color: "#8990a0" }}>{"\u2192"}</span>
+                              {session.outTime ? (
+                                <span style={{ color: "#344054" }}>{formatTime(session.outTime)}</span>
+                              ) : (
+                                <span style={{ color: "#2563eb", fontWeight: 600 }}>ongoing</span>
+                              )}
+                              {session.outTime && session.durationMinutes !== null && (
+                                <span style={{ color: "#6d45e5", fontWeight: 600, marginLeft: 2 }}>({formatDuration(session.durationMinutes)})</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
               {data && visibleEmployees.length === 0 && (
@@ -724,7 +780,7 @@ export default function DashboardTab() {
           <div className="modal-card" style={{ maxWidth: 380, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>&#9888;</div>
             <h2 style={{ margin: "0 0 8px", fontSize: 18 }}>{confirmAction.label}</h2>
-            <p style={{ margin: "0 0 22px", color: "var(--muted)", fontSize: 14, lineHeight: 1.5 }}>{confirmAction.detail}</p>
+            <p style={{ margin: "0 0 22px", color: "var(--muted)", fontSize: 16, lineHeight: 1.5 }}>{confirmAction.detail}</p>
             <div style={{ display: "flex", gap: 10 }}>
               <button
                 className="secondary"
@@ -759,6 +815,9 @@ export default function DashboardTab() {
         }
         .attendance-filters input { width: min(240px, 42vw); }
         .employee-cell { min-width: 190px; }
+        .flex-session-row { background: #f8f9fc; }
+        .flex-session-row td { border-left: 3px solid #7c3aed; font-size: 13px; }
+        .flex-session-row td:first-child { border-left: 3px solid #7c3aed; }
         .attendance-empty { text-align: center; color: #8990a0; padding: 30px !important; }
         @media (max-width: 900px) {
           .dash-summary { grid-template-columns: 1fr !important; }

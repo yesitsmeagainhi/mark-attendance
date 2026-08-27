@@ -215,7 +215,7 @@ export default function ReportsTab() {
     <>
       <div className="date-picker-row">
         <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
-        <span style={{ fontSize: 13, color: "#667085" }}>Working days: <b>{workingDays}</b></span>
+        <span style={{ fontSize: 15, color: "#667085" }}>Working days: <b>{workingDays}</b></span>
         {rows.length > 0 && (
           <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
             <button className="export" onClick={() => exportSummary(rows, month, workingDays)} disabled={generating}>CSV</button>
@@ -241,22 +241,22 @@ export default function ReportsTab() {
             </span>
             <div style={{ flex: 1, minWidth: 150 }}>
               <div style={{ fontWeight: 700, fontSize: 18 }}>{selectedEmp.name}</div>
-              <div style={{ fontSize: 12, color: "#667085" }}>
+              <div style={{ fontSize: 14, color: "#667085" }}>
                 {selectedEmp.id} &middot; {selectedEmp.jobRole || "Employee"} &middot; {selectedEmp.office}
               </div>
-              <div style={{ fontSize: 11, color: "#8990a0" }}>Shift: {selectedEmp.shift}</div>
+              <div style={{ fontSize: 13, color: "#8990a0" }}>Shift: {selectedEmp.shift}</div>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               <button onClick={() => exportEmployeeDetail(selectedEmp, month)} disabled={generating}
-                style={{ border: "1px solid var(--purple)", background: "#eee9ff", color: "#6d45e5", padding: "8px 12px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                style={{ border: "1px solid var(--purple)", background: "#eee9ff", color: "#6d45e5", padding: "8px 12px", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                 CSV
               </button>
               <button onClick={() => handleExcelExport(selectedEmp)} disabled={generating}
-                style={{ border: "1px solid var(--purple)", background: "#eee9ff", color: "#6d45e5", padding: "8px 12px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                style={{ border: "1px solid var(--purple)", background: "#eee9ff", color: "#6d45e5", padding: "8px 12px", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                 {generating ? "..." : "Excel"}
               </button>
               <button onClick={() => handlePdfExport(selectedEmp)} disabled={generating}
-                style={{ border: "1px solid var(--purple)", background: "#eee9ff", color: "#6d45e5", padding: "8px 12px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                style={{ border: "1px solid var(--purple)", background: "#eee9ff", color: "#6d45e5", padding: "8px 12px", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                 {generating ? "..." : "PDF"}
               </button>
             </div>
@@ -264,7 +264,7 @@ export default function ReportsTab() {
               onClick={() => setSelectedEmp(null)}
               style={{
                 border: "1px solid var(--line)", background: "#fff", padding: "8px 16px",
-                borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer",
               }}
             >
               Close
@@ -297,7 +297,7 @@ export default function ReportsTab() {
               <div key={c.label} style={{
                 background: c.bg, borderRadius: 12, padding: "12px 14px", textAlign: "center",
               }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: c.color, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 4 }}>{c.label}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: c.color, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 4 }}>{c.label}</div>
                 <div style={{ fontSize: 20, fontWeight: 800, color: c.color }}>{c.value}</div>
               </div>
             ))}
@@ -309,7 +309,7 @@ export default function ReportsTab() {
               <thead>
                 <tr>
                   {["Date", "Punch In", "Punch Out", "Break", "Work Hours", "Status"].map((h) => (
-                    <th key={h} style={{ textAlign: "left", padding: "10px 14px", fontSize: 9, textTransform: "uppercase", letterSpacing: ".08em", color: "#8990a0", background: "#f9fafb" }}>{h}</th>
+                    <th key={h} style={{ textAlign: "left", padding: "10px 14px", fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em", color: "#8990a0", background: "#f9fafb" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -319,24 +319,24 @@ export default function ReportsTab() {
                   const isOff = (day.status === "sunday" || day.status === "holiday");
                   return (
                     <tr key={day.date} style={{ background: isOff ? "#fafafa" : undefined }}>
-                      <td style={{ padding: "10px 14px", borderTop: "1px solid #eff0f3", fontSize: 13, fontWeight: 600 }}>
+                      <td style={{ padding: "10px 14px", borderTop: "1px solid #eff0f3", fontSize: 15, fontWeight: 600 }}>
                         {fmtDate(day.date)}
                       </td>
-                      <td style={{ padding: "10px 14px", borderTop: "1px solid #eff0f3", fontSize: 13 }}>
+                      <td style={{ padding: "10px 14px", borderTop: "1px solid #eff0f3", fontSize: 15 }}>
                         {day.punchIn ? fmtTime(day.punchIn) : "\u2014"}
                       </td>
-                      <td style={{ padding: "10px 14px", borderTop: "1px solid #eff0f3", fontSize: 13 }}>
+                      <td style={{ padding: "10px 14px", borderTop: "1px solid #eff0f3", fontSize: 15 }}>
                         {day.punchOut ? fmtTime(day.punchOut) : "\u2014"}
                       </td>
-                      <td style={{ padding: "10px 14px", borderTop: "1px solid #eff0f3", fontSize: 13, color: "#a86400" }}>
+                      <td style={{ padding: "10px 14px", borderTop: "1px solid #eff0f3", fontSize: 15, color: "#a86400" }}>
                         {day.breakMinutes ? fmtDur(day.breakMinutes) : "\u2014"}
                       </td>
-                      <td style={{ padding: "10px 14px", borderTop: "1px solid #eff0f3", fontSize: 13, fontWeight: day.durationMinutes ? 700 : 400 }}>
+                      <td style={{ padding: "10px 14px", borderTop: "1px solid #eff0f3", fontSize: 15, fontWeight: day.durationMinutes ? 700 : 400 }}>
                         {day.durationMinutes !== null ? fmtDur(day.durationMinutes) : "\u2014"}
                       </td>
                       <td style={{ padding: "10px 14px", borderTop: "1px solid #eff0f3" }}>
                         <span style={{
-                          fontSize: 10, padding: "4px 10px", borderRadius: 99, fontWeight: 600,
+                          fontSize: 12, padding: "4px 10px", borderRadius: 99, fontWeight: 600,
                           background: badge.bg, color: badge.color,
                         }}>{badge.label}</span>
                       </td>
@@ -394,7 +394,7 @@ export default function ReportsTab() {
                   <td>
                     <span className="grace-badge grace">{r.lateDays}</span>
                     {r.lateAbsentDays > 0 && (
-                      <div style={{ fontSize: 10, color: "#c73333", marginTop: 2 }}>= {r.lateAbsentDays}d ded.</div>
+                      <div style={{ fontSize: 12, color: "#c73333", marginTop: 2 }}>= {r.lateAbsentDays}d ded.</div>
                     )}
                   </td>
                   <td>{r.leaveDays}</td>
@@ -409,7 +409,7 @@ export default function ReportsTab() {
                           background: r.attendancePct >= 90 ? "#22c55e" : r.attendancePct >= 75 ? "#f59e0b" : "#ef4444",
                         }} />
                       </div>
-                      <b style={{ fontSize: 12, minWidth: 32 }}>{r.attendancePct}%</b>
+                      <b style={{ fontSize: 14, minWidth: 32 }}>{r.attendancePct}%</b>
                     </div>
                   </td>
                 </tr>

@@ -115,8 +115,10 @@ export async function GET(request: Request) {
 
     // Calculate work duration in minutes (sum all IN/OUT pairs for multi-session)
     let durationMinutes: number | null = null;
+    const sorted = punchIn
+      ? [...empRecords].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp))
+      : [];
     if (punchIn) {
-      const sorted = [...empRecords].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
       let total = 0;
       for (let i = 0; i < sorted.length; i += 2) {
         if (sorted[i]?.punchType === "IN" && sorted[i + 1]?.punchType === "OUT") {
@@ -128,10 +130,37 @@ export async function GET(request: Request) {
       if (total > 0) durationMinutes = total;
     }
 
+    // Build per-session breakdown for flex employees
+    type SessionRecord = { inTime: string; outTime: string | null; inPhotoKey: string; outPhotoKey: string | null; durationMinutes: number | null; office: string };
+    const sessions: SessionRecord[] = [];
+    if (emp.flexibleHours && punchIn) {
+      for (let i = 0; i < sorted.length; i++) {
+        if (sorted[i].punchType === "IN") {
+          const out = sorted[i + 1]?.punchType === "OUT" ? sorted[i + 1] : null;
+          let dur: number | null = null;
+          if (out) {
+            const inD = new Date(sorted[i].serverTimestamp.replace(" ", "T") + (sorted[i].serverTimestamp.includes("Z") ? "" : "Z"));
+            const outD = new Date(out.serverTimestamp.replace(" ", "T") + (out.serverTimestamp.includes("Z") ? "" : "Z"));
+            dur = Math.max(0, Math.floor((outD.getTime() - inD.getTime()) / 60000));
+          }
+          sessions.push({
+            inTime: sorted[i].serverTimestamp,
+            outTime: out?.serverTimestamp ?? null,
+            inPhotoKey: sorted[i].photoKey,
+            outPhotoKey: out?.photoKey ?? null,
+            durationMinutes: dur,
+            office: sorted[i].office,
+          });
+          if (out) i++; // skip paired OUT
+        }
+      }
+    }
+
     return {
       id: emp.id,
       name: emp.name,
       workStartTime: emp.workStartTime,
+      flexibleHours: emp.flexibleHours,
       punchIn: punchIn
         ? { time: punchIn.serverTimestamp, photoKey: punchIn.photoKey, source: punchIn.source, office: punchIn.office, latitude: punchIn.latitude, longitude: punchIn.longitude }
         : null,
@@ -139,6 +168,7 @@ export async function GET(request: Request) {
         ? { time: punchOut.serverTimestamp, photoKey: punchOut.photoKey, source: punchOut.source, office: punchOut.office, latitude: punchOut.latitude, longitude: punchOut.longitude }
         : null,
       durationMinutes,
+      sessions,
       status,
       source,
     };
