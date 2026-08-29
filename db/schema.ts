@@ -18,6 +18,8 @@ export const employees = sqliteTable("employees", {
   hourlyRate: integer("hourly_rate").notNull().default(0),
   profilePhotoKey: text("profile_photo_key"),
   flexibleHours: integer("flexible_hours", { mode: "boolean" }).notNull().default(false),
+  dateOfBirth: text("date_of_birth").notNull().default(""),
+  profileEditCount: integer("profile_edit_count").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
