@@ -128,5 +128,7 @@ export async function GET() {
     nextPunchType,
     canPunchIn,
     canPunchOut,
+  }, {
+    headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
   });
 }

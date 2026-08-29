@@ -76,6 +76,27 @@ export default function MissPunchTab() {
 
   const today = new Date().toISOString().slice(0, 10);
 
+  // Helper function to handle single or multiple 24-hour times ("HH:MM" or "HH:MM, HH:MM")
+  function formatTo12Hour(timeStr: string): string {
+    if (!timeStr) return "—";
+
+    // Split by comma in case the API returns combined times for BOTH requests
+    return timeStr
+      .split(",")
+      .map((item) => {
+        const cleanTime = item.trim();
+        const [hoursStr, minutesStr] = cleanTime.split(":");
+        const hours = parseInt(hoursStr, 10);
+        if (isNaN(hours)) return cleanTime;
+
+        const ampm = hours >= 12 ? "PM" : "AM";
+        const formattedHours = hours % 12 || 12;
+        const paddedHours = formattedHours.toString().padStart(2, "0");
+
+        return `${paddedHours}:${minutesStr} ${ampm}`;
+      })
+      .join(" / "); // Joins multiple times with a clean separator (e.g., "09:00 AM / 06:00 PM")
+  }
   return (
     <>
       <div className="request-form-card">
@@ -147,20 +168,73 @@ export default function MissPunchTab() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} style={{ textAlign: "center", padding: 30 }}>Loading...</td></tr>
-              ) : requests.length === 0 ? (
-                <tr><td colSpan={7} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No miss punch requests yet.</td></tr>
-              ) : requests.map((r) => (
-                <tr key={r.id}>
-                  <td><b>{new Date(r.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</b></td>
-                  <td>{r.punchType}</td>
-                  <td>{r.requestedTime}</td>
-                  <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.reason}</td>
-                  <td><span className={`badge-${r.status}`}>{r.status.charAt(0).toUpperCase() + r.status.slice(1)}</span></td>
-                  <td>{r.adminNote || "\u2014"}</td>
-                  <td><small>{new Date(r.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</small></td>
+                <tr>
+                  <td colSpan={7} style={{ textAlign: "center", padding: 30 }}>
+                    Loading...
+                  </td>
                 </tr>
-              ))}
+              ) : requests.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    style={{ textAlign: "center", color: "#8990a0", padding: 30 }}
+                  >
+                    No miss punch requests yet.
+                  </td>
+                </tr>
+              ) : (
+                requests.map((r) => {
+                  console.log("Miss Punch Request:", r);
+                  console.log("Requested Time:", r.requestedTime);
+                  console.log("Formatted Time:", formatTo12Hour(r.requestedTime));
+
+                  return (
+                    <tr key={r.id}>
+                      <td>
+                        <b>
+                          {new Date(r.date).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                          })}
+                        </b>
+                      </td>
+
+                      <td>{r.punchType}</td>
+
+                      <td>
+                        {formatTo12Hour(r.requestedTime)}
+                      </td>
+
+                      <td
+                        style={{
+                          maxWidth: 200,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {r.reason}
+                      </td>
+
+                      <td>
+                        <span className={`badge-${r.status}`}>
+                          {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+                        </span>
+                      </td>
+
+                      <td>{r.adminNote || "—"}</td>
+
+                      <td>
+                        <small>
+                          {new Date(r.createdAt).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                          })}
+                        </small>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

@@ -255,7 +255,7 @@
 
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { DailyEmployee, BranchRow, DepartmentRow } from "./types";
 import AddEmployeeModal from "./AddEmployeeModal";
 import JournalsSection from "./JournalsSection";
@@ -301,8 +301,6 @@ export default function DashboardTab() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [confirmAction, setConfirmAction] = useState<{ label: string; detail: string; onConfirm: () => void } | null>(null);
-  const [expandedFlexIds, setExpandedFlexIds] = useState<Set<string>>(new Set());
-
   const fetchData = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
@@ -617,29 +615,11 @@ export default function DashboardTab() {
                 const initials = emp.name.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
                 const color = ["#7c3aed", "#2563eb", "#059669", "#db2777", "#ea580c"][emp.id.charCodeAt(emp.id.length - 1) % 5];
                 const isAdminMarked = emp.source === "admin";
-                const hasSessions = emp.flexibleHours && emp.sessions && emp.sessions.length > 1;
-                const isExpanded = expandedFlexIds.has(emp.id);
+                const isFlex = emp.flexibleHours && emp.sessions && emp.sessions.length > 0;
 
                 return (
-                  <React.Fragment key={emp.id}>
-                  <tr>
+                  <tr key={emp.id}>
                     <td data-label="Employee" className="employee-cell cell-flex">
-                      {hasSessions && (
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => setExpandedFlexIds((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(emp.id)) next.delete(emp.id); else next.add(emp.id);
-                            return next;
-                          })}
-                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.currentTarget.click(); }}
-                          style={{ cursor: "pointer", fontSize: 14, color: "#6d45e5", marginRight: 4, userSelect: "none", fontWeight: 700 }}
-                          title={isExpanded ? "Collapse sessions" : "Expand sessions"}
-                        >
-                          {isExpanded ? "\u25BE" : "\u25B8"}
-                        </span>
-                      )}
                       <span className="person" style={{ background: color }}>{initials}</span>
                       <span>
                         <b>{emp.name}</b>
@@ -677,11 +657,33 @@ export default function DashboardTab() {
                         <span style={{ color: "#c9cbd4" }}>{"\u2014"}</span>
                       )}
                     </td>
-                    <td data-label="Punch In">{emp.punchIn ? formatTime(emp.punchIn.time) : "\u2014"}</td>
-                    <td data-label="Punch Out">{emp.punchOut ? formatTime(emp.punchOut.time) : "\u2014"}</td>
+                    <td data-label="Punch In">
+                      {isFlex ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          {emp.sessions.map((s, i) => (
+                            <span key={i} style={{ fontSize: 13, lineHeight: 1.4 }}>{formatTime(s.inTime)}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        emp.punchIn ? formatTime(emp.punchIn.time) : "\u2014"
+                      )}
+                    </td>
+                    <td data-label="Punch Out">
+                      {isFlex ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          {emp.sessions.map((s, i) => (
+                            <span key={i} style={{ fontSize: 13, lineHeight: 1.4 }}>
+                              {s.outTime ? formatTime(s.outTime) : <span style={{ color: "#2563eb", fontWeight: 600 }}>ongoing</span>}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        emp.punchOut ? formatTime(emp.punchOut.time) : "\u2014"
+                      )}
+                    </td>
                     <td data-label="Duration" style={{ fontWeight: 600, color: emp.durationMinutes !== null ? "#6d45e5" : undefined }}>
                       {formatDuration(emp.durationMinutes)}
-                      {hasSessions && (
+                      {isFlex && emp.sessions.length > 1 && (
                         <div style={{ fontSize: 12, fontWeight: 600, color: "#8990a0", marginTop: 2 }}>
                           {emp.sessions.length} sessions
                         </div>
@@ -720,31 +722,6 @@ export default function DashboardTab() {
                       </div>
                     </td>
                   </tr>
-                  {/* Flex session summary row */}
-                  {hasSessions && isExpanded && (
-                    <tr className="flex-session-row">
-                      <td colSpan={9} style={{ padding: "8px 16px 8px 44px" }}>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                          {emp.sessions.map((session, si) => (
-                            <div key={si} style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "1px solid #e7e9ee", borderRadius: 8, padding: "6px 12px", fontSize: 14 }}>
-                              <span style={{ fontWeight: 700, color: "#7c3aed" }}>#{si + 1}</span>
-                              <span style={{ color: "#344054" }}>{formatTime(session.inTime)}</span>
-                              <span style={{ color: "#8990a0" }}>{"\u2192"}</span>
-                              {session.outTime ? (
-                                <span style={{ color: "#344054" }}>{formatTime(session.outTime)}</span>
-                              ) : (
-                                <span style={{ color: "#2563eb", fontWeight: 600 }}>ongoing</span>
-                              )}
-                              {session.outTime && session.durationMinutes !== null && (
-                                <span style={{ color: "#6d45e5", fontWeight: 600, marginLeft: 2 }}>({formatDuration(session.durationMinutes)})</span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  </React.Fragment>
                 );
               })}
               {data && visibleEmployees.length === 0 && (
@@ -815,9 +792,6 @@ export default function DashboardTab() {
         }
         .attendance-filters input { width: min(240px, 42vw); }
         .employee-cell { min-width: 190px; }
-        .flex-session-row { background: #f8f9fc; }
-        .flex-session-row td { border-left: 3px solid #7c3aed; font-size: 13px; }
-        .flex-session-row td:first-child { border-left: 3px solid #7c3aed; }
         .attendance-empty { text-align: center; color: #8990a0; padding: 30px !important; }
         @media (max-width: 900px) {
           .dash-summary { grid-template-columns: 1fr !important; }

@@ -129,7 +129,7 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
   const fetchStatus = useCallback(async () => {
     if (!enabled) return;
     try {
-      const r = await fetch("/api/attendance/status");
+      const r = await fetch("/api/attendance/status", { cache: "no-store" });
       if (!r.ok) return;
       const data: TodayStatus | null = await r.json();
       if (data) setTodayStatus(data);
@@ -242,7 +242,8 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
 
   const openCamera = useCallback(() => {
     setPhoto(null);
-    acquireLocation(); // refresh GPS so it's fresh when photo is captured
+    setLocation(null); // clear stale GPS — disables capture until fresh reading arrives
+    acquireLocation();
     setCameraOpen(true);
   }, [acquireLocation]);
 

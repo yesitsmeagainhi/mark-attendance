@@ -3,6 +3,16 @@
 import { useEffect, useState } from "react";
 import type { MissPunchRow } from "./types";
 
+function formatTo12Hour(timeStr: string): string {
+  if (!timeStr) return "\u2014";
+  const [hoursStr, minutesStr] = timeStr.trim().split(":");
+  const hours = parseInt(hoursStr, 10);
+  if (isNaN(hours)) return timeStr;
+  const ampm = hours >= 12 ? "PM" : "AM";
+  const h12 = (hours % 12 || 12).toString().padStart(2, "0");
+  return `${h12}:${minutesStr} ${ampm}`;
+}
+
 export default function RequestsTab() {
   const [requests, setRequests] = useState<MissPunchRow[]>([]);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
@@ -70,7 +80,7 @@ export default function RequestsTab() {
                 <td><b>{r.employeeName}</b><br /><small>{r.employeeId}</small></td>
                 <td>{new Date(r.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</td>
                 <td>{r.punchType}</td>
-                <td>{r.requestedTime}</td>
+                <td>{formatTo12Hour(r.requestedTime)}</td>
                 <td style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>{r.reason}</td>
                 <td><span className={`badge-${r.status}`}>{r.status.charAt(0).toUpperCase() + r.status.slice(1)}</span></td>
                 <td>
