@@ -7,6 +7,12 @@ function isRealPhoto(key: string | null) {
   return key && key !== "admin-marked" && key !== "admin/unpaid-holiday" && !key.startsWith("miss-punch/");
 }
 
+type SessionInfo = {
+  inTime: string;
+  outTime: string | null;
+  durationMinutes: number | null;
+};
+
 type HistoryRecord = {
   date: string;
   punchInTime: string | null;
@@ -17,6 +23,7 @@ type HistoryRecord = {
   office: string | null;
   photoKeyIn: string | null;
   photoKeyOut: string | null;
+  sessions?: SessionInfo[];
 };
 
 type HistoryData = {
@@ -29,6 +36,7 @@ type HistoryData = {
   absentDays: number;
   leaveDays: number;
   sundayWorkedDays: number;
+  isFlexible?: boolean;
 };
 
 type DayData = {
@@ -38,6 +46,7 @@ type DayData = {
   punchIn: string | null;
   punchOut: string | null;
   duration: number | null;
+  sessions?: SessionInfo[];
 };
 
 type TimesheetData = {
@@ -50,6 +59,7 @@ type TimesheetData = {
   leaveDays: number;
   uhDays: number;
   sundayWorkedDays: number;
+  isFlexible?: boolean;
 };
 
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -74,26 +84,38 @@ export default function HistoryTab() {
   const [tsData, setTsData] = useState<TimesheetData | null>(null);
   const [tsLoading, setTsLoading] = useState(false);
 
-  // Fetch list data by month
-  useEffect(() => {
-    if (viewMode !== "list") return;
-    setLoading(true);
+  function fetchHistory(silent = false) {
+    if (!silent) setLoading(true);
     fetch(`/api/attendance/history?month=${monthStr}`)
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d) setData(d); })
       .catch(() => undefined)
-      .finally(() => setLoading(false));
+      .finally(() => { if (!silent) setLoading(false); });
+  }
+
+  function fetchTimesheet(silent = false) {
+    if (!silent) setTsLoading(true);
+    fetch(`/api/attendance/timesheet?month=${monthStr}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d) setTsData(d); })
+      .catch(() => undefined)
+      .finally(() => { if (!silent) setTsLoading(false); });
+  }
+
+  // Fetch list data by month
+  useEffect(() => {
+    if (viewMode !== "list") return;
+    fetchHistory();
+    const id = setInterval(() => fetchHistory(true), 30000);
+    return () => clearInterval(id);
   }, [monthStr, viewMode]);
 
   // Fetch grid data
   useEffect(() => {
     if (viewMode !== "grid") return;
-    setTsLoading(true);
-    fetch(`/api/attendance/timesheet?month=${monthStr}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d) setTsData(d); })
-      .catch(() => undefined)
-      .finally(() => setTsLoading(false));
+    fetchTimesheet();
+    const id = setInterval(() => fetchTimesheet(true), 30000);
+    return () => clearInterval(id);
   }, [monthStr, viewMode]);
 
   function prevMonth() {
@@ -195,33 +217,37 @@ export default function HistoryTab() {
               {calendarCells.map((cell, i) => {
                 if (!cell) return <div key={`empty-${i}`} className="calendar-day empty"></div>;
                 const dayNum = parseInt(cell.date.slice(-2), 10);
+                const hasFlexSessions = tsData?.isFlexible && cell.sessions && cell.sessions.length > 1;
+                const renderPunchTimes = () => (
+                  <>
+                    <div className="day-times">
+                      {formatTimeIST(cell.punchIn!)}
+                      {cell.punchOut ? ` - ${formatTimeIST(cell.punchOut)}` : ""}
+                    </div>
+                    {hasFlexSessions && (
+                      <div className="day-times" style={{ fontSize: 9, color: "#7c3aed", fontWeight: 600, marginTop: 1 }}>
+                        {cell.sessions!.length} sessions{cell.duration !== null ? ` \u00B7 ${formatDuration(cell.duration)}` : ""}
+                      </div>
+                    )}
+                  </>
+                );
                 return (
                   <div key={cell.date} className={`calendar-day ${cell.status}`}>
                     <div className="day-num">{dayNum}</div>
-                    {cell.status === "present" && cell.punchIn && (
-                      <div className="day-times">
-                        {formatTimeIST(cell.punchIn)}
-                        {cell.punchOut ? ` - ${formatTimeIST(cell.punchOut)}` : ""}
-                      </div>
-                    )}
-                    {cell.status === "half" && cell.punchIn && (
-                      <div className="day-times">
-                        {formatTimeIST(cell.punchIn)}
-                        {cell.punchOut ? ` - ${formatTimeIST(cell.punchOut)}` : ""}
-                      </div>
-                    )}
-                    {cell.status === "short" && cell.punchIn && (
-                      <div className="day-times">
-                        {formatTimeIST(cell.punchIn)}
-                        {cell.punchOut ? ` - ${formatTimeIST(cell.punchOut)}` : ""}
-                      </div>
-                    )}
+                    {(cell.status === "present" || cell.status === "half" || cell.status === "short") && cell.punchIn && renderPunchTimes()}
                     {cell.status === "extra-pay" && cell.punchIn && (
-                      <div className="day-times">
-                        <span style={{ color: "#6d45e5", fontWeight: 700 }}>OT</span>{" "}
-                        {formatTimeIST(cell.punchIn)}
-                        {cell.punchOut ? ` - ${formatTimeIST(cell.punchOut)}` : ""}
-                      </div>
+                      <>
+                        <div className="day-times">
+                          <span style={{ color: "#6d45e5", fontWeight: 700 }}>OT</span>{" "}
+                          {formatTimeIST(cell.punchIn)}
+                          {cell.punchOut ? ` - ${formatTimeIST(cell.punchOut)}` : ""}
+                        </div>
+                        {hasFlexSessions && (
+                          <div className="day-times" style={{ fontSize: 9, color: "#7c3aed", fontWeight: 600, marginTop: 1 }}>
+                            {cell.sessions!.length} sessions
+                          </div>
+                        )}
+                      </>
                     )}
                     {cell.status === "sunday" && <div className="day-times">Off</div>}
                     {cell.status === "leave" && <div className="day-times">Leave</div>}
@@ -323,12 +349,27 @@ export default function HistoryTab() {
                 </tr>
               </thead>
               <tbody>
-                {data.records.map((r) => (
+                {data.records.map((r) => {
+                  const isFlex = data.isFlexible && r.sessions && r.sessions.length > 1;
+                  return (
                   <tr key={r.date}>
                     <td><b>{new Date(r.date).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" })}</b></td>
                     <td>{r.punchInTime ? formatTimeIST(r.punchInTime) : "\u2014"}</td>
-                    <td>{r.punchOutTime ? formatTimeIST(r.punchOutTime) : "\u2014"}</td>
-                    <td>{r.duration !== null ? formatDuration(r.duration) : "\u2014"}</td>
+                    <td>{r.punchOutTime ? formatTimeIST(r.punchOutTime) : (data.isFlexible && r.sessions?.some(s => !s.outTime) ? <span style={{ color: "#2563eb", fontWeight: 600 }}>ongoing</span> : "\u2014")}</td>
+                    <td>
+                      {r.duration !== null ? formatDuration(r.duration) : "\u2014"}
+                      {isFlex && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4 }}>
+                          {r.sessions!.map((s, i) => (
+                            <div key={i} style={{ fontSize: 11, color: "#667085", lineHeight: 1.3, whiteSpace: "nowrap" }}>
+                              <span style={{ color: "#7c3aed", fontWeight: 700 }}>#{i + 1}</span>{" "}
+                              {formatTimeIST(s.inTime)}{"\u2192"}{s.outTime ? formatTimeIST(s.outTime) : <span style={{ color: "#2563eb" }}>now</span>}
+                              {s.durationMinutes !== null && <span style={{ color: "#6d45e5", fontWeight: 600 }}> ({formatDuration(s.durationMinutes)})</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
                     <td>
                       {isRealPhoto(r.photoKeyIn) ? (
                         <img
@@ -366,7 +407,8 @@ export default function HistoryTab() {
                       )}
                     </td>
                   </tr>
-                ))}
+                );
+                })}
                 {data.records.length === 0 && (
                   <tr><td colSpan={7} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No attendance records found.</td></tr>
                 )}

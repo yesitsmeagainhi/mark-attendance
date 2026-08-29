@@ -182,9 +182,8 @@ export default function ReportsTab() {
     } finally { setGenerating(false); }
   }
 
-  useEffect(() => {
-    setLoading(true);
-    setSelectedEmp(null);
+  function fetchReports(silent = false) {
+    if (!silent) { setLoading(true); setSelectedEmp(null); }
     fetch(`/api/admin/reports?month=${month}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
@@ -194,7 +193,13 @@ export default function ReportsTab() {
         }
       })
       .catch(() => undefined)
-      .finally(() => setLoading(false));
+      .finally(() => { if (!silent) setLoading(false); });
+  }
+
+  useEffect(() => {
+    fetchReports();
+    const id = setInterval(() => fetchReports(true), 30000);
+    return () => clearInterval(id);
   }, [month]);
 
   const totals = rows.reduce(

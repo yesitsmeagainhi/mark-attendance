@@ -26,7 +26,11 @@ export default function RequestsTab() {
       .catch(() => undefined);
   }
 
-  useEffect(() => { fetchRequests(); }, []);
+  useEffect(() => {
+    fetchRequests();
+    const id = setInterval(fetchRequests, 30000);
+    return () => clearInterval(id);
+  }, []);
 
   async function handleReview(requestId: string, action: "approved" | "rejected") {
     setReviewingId(requestId);

@@ -166,6 +166,7 @@ export async function GET(request: Request) {
   const today = new Date().toISOString().slice(0, 10);
   const halfDayMinutes = empRules.minimum_hours_for_half_day * 60;
   const fullDayMinutes = empRules.minimum_hours_for_full_day * 60;
+  type SessionInfo = { inTime: string; outTime: string | null; durationMinutes: number | null };
   const result: Array<{
     date: string;
     punchInTime: string | null;
@@ -176,7 +177,27 @@ export async function GET(request: Request) {
     office: string | null;
     photoKeyIn: string | null;
     photoKeyOut: string | null;
+    sessions?: SessionInfo[];
   }> = [];
+
+  function buildSessions(allPunches: { punchType: string; serverTimestamp: string }[]): SessionInfo[] {
+    const sorted = [...allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
+    const sessions: SessionInfo[] = [];
+    for (let i = 0; i < sorted.length; i++) {
+      if (sorted[i].punchType === "IN") {
+        const out = sorted[i + 1]?.punchType === "OUT" ? sorted[i + 1] : null;
+        let dur: number | null = null;
+        if (out) {
+          const inD = new Date(sorted[i].serverTimestamp.replace(" ", "T") + (sorted[i].serverTimestamp.includes("Z") ? "" : "Z"));
+          const outD = new Date(out.serverTimestamp.replace(" ", "T") + (out.serverTimestamp.includes("Z") ? "" : "Z"));
+          dur = Math.max(0, Math.floor((outD.getTime() - inD.getTime()) / 60000));
+        }
+        sessions.push({ inTime: sorted[i].serverTimestamp, outTime: out?.serverTimestamp ?? null, durationMinutes: dur });
+        if (out) i++;
+      }
+    }
+    return sessions;
+  }
 
   let presentDays = 0;
   let lateDays = 0;
@@ -199,7 +220,8 @@ export async function GET(request: Request) {
         const duration: number | null = totalDur > 0 ? totalDur : null;
         sundayWorkedDays++;
         presentDays++;
-        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut, duration, status: "Overtime", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null });
+        const sessions = isFlexible ? buildSessions(dayData.allPunches) : undefined;
+        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut, duration, status: "Overtime", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null, sessions });
       } else {
         // Regular Sunday off
         result.push({ date: dateStr, punchInTime: null, punchOutTime: null, duration: null, status: "Sunday", lateByMinutes: null, office: null, photoKeyIn: null, photoKeyOut: null });
@@ -242,12 +264,12 @@ export async function GET(request: Request) {
     // Skip for flexible-hours employees
     if (!isFlexible && dateStr < today) {
       if (totalDur < halfDayMinutes) {
-        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut || null, duration, status: "Short Day", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null });
+        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut || null, duration, status: "Short Day", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null, sessions: isFlexible ? buildSessions(dayData.allPunches) : undefined });
         continue;
       }
       if (totalDur < fullDayMinutes) {
         halfDays++;
-        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut || null, duration, status: "Half Day", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null });
+        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut || null, duration, status: "Half Day", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null, sessions: isFlexible ? buildSessions(dayData.allPunches) : undefined });
         continue;
       }
     }
@@ -275,6 +297,7 @@ export async function GET(request: Request) {
       office: dayData.office || null,
       photoKeyIn: dayData.photoKeyIn || null,
       photoKeyOut: dayData.photoKeyOut || null,
+      sessions: isFlexible ? buildSessions(dayData.allPunches) : undefined,
     });
   }
 
@@ -288,5 +311,6 @@ export async function GET(request: Request) {
     sundayWorkedDays,
     absentDays: result.filter((r) => r.status === "Absent" || r.status === "Short Day").length,
     leaveDays: result.filter((r) => r.status === "Leave").length,
+    isFlexible,
   });
 }

@@ -33,7 +33,11 @@ export default function MissPunchTab() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { fetchRequests(); }, []);
+  useEffect(() => {
+    fetchRequests();
+    const id = setInterval(fetchRequests, 30000);
+    return () => clearInterval(id);
+  }, []);
 
   async function submitOne(type: "IN" | "OUT", time: string) {
     const res = await fetch("/api/miss-punch", {
@@ -183,12 +187,7 @@ export default function MissPunchTab() {
                   </td>
                 </tr>
               ) : (
-                requests.map((r) => {
-                  console.log("Miss Punch Request:", r);
-                  console.log("Requested Time:", r.requestedTime);
-                  console.log("Formatted Time:", formatTo12Hour(r.requestedTime));
-
-                  return (
+                requests.map((r) => (
                     <tr key={r.id}>
                       <td>
                         <b>
@@ -232,8 +231,7 @@ export default function MissPunchTab() {
                         </small>
                       </td>
                     </tr>
-                  );
-                })
+                ))
               )}
             </tbody>
           </table>

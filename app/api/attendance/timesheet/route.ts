@@ -129,6 +129,27 @@ export async function GET(request: Request) {
     }
   }
 
+  // Build session info helper for flex employees
+  type SessionInfo = { inTime: string; outTime: string | null; durationMinutes: number | null };
+  function buildSessions(allPunches: { punchType: string; serverTimestamp: string }[]): SessionInfo[] {
+    const sorted = [...allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
+    const sessions: SessionInfo[] = [];
+    for (let i = 0; i < sorted.length; i++) {
+      if (sorted[i].punchType === "IN") {
+        const out = sorted[i + 1]?.punchType === "OUT" ? sorted[i + 1] : null;
+        let dur: number | null = null;
+        if (out) {
+          const inD = new Date(sorted[i].serverTimestamp.replace(" ", "T") + (sorted[i].serverTimestamp.includes("Z") ? "" : "Z"));
+          const outD = new Date(out.serverTimestamp.replace(" ", "T") + (out.serverTimestamp.includes("Z") ? "" : "Z"));
+          dur = Math.max(0, Math.floor((outD.getTime() - inD.getTime()) / 60000));
+        }
+        sessions.push({ inTime: sorted[i].serverTimestamp, outTime: out?.serverTimestamp ?? null, durationMinutes: dur });
+        if (out) i++;
+      }
+    }
+    return sessions;
+  }
+
   // Build day-by-day data
   const days: Array<{
     date: string;
@@ -137,6 +158,7 @@ export async function GET(request: Request) {
     punchIn: string | null;
     punchOut: string | null;
     duration: number | null;
+    sessions?: SessionInfo[];
   }> = [];
 
   let totalMinutesWorked = 0;
@@ -171,7 +193,7 @@ export async function GET(request: Request) {
         sundayWorkedDays++;
         presentDays++;
         if (duration) totalMinutesWorked += totalDur;
-        days.push({ date: dateStr, dayOfWeek, status: "extra-pay", punchIn: sundayData.punchIn, punchOut: sundayData.punchOut, duration });
+        days.push({ date: dateStr, dayOfWeek, status: "extra-pay", punchIn: sundayData.punchIn, punchOut: sundayData.punchOut, duration, sessions: isFlexible ? buildSessions(sundayData.allPunches) : undefined });
       } else {
         days.push({ date: dateStr, dayOfWeek, status: "sunday", punchIn: null, punchOut: null, duration: null });
       }
@@ -217,12 +239,12 @@ export async function GET(request: Request) {
       if (totalDur < halfDayMinutes) {
         // Short day — counts as absent
         absentDays++;
-        days.push({ date: dateStr, dayOfWeek, status: "short", punchIn: dayData.punchIn, punchOut: dayData.punchOut, duration });
+        days.push({ date: dateStr, dayOfWeek, status: "short", punchIn: dayData.punchIn, punchOut: dayData.punchOut, duration, sessions: isFlexible ? buildSessions(dayData.allPunches) : undefined });
         continue;
       }
       if (totalDur < fullDayMinutes) {
         halfDays++;
-        days.push({ date: dateStr, dayOfWeek, status: "half", punchIn: dayData.punchIn, punchOut: dayData.punchOut, duration });
+        days.push({ date: dateStr, dayOfWeek, status: "half", punchIn: dayData.punchIn, punchOut: dayData.punchOut, duration, sessions: isFlexible ? buildSessions(dayData.allPunches) : undefined });
         continue;
       }
     }
@@ -237,6 +259,7 @@ export async function GET(request: Request) {
       punchIn: dayData.punchIn,
       punchOut: dayData.punchOut || null,
       duration,
+      sessions: isFlexible ? buildSessions(dayData.allPunches) : undefined,
     });
   }
 
@@ -250,5 +273,6 @@ export async function GET(request: Request) {
     leaveDays: leaveDaysCount,
     uhDays,
     sundayWorkedDays,
+    isFlexible,
   });
 }

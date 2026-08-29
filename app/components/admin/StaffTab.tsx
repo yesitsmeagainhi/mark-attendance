@@ -45,7 +45,11 @@ export default function StaffTab() {
       .catch(() => undefined);
   }
 
-  useEffect(() => { fetchEmployees(); fetchBranches(); fetchDepartments(); }, []);
+  useEffect(() => {
+    fetchEmployees(); fetchBranches(); fetchDepartments();
+    const id = setInterval(() => { fetchEmployees(); fetchBranches(); fetchDepartments(); }, 30000);
+    return () => clearInterval(id);
+  }, []);
 
   // Close popup on outside click
   useEffect(() => {

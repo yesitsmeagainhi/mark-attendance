@@ -50,7 +50,11 @@ export default function PayrollTab() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { fetchPayroll(); }, [month]);
+  useEffect(() => {
+    fetchPayroll();
+    const id = setInterval(fetchPayroll, 30000);
+    return () => clearInterval(id);
+  }, [month]);
 
   async function saveSalary(empId: string, isFlexible: boolean) {
     const value = parseInt(salaryValue, 10) || 0;

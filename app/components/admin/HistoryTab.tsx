@@ -63,8 +63,8 @@ export default function HistoryTab() {
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
 
-  useEffect(() => {
-    setLoading(true);
+  function fetchActivities(silent = false) {
+    if (!silent) setLoading(true);
     const params = new URLSearchParams({ page: String(page), limit: "30" });
     if (actionFilter) params.set("actionType", actionFilter);
     if (search) params.set("search", search);
@@ -79,7 +79,13 @@ export default function HistoryTab() {
         }
       })
       .catch(() => undefined)
-      .finally(() => setLoading(false));
+      .finally(() => { if (!silent) setLoading(false); });
+  }
+
+  useEffect(() => {
+    fetchActivities();
+    const id = setInterval(() => fetchActivities(true), 30000);
+    return () => clearInterval(id);
   }, [page, actionFilter, search]);
 
   // Reset page when filters change
