@@ -149,3 +149,17 @@ export const employeeRuleOverrides = sqliteTable("employee_rule_overrides", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull().default(""),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const pushTokens = sqliteTable("push_tokens", {
+  token: text("token").primaryKey(),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  platform: text("platform").notNull().default("android"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});

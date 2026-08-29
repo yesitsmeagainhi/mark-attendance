@@ -44,7 +44,7 @@ export async function GET() {
     return Response.json({ error: "Photo not found." }, { status: 404 });
   }
 
-  return new Response(stored.body, {
+  return new Response(new Uint8Array(stored.body), {
     headers: {
       "Content-Type": stored.contentType,
       "Cache-Control": "private, max-age=3600",
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
   const form = await request.formData();
   const photo = form.get("photo");
 
-  if (!(photo instanceof File) && !(photo instanceof Blob)) {
+  if (!photo || typeof photo === "string") {
     return Response.json({ error: "photo field is required (multipart/form-data)." }, { status: 400 });
   }
   const mimeType = resolveMimeType(photo as File);
