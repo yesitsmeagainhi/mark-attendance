@@ -657,35 +657,19 @@ export default function DashboardTab() {
                         <span style={{ color: "#c9cbd4" }}>{"\u2014"}</span>
                       )}
                     </td>
-                    <td data-label="Punch In">
-                      {isFlex ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                          {emp.sessions.map((s, i) => (
-                            <span key={i} style={{ fontSize: 13, lineHeight: 1.4 }}>{formatTime(s.inTime)}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        emp.punchIn ? formatTime(emp.punchIn.time) : "\u2014"
-                      )}
-                    </td>
-                    <td data-label="Punch Out">
-                      {isFlex ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                          {emp.sessions.map((s, i) => (
-                            <span key={i} style={{ fontSize: 13, lineHeight: 1.4 }}>
-                              {s.outTime ? formatTime(s.outTime) : <span style={{ color: "#2563eb", fontWeight: 600 }}>ongoing</span>}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        emp.punchOut ? formatTime(emp.punchOut.time) : "\u2014"
-                      )}
-                    </td>
+                    <td data-label="Punch In">{emp.punchIn ? formatTime(emp.punchIn.time) : "\u2014"}</td>
+                    <td data-label="Punch Out">{emp.punchOut ? formatTime(emp.punchOut.time) : (isFlex && emp.sessions.some(s => !s.outTime) ? <span style={{ color: "#2563eb", fontWeight: 600 }}>ongoing</span> : "\u2014")}</td>
                     <td data-label="Duration" style={{ fontWeight: 600, color: emp.durationMinutes !== null ? "#6d45e5" : undefined }}>
                       {formatDuration(emp.durationMinutes)}
                       {isFlex && emp.sessions.length > 1 && (
-                        <div style={{ fontSize: 12, fontWeight: 600, color: "#8990a0", marginTop: 2 }}>
-                          {emp.sessions.length} sessions
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4 }}>
+                          {emp.sessions.map((s, i) => (
+                            <div key={i} style={{ fontSize: 11, color: "#667085", lineHeight: 1.3, whiteSpace: "nowrap" }}>
+                              <span style={{ color: "#7c3aed", fontWeight: 700 }}>#{i + 1}</span>{" "}
+                              {formatTime(s.inTime)}{"\u2192"}{s.outTime ? formatTime(s.outTime) : <span style={{ color: "#2563eb" }}>now</span>}
+                              {s.durationMinutes !== null && <span style={{ color: "#6d45e5", fontWeight: 600 }}> ({formatDuration(s.durationMinutes)})</span>}
+                            </div>
+                          ))}
                         </div>
                       )}
                     </td>
