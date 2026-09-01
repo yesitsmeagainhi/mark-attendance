@@ -48,11 +48,6 @@ function fmtDay(dateStr: string): string {
   return d.toLocaleDateString("en-IN", { weekday: "short" });
 }
 
-function fmtJoinDate(ts: string): string {
-  const d = new Date(ts);
-  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-}
-
 function fmt(n: number): string {
   return `Rs ${n.toLocaleString("en-IN")}`;
 }
@@ -80,18 +75,13 @@ function buildEmployeePage(
   doc.setTextColor(102, 112, 133);
   doc.text(`Month: ${month}`, pageWidth / 2, 28, { align: "center" });
 
-  // Employee info table (2-column key-value layout)
+  // Employee info table (3-column key-value layout matching UI)
   const infoData = [
-    ["Employee Name", emp.name, "Monthly Salary", fmt(emp.monthlySalary)],
-    ["Employee ID", emp.id, "Per Day Pay", fmt(emp.perDayRate)],
-    ["Branch", emp.office, "Present Days", String(emp.presentDays)],
-    ["Job Role", emp.jobRole, "Half Days", String(emp.halfDays || 0)],
-    ["", "", "Absent Days", String(emp.absentDays)],
-    ["Shift Timing", emp.shift, "Late Days", `${emp.lateDays}${emp.lateAbsentDays > 0 ? ` (= ${emp.lateAbsentDays}d ded.)` : ""}`],
-    ["Joining Date", fmtJoinDate(emp.createdAt), "Leave Days", String(emp.leaveDays)],
-    ["Working Days", String(workingDays), "Weekly Offs", String(emp.weeklyOffs)],
-    ["Sunday Worked", `${emp.sundayWorkedDays}${emp.sundayBonus > 0 ? ` (+${fmt(emp.sundayBonus)})` : ""}`, "Deduction", fmt(emp.deduction)],
-    ["", "", "Net Pay", fmt(emp.netPay)],
+    ["Name", emp.name, "Emp ID", emp.id, "Branch", emp.office],
+    ["Role", emp.jobRole, "Shift", emp.shift, "Work Days", String(workingDays)],
+    ["Present", String(emp.presentDays), "Half Day", String(emp.halfDays || 0), "Absent", String(emp.absentDays)],
+    ["Late", `${emp.lateDays}${emp.lateAbsentDays > 0 ? ` (= ${emp.lateAbsentDays}d ded.)` : ""}`, "Leave", String(emp.leaveDays), "Sun Work", `${emp.sundayWorkedDays}${emp.sundayBonus > 0 ? ` (+${fmt(emp.sundayBonus)})` : ""}`],
+    ["Salary", fmt(emp.monthlySalary), "Deduction", emp.deduction > 0 ? `-${fmt(emp.deduction)}` : "\u2014", "Net Pay", fmt(emp.netPay)],
   ];
 
   autoTable(doc, {
@@ -100,42 +90,40 @@ function buildEmployeePage(
     theme: "plain",
     styles: { fontSize: 8, cellPadding: 2 },
     columnStyles: {
-      0: { fontStyle: "bold", textColor: [102, 112, 133], cellWidth: 35 },
-      1: { cellWidth: 55 },
-      2: { fontStyle: "bold", textColor: [102, 112, 133], cellWidth: 35 },
-      3: { cellWidth: 55 },
+      0: { fontStyle: "bold", textColor: [102, 112, 133], cellWidth: 25 },
+      1: { cellWidth: 35 },
+      2: { fontStyle: "bold", textColor: [102, 112, 133], cellWidth: 25 },
+      3: { cellWidth: 35 },
+      4: { fontStyle: "bold", textColor: [102, 112, 133], cellWidth: 25 },
+      5: { cellWidth: 35 },
     },
     didParseCell(data: { column: { index: number }; row: { index: number }; cell: { styles: { fillColor: number[]; fontStyle: string; textColor: number[] } } }) {
       // Highlight Net Pay value
-      if (data.column.index === 3 && data.row.index === 9) {
+      if (data.column.index === 5 && data.row.index === 4) {
         data.cell.styles.fillColor = [232, 247, 239];
         data.cell.styles.fontStyle = "bold";
+      }
+      // Red for Deduction value
+      if (data.column.index === 3 && data.row.index === 4 && emp.deduction > 0) {
+        data.cell.styles.textColor = [199, 51, 51];
       }
     },
     margin: { left: 14, right: 14 },
   });
 
-  // Daily attendance table
+  // Daily attendance table — matches UI: Date, Punch In, Punch Out, Break, Work Hours, Status
   let totalBreakMins = 0;
-  let totalSalary = 0;
 
   const bodyData = emp.dailyDetails.map((day) => {
-    const isWorkDay = day.status === "present" || day.status === "late";
-    const isHalfDay = day.status === "half-day";
-    const isSundayWorked = day.status === "sunday-worked";
-    const daySalary = isSundayWorked ? emp.perDayRate : isHalfDay ? Math.round(emp.perDayRate * 0.5) : (isWorkDay ? emp.perDayRate : 0);
-    if (isWorkDay || isSundayWorked || isHalfDay) totalSalary += daySalary;
     if (day.breakMinutes) totalBreakMins += day.breakMinutes;
 
     return [
-      fmtDate(day.date),
-      fmtDay(day.date),
-      statusLabels[day.status] || day.status,
+      `${fmtDay(day.date)}, ${fmtDate(day.date)}`,
       day.punchIn ? fmtTimeIST(day.punchIn) : "\u2014",
       day.punchOut ? fmtTimeIST(day.punchOut) : "\u2014",
       day.breakMinutes ? fmtDur(day.breakMinutes) : "\u2014",
       day.durationMinutes ? fmtDur(day.durationMinutes) : "\u2014",
-      (isWorkDay || isSundayWorked || isHalfDay) ? fmt(daySalary) : "\u2014",
+      statusLabels[day.status] || day.status,
     ];
   });
 
@@ -144,10 +132,9 @@ function buildEmployeePage(
 
   autoTable(doc, {
     startY: prevY + 6,
-    head: [["Date", "Day", "Status", "Punch In", "Punch Out", "Break", "Work Hours", "Salary"]],
+    head: [["Date", "Punch In", "Punch Out", "Break", "Work Hours", "Status"]],
     body: bodyData,
-    foot: [["TOTAL", "", "", "", "", totalBreakMins > 0 ? fmtDur(totalBreakMins) : "\u2014", emp.totalWorkedMinutes > 0 ? fmtDur(emp.totalWorkedMinutes) : "\u2014", fmt(totalSalary)]],
-    // styles: { fontSize: 7, cellPadding: 2, halign: "center" },
+    foot: [["TOTAL", "", "", totalBreakMins > 0 ? fmtDur(totalBreakMins) : "\u2014", emp.totalWorkedMinutes > 0 ? fmtDur(emp.totalWorkedMinutes) : "\u2014", ""]],
     styles: {
       fontSize: 8,
       cellPadding: { top: 0.65, right: 1, bottom: 0.65, left: 1 },
@@ -170,17 +157,14 @@ function buildEmployeePage(
       textColor: [23, 32, 51],
       cellPadding: { top: 1, right: 1, bottom: 1, left: 1 },
     },
-    // headStyles: { fillColor: [109, 69, 229], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
-    // footStyles: { fillColor: [249, 250, 251], fontStyle: "bold", fontSize: 8, textColor: [23, 32, 51] },
     columnStyles: {
-      0: { cellWidth: 22 },
-      1: { cellWidth: 18 },
-      2: { cellWidth: 22 },
-      7: { cellWidth: 30 },
+      0: { cellWidth: 30 },
+      5: { cellWidth: 25 },
     },
     didParseCell(data: { section: string; column: { index: number }; cell: { styles: { fillColor: number[]; textColor: number[]; fontStyle: string } }; row: { raw: string[] } }) {
-      if (data.section === "body" && data.column.index === 2) {
-        const status = Object.keys(statusLabels).find((k) => statusLabels[k] === data.row.raw[2]);
+      // Status is now column 5
+      if (data.section === "body" && data.column.index === 5) {
+        const status = Object.keys(statusLabels).find((k) => statusLabels[k] === data.row.raw[5]);
         if (status && statusColors[status]) {
           data.cell.styles.fillColor = [...statusColors[status].bg];
           data.cell.styles.textColor = [...statusColors[status].fg];

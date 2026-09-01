@@ -2,6 +2,12 @@
 
 import { useEffect, useState } from "react";
 
+type SessionInfo = {
+  inTime: string;
+  outTime: string | null;
+  durationMinutes: number | null;
+};
+
 type DayDetail = {
   date: string;
   punchIn: string | null;
@@ -9,6 +15,7 @@ type DayDetail = {
   durationMinutes: number | null;
   breakMinutes: number | null;
   status: string;
+  sessions?: SessionInfo[];
 };
 
 type ReportRow = {
@@ -19,6 +26,8 @@ type ReportRow = {
   office: string;
   monthlySalary: number;
   createdAt: string;
+  isFlexible?: boolean;
+  hourlyRate?: number;
   presentDays: number;
   absentDays: number;
   halfDays: number;
@@ -53,77 +62,6 @@ function fmtTime(ts: string) {
 function fmtDate(dateStr: string) {
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" });
-}
-
-function csvEscape(val: string) {
-  if (val.includes(",") || val.includes('"') || val.includes("\n")) return `"${val.replace(/"/g, '""')}"`;
-  return val;
-}
-
-function downloadCsv(filename: string, csvContent: string) {
-  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function exportSummary(rows: ReportRow[], month: string, workingDays: number) {
-  const header = ["Employee", "ID", "Shift", "Present", "Half Day", "Absent", "Short Day", "Late", "Late=Absent", "Leave", "UH", "Total Hours", "Attendance %"];
-  const lines = rows.map((r) => [
-    csvEscape(r.name), r.id, r.shift,
-    String(r.presentDays), String(r.halfDays || 0), String(r.absentDays), String(r.shortDays || 0), String(r.lateDays), String(r.lateAbsentDays || 0), String(r.leaveDays), String(r.uhDays),
-    fmtDur(r.totalWorkedMinutes), `${r.attendancePct}%`,
-  ].join(","));
-  const totals = rows.reduce((a, r) => ({
-    p: a.p + r.presentDays, hd: a.hd + (r.halfDays || 0), ab: a.ab + r.absentDays, sd: a.sd + (r.shortDays || 0), l: a.l + r.lateDays, la: a.la + (r.lateAbsentDays || 0),
-    lv: a.lv + r.leaveDays, u: a.u + r.uhDays, m: a.m + r.totalWorkedMinutes,
-  }), { p: 0, hd: 0, ab: 0, sd: 0, l: 0, la: 0, lv: 0, u: 0, m: 0 });
-  const avgPct = rows.length > 0 ? Math.round(rows.reduce((s, r) => s + r.attendancePct, 0) / rows.length) : 0;
-  lines.push(["TOTALS", "", "", String(totals.p), String(totals.hd), String(totals.ab), String(totals.sd), String(totals.l), String(totals.la), String(totals.lv), String(totals.u), fmtDur(totals.m), `${avgPct}%`].join(","));
-
-  const csv = `Attendance Report - ${month} (Working Days: ${workingDays})\n\n${header.join(",")}\n${lines.join("\n")}`;
-  downloadCsv(`attendance-report-${month}.csv`, csv);
-}
-
-function exportEmployeeDetail(emp: ReportRow, month: string) {
-  const summaryRows = [
-    `Employee Report - ${emp.name} (${emp.id})`,
-    `Month: ${month}  |  Shift: ${emp.shift}`,
-    "",
-    `Present,${emp.presentDays}`,
-    `Half Day,${emp.halfDays || 0}`,
-    `Absent,${emp.absentDays}`,
-    `Short Day,${emp.shortDays || 0}`,
-    `Late,${emp.lateDays}`,
-    `Late Ded.,${emp.lateAbsentDays || 0} days`,
-    `Leave,${emp.leaveDays}`,
-    `UH,${emp.uhDays}`,
-    `Sunday Worked,${emp.sundayWorkedDays || 0}`,
-    `Sunday Bonus,${emp.sundayBonus || 0}`,
-    `Total Hours,${fmtDur(emp.totalWorkedMinutes)}`,
-    `Attendance,${emp.attendancePct}%`,
-    "",
-  ];
-  const header = "Date,Day,Punch In,Punch Out,Duration,Status";
-  const dayLines = emp.dailyDetails.map((day) => {
-    const d = new Date(day.date + "T00:00:00");
-    const dayName = d.toLocaleDateString("en-IN", { weekday: "short" });
-    const dateStr = d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-    const badge = statusBadge[day.status] || statusBadge.absent;
-    return [
-      dateStr, dayName,
-      day.punchIn ? fmtTime(day.punchIn) : "-",
-      day.punchOut ? fmtTime(day.punchOut) : "-",
-      day.durationMinutes !== null ? fmtDur(day.durationMinutes) : "-",
-      badge.label,
-    ].join(",");
-  });
-
-  const csv = summaryRows.join("\n") + header + "\n" + dayLines.join("\n");
-  downloadCsv(`${emp.name.replace(/\s+/g, "-")}-report-${month}.csv`, csv);
 }
 
 const statusBadge: Record<string, { bg: string; color: string; label: string }> = {
@@ -163,6 +101,30 @@ export default function ReportsTab() {
     try {
       const { generateEmployeePDF } = await import("../../../lib/reports/generate-pdf");
       await generateEmployeePDF(emp, month, workingDays);
+    } finally { setGenerating(false); }
+  }
+
+  async function handleFlatExcelExport() {
+    setGenerating(true);
+    try {
+      const { generateFlatReportExcel } = await import("../../../lib/reports/generate-excel");
+      await generateFlatReportExcel(rows, month, workingDays);
+    } finally { setGenerating(false); }
+  }
+
+  async function handleRawExcelExport() {
+    setGenerating(true);
+    try {
+      const { generateRawReportExcel } = await import("../../../lib/reports/generate-excel");
+      await generateRawReportExcel(rows, month, workingDays);
+    } finally { setGenerating(false); }
+  }
+
+  async function handleFlexExcelExport() {
+    setGenerating(true);
+    try {
+      const { generateFlexReportExcel } = await import("../../../lib/reports/generate-excel");
+      await generateFlexReportExcel(rows, month);
     } finally { setGenerating(false); }
   }
 
@@ -223,7 +185,11 @@ export default function ReportsTab() {
         <span style={{ fontSize: 15, color: "#667085" }}>Working days: <b>{workingDays}</b></span>
         {rows.length > 0 && (
           <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
-            <button className="export" onClick={() => exportSummary(rows, month, workingDays)} disabled={generating}>CSV</button>
+            <button className="export" onClick={handleRawExcelExport} disabled={generating}>{generating ? "..." : "Raw"}</button>
+            <button className="export" onClick={handleFlatExcelExport} disabled={generating}>{generating ? "..." : "Detailed"}</button>
+            {rows.some((r) => r.isFlexible) && (
+              <button className="export" onClick={handleFlexExcelExport} disabled={generating}>{generating ? "..." : "Flex"}</button>
+            )}
             <button className="export" onClick={handleAllExcelExport} disabled={generating}>{generating ? "..." : "Excel"}</button>
             <button className="export" onClick={handleAllPdfExport} disabled={generating}>{generating ? "..." : "PDF"}</button>
           </div>
@@ -252,10 +218,6 @@ export default function ReportsTab() {
               <div style={{ fontSize: 13, color: "#8990a0" }}>Shift: {selectedEmp.shift}</div>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => exportEmployeeDetail(selectedEmp, month)} disabled={generating}
-                style={{ border: "1px solid var(--purple)", background: "#eee9ff", color: "#6d45e5", padding: "8px 12px", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                CSV
-              </button>
               <button onClick={() => handleExcelExport(selectedEmp)} disabled={generating}
                 style={{ border: "1px solid var(--purple)", background: "#eee9ff", color: "#6d45e5", padding: "8px 12px", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                 {generating ? "..." : "Excel"}
@@ -313,7 +275,7 @@ export default function ReportsTab() {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
               <thead>
                 <tr>
-                  {["Date", "Punch In", "Punch Out", "Break", "Work Hours", "Status"].map((h) => (
+                  {["Day","Date", "Punch In", "Punch Out", "Break", "Work Hours", "Status"].map((h) => (
                     <th key={h} style={{ textAlign: "left", padding: "10px 14px", fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em", color: "#8990a0", background: "#f9fafb" }}>{h}</th>
                   ))}
                 </tr>

@@ -239,7 +239,8 @@ export async function GET(request: Request) {
     const lateDeductionDays = Math.floor(lateDays / 3) * 0.5;
     const halfDayDeduction = halfDays * 0.5;
     const totalDeductionDays = absentDays + halfDayDeduction + lateDeductionDays;
-    const perDayRate = workingDays > 0 ? emp.monthlySalary / workingDays : 0;
+    // Per-day rate uses total calendar days in month (including Sundays)
+    const perDayRate = Math.round(emp.monthlySalary / lastDay);
     const deduction = Math.round(perDayRate * totalDeductionDays);
     const sundayBonus = Math.round(sundayWorkedDays * perDayRate);
     const netPay = emp.monthlySalary - deduction + sundayBonus;

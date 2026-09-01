@@ -5,6 +5,27 @@ import { requireApiRole } from "../../../authz";
 import { getEffectiveRulesBatch } from "../../../../lib/rules";
 import { calculateTotalDuration, calculateBreakDuration } from "../../../../lib/time-utils";
 
+type SessionInfo = { inTime: string; outTime: string | null; durationMinutes: number | null };
+
+function buildSessions(allPunches: { punchType: string; serverTimestamp: string }[]): SessionInfo[] {
+  const sorted = [...allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
+  const sessions: SessionInfo[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (sorted[i].punchType === "IN") {
+      const out = sorted[i + 1]?.punchType === "OUT" ? sorted[i + 1] : null;
+      let dur: number | null = null;
+      if (out) {
+        const inD = new Date(sorted[i].serverTimestamp.replace(" ", "T") + (sorted[i].serverTimestamp.includes("Z") ? "" : "Z"));
+        const outD = new Date(out.serverTimestamp.replace(" ", "T") + (out.serverTimestamp.includes("Z") ? "" : "Z"));
+        dur = Math.max(0, Math.floor((outD.getTime() - inD.getTime()) / 60000));
+      }
+      sessions.push({ inTime: sorted[i].serverTimestamp, outTime: out?.serverTimestamp ?? null, durationMinutes: dur });
+      if (out) i++;
+    }
+  }
+  return sessions;
+}
+
 export async function GET(request: Request) {
   const auth = await requireApiRole("admin");
   if ("error" in auth) return auth.error;
@@ -31,6 +52,7 @@ export async function GET(request: Request) {
       jobRole: employees.jobRole,
       office: employees.office,
       monthlySalary: employees.monthlySalary,
+      hourlyRate: employees.hourlyRate,
       flexibleHours: employees.flexibleHours,
       createdAt: employees.createdAt,
     })
@@ -148,6 +170,7 @@ export async function GET(request: Request) {
       durationMinutes: number | null;
       breakMinutes: number | null;
       status: string;
+      sessions?: SessionInfo[];
     };
     const dailyDetails: DayDetail[] = [];
 
@@ -183,6 +206,7 @@ export async function GET(request: Request) {
             durationMinutes: dur > 0 ? dur : null,
             breakMinutes: brk > 0 ? brk : null,
             status: "sunday-worked",
+            sessions: buildSessions(sundayEntry.allPunches),
           });
         } else {
           dailyDetails.push({ date: dateStr, punchIn: null, punchOut: null, durationMinutes: null, breakMinutes: null, status: "sunday" });
@@ -214,7 +238,7 @@ export async function GET(request: Request) {
 
       // If punch-out is missing, treat as absent (incomplete record)
       if (!entry.punchOut) {
-        dailyDetails.push({ date: dateStr, punchIn: entry.punchIn, punchOut: null, durationMinutes: null, breakMinutes: null, status: "absent" });
+        dailyDetails.push({ date: dateStr, punchIn: entry.punchIn, punchOut: null, durationMinutes: null, breakMinutes: null, status: "absent", sessions: buildSessions(entry.allPunches) });
         continue;
       }
 
@@ -234,12 +258,12 @@ export async function GET(request: Request) {
       if (!emp.flexibleHours && dateStr < today) {
         if (totalDur < halfDayMinutes) {
           shortDays++;
-          dailyDetails.push({ date: dateStr, punchIn: entry.punchIn, punchOut: entry.punchOut, durationMinutes, breakMinutes, status: "short-day" });
+          dailyDetails.push({ date: dateStr, punchIn: entry.punchIn, punchOut: entry.punchOut, durationMinutes, breakMinutes, status: "short-day", sessions: buildSessions(entry.allPunches) });
           continue;
         }
         if (totalDur < fullDayMinutes) {
           halfDays++;
-          dailyDetails.push({ date: dateStr, punchIn: entry.punchIn, punchOut: entry.punchOut, durationMinutes, breakMinutes, status: "half-day" });
+          dailyDetails.push({ date: dateStr, punchIn: entry.punchIn, punchOut: entry.punchOut, durationMinutes, breakMinutes, status: "half-day", sessions: buildSessions(entry.allPunches) });
           continue;
         }
       }
@@ -262,6 +286,7 @@ export async function GET(request: Request) {
         durationMinutes,
         breakMinutes,
         status: isLate ? "late" : "present",
+        sessions: buildSessions(entry.allPunches),
       });
     }
 
@@ -273,10 +298,10 @@ export async function GET(request: Request) {
     const halfDayDeduction = halfDays * 0.5;
     const attendancePct = countableDays > 0 ? Math.round(((presentDays + halfDays * 0.5) / countableDays) * 100) : 100;
 
-    // Salary calculations (per-day rate uses full month working days)
+    // Salary calculations (per-day rate uses total calendar days in month, including Sundays)
     const totalDeductionDays = absentDays + halfDayDeduction + lateDeductionDays;
-    const perDayRate = totalMonthWorkingDays > 0 ? Math.round(emp.monthlySalary / totalMonthWorkingDays) : 0;
-    const deduction = Math.round((totalMonthWorkingDays > 0 ? emp.monthlySalary / totalMonthWorkingDays : 0) * totalDeductionDays);
+    const perDayRate = Math.round(emp.monthlySalary / lastDay);
+    const deduction = Math.round(perDayRate * totalDeductionDays);
     const sundayBonus = sundayWorkedDays * perDayRate;
     const netPay = emp.monthlySalary - deduction + sundayBonus;
 
@@ -288,6 +313,8 @@ export async function GET(request: Request) {
       office: emp.office,
       monthlySalary: emp.monthlySalary,
       createdAt: emp.createdAt,
+      isFlexible: emp.flexibleHours,
+      hourlyRate: emp.hourlyRate,
       presentDays,
       absentDays,
       halfDays,
