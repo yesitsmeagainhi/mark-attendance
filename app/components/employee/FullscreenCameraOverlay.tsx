@@ -68,7 +68,10 @@ export default function FullscreenCameraOverlay({
   // Start camera stream (runs once on mount)
   useEffect(() => {
     let cancelled = false;
-    navigator.mediaDevices?.getUserMedia({ video: { facingMode: "user" }, audio: false })
+    navigator.mediaDevices?.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      })
       .then((stream) => {
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;

@@ -92,9 +92,12 @@ export async function POST(request: Request) {
     );
   }
 
-  // Validate GPS accuracy — reject readings too inaccurate for geo-fencing
+  // Validate GPS accuracy — reject readings too inaccurate for geo-fencing.
+  // Threshold is 200m: iOS devices indoors often report WiFi/cell-tower
+  // positions with 150-200m accuracy that are still positionally valid.
+  // The geo-fence check itself will still reject genuinely wrong positions.
   const accuracy = parseFloat(form.get("accuracy") as string || "0");
-  if (accuracy > 150) {
+  if (accuracy > 200) {
     return Response.json(
       { error: `GPS accuracy is too low (±${Math.round(accuracy)}m). Please move to an open area or wait for a better GPS signal and try again.` },
       { status: 400 },

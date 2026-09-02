@@ -185,12 +185,13 @@ export default function ReportsTab() {
         <span style={{ fontSize: 15, color: "#667085" }}>Working days: <b>{workingDays}</b></span>
         {rows.length > 0 && (
           <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
-            <button className="export" onClick={handleRawExcelExport} disabled={generating}>{generating ? "..." : "Raw"}</button>
-            <button className="export" onClick={handleFlatExcelExport} disabled={generating}>{generating ? "..." : "Detailed"}</button>
+            <button className="export" onClick={handleRawExcelExport} disabled={generating}>{generating ? "..." : "Excel 1"}</button>
+            <button className="export" onClick={handleFlatExcelExport} disabled={generating}>{generating ? "..." : "Excel 2"}</button>
+            <button className="export" onClick={handleAllExcelExport} disabled={generating}>{generating ? "..." : "Excel 3"}</button>
+
             {rows.some((r) => r.isFlexible) && (
-              <button className="export" onClick={handleFlexExcelExport} disabled={generating}>{generating ? "..." : "Flex"}</button>
+              <button className="export" onClick={handleFlexExcelExport} disabled={generating}>{generating ? "..." : "Flexible Employee Excel"}</button>
             )}
-            <button className="export" onClick={handleAllExcelExport} disabled={generating}>{generating ? "..." : "Excel"}</button>
             <button className="export" onClick={handleAllPdfExport} disabled={generating}>{generating ? "..." : "PDF"}</button>
           </div>
         )}
@@ -275,7 +276,7 @@ export default function ReportsTab() {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
               <thead>
                 <tr>
-                  {["Day","Date", "Punch In", "Punch Out", "Break", "Work Hours", "Status"].map((h) => (
+                  {["Day", "Date", "Punch In", "Punch Out", "Break", "Work Hours", "Status"].map((h) => (
                     <th key={h} style={{ textAlign: "left", padding: "10px 14px", fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em", color: "#8990a0", background: "#f9fafb" }}>{h}</th>
                   ))}
                 </tr>

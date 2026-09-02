@@ -146,29 +146,48 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
     }
     setLocationLoading(true);
     setLocationError("");
+
+    const onSuccess = (position: GeolocationPosition) => {
+      setLocation({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        timestamp: position.timestamp,
+      });
+      setLocationLoading(false);
+    };
+
+    const onError = (err: GeolocationPositionError) => {
+      setLocationLoading(false);
+      if (err.code === err.PERMISSION_DENIED) {
+        setLocationError("Location permission denied. Please enable location access in your browser settings and refresh.");
+      } else if (err.code === err.POSITION_UNAVAILABLE) {
+        setLocationError("Location unavailable. Please check that GPS is enabled on your device.");
+      } else if (err.code === err.TIMEOUT) {
+        setLocationError("Location request timed out. Please try again in an open area.");
+      } else {
+        setLocationError("Could not determine your location. Please try again.");
+      }
+    };
+
+    // Try high-accuracy GPS first (true GPS hardware).
+    // If it times out (common on iOS indoors), fall back to
+    // enableHighAccuracy: false (WiFi/cell triangulation — faster but less precise).
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          timestamp: position.timestamp,
-        });
-        setLocationLoading(false);
-      },
+      onSuccess,
       (err) => {
-        setLocationLoading(false);
-        if (err.code === err.PERMISSION_DENIED) {
-          setLocationError("Location permission denied. Please enable location access in your browser settings and refresh.");
-        } else if (err.code === err.POSITION_UNAVAILABLE) {
-          setLocationError("Location unavailable. Please check that GPS is enabled on your device.");
-        } else if (err.code === err.TIMEOUT) {
-          setLocationError("Location request timed out. Please try again in an open area.");
+        if (err.code === err.TIMEOUT) {
+          // Fallback: accept WiFi/cell-tower position
+          navigator.geolocation.getCurrentPosition(onSuccess, onError, {
+            enableHighAccuracy: false,
+            timeout: 15000,
+            maximumAge: 30000,
+          });
         } else {
-          setLocationError("Could not determine your location. Please try again.");
+          onError(err);
         }
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 20000 },
     );
   }, [enabled]);
 

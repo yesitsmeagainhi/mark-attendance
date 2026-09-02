@@ -364,7 +364,7 @@ export async function generateFlatReportExcel(
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-  downloadBlob(blob, `attendance-report-${month}-detailed.xlsx`);
+  downloadBlob(blob, `attendance-excel2-${month}.xlsx`);
 }
 
 export async function generateAllEmployeesExcel(
@@ -485,7 +485,7 @@ export async function generateAllEmployeesExcel(
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-  downloadBlob(blob, `attendance-report-${month}.xlsx`);
+  downloadBlob(blob, `attendance-excel3-${month}.xlsx`);
 }
 
 /** Date-wise report — grouped by date, each date lists all employees' attendance */
@@ -635,7 +635,7 @@ export async function generateRawReportExcel(
 
   const buf = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-  downloadBlob(blob, `attendance-raw-${month}.xlsx`);
+  downloadBlob(blob, `attendance-excel1-${month}.xlsx`);
 }
 
 /** Flex employee report — session-based attendance per employee */
@@ -645,132 +645,327 @@ export async function generateFlexReportExcel(
 ) {
   const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("Flex Attendance");
+  // const sheet = workbook.addWorksheet("Flex Attendance");
 
   const flexEmps = employees.filter((e) => e.isFlexible);
   if (flexEmps.length === 0) return;
 
   const colCount = 6;
-  sheet.columns = [
-    { width: 18 }, // Date
+  // sheet.columns = [
+  //   { width: 18 }, // Date
+  //   { width: 10 }, // Session
+  //   { width: 14 }, // In Time
+  //   { width: 14 }, // Out Time
+  //   { width: 14 }, // Duration
+  //   { width: 14 }, // Status
+  // ];
+
+  let r = 1;
+
+  // // ── Title bar ──
+  // sheet.mergeCells(r, 1, r, colCount);
+  // const titleCell = sheet.getCell(r, 1);
+  // titleCell.value = `FLEX ATTENDANCE REPORT \u2014 ${month}`;
+  // titleCell.font = { bold: true, size: 14, color: { argb: WHITE } };
+  // titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
+  // titleCell.alignment = { horizontal: "center", vertical: "middle" };
+  // sheet.getRow(r).height = 34;
+  // r++;
+
+  // // ── Subtitle ──
+  // sheet.mergeCells(r, 1, r, colCount);
+  // const subCell = sheet.getCell(r, 1);
+  // subCell.value = `${flexEmps.length} Flex Employee${flexEmps.length > 1 ? "s" : ""}`;
+  // subCell.font = { size: 10, color: { argb: GRAY } };
+  // subCell.alignment = { horizontal: "center", vertical: "middle" };
+  // subCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_GRAY } };
+  // for (let c = 1; c <= colCount; c++) sheet.getRow(r).getCell(c).border = borderAll();
+  // sheet.getRow(r).height = 22;
+  // r++;
+
+  // // ── Spacer ──
+  // sheet.getRow(r).height = 6;
+  // r++;
+
+  // for (let ei = 0; ei < flexEmps.length; ei++) {
+  //   const emp = flexEmps[ei];
+  //   if (ei > 0) {
+  //     sheet.getRow(r).height = 10;
+  //     r++;
+  //     sheet.getRow(r).height = 10;
+  //     r++;
+  //   }
+
+  //   // ── Employee header bar ──
+  //   sheet.mergeCells(r, 1, r, colCount);
+  //   const empCell = sheet.getCell(r, 1);
+  //   empCell.value = emp.name;
+  //   empCell.font = { bold: true, size: 12, color: { argb: WHITE } };
+  //   empCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
+  //   empCell.alignment = { horizontal: "left", vertical: "middle" };
+  //   sheet.getRow(r).height = 26;
+  //   r++;
+
+  //   // ── Employee info row ──
+  //   const infoRow = sheet.getRow(r);
+  //   infoRow.height = 20;
+  //   sheet.mergeCells(r, 1, r, 3);
+  //   infoRow.getCell(1).value = `ID: ${emp.id}  \u00B7  ${emp.jobRole || "Employee"}  \u00B7  ${emp.office}`;
+  //   infoRow.getCell(1).font = { size: 9, color: { argb: GRAY } };
+  //   infoRow.getCell(1).alignment = { vertical: "middle" };
+  //   sheet.mergeCells(r, 4, r, colCount);
+  //   infoRow.getCell(4).value = `Rate: ${fmt(emp.hourlyRate || 0)}/hr`;
+  //   infoRow.getCell(4).font = { bold: true, size: 9, color: { argb: PURPLE } };
+  //   infoRow.getCell(4).alignment = { horizontal: "right", vertical: "middle" };
+  //   for (let c = 1; c <= colCount; c++) {
+  //     infoRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_GRAY } };
+  //     infoRow.getCell(c).border = borderAll();
+  //   }
+  //   r++;
+
+  //   // ── Spacer ──
+  //   sheet.getRow(r).height = 4;
+  //   r++;
+
+  //   // ── Table header ──
+  //   const headers = ["Date", "Sessions", "First IN", "Last OUT", "Total Worked", "Status"];
+  //   const headerRow = sheet.getRow(r);
+  //   headers.forEach((h, idx) => {
+  //     const cell = headerRow.getCell(idx + 1);
+  //     cell.value = h;
+  //     cell.font = { bold: true, size: 9, color: { argb: WHITE } };
+  //     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
+  //     cell.alignment = { horizontal: "center", vertical: "middle" };
+  //     cell.border = borderAll();
+  //   });
+  //   headerRow.height = 22;
+  //   r++;
+
+  //   // ── Daily rows (one row per day) ──
+  //   let empTotalMinutes = 0;
+
+  //   for (let di = 0; di < emp.dailyDetails.length; di++) {
+  //     const day = emp.dailyDetails[di];
+  //     const sessions = day.sessions || [];
+  //     const isOff = day.status === "sunday" || day.status === "holiday";
+  //     const noSessions = !day.punchIn || !day.punchOut || !day.durationMinutes;
+  //     const isEvenRow = di % 2 === 1;
+
+  //     const row = sheet.getRow(r);
+  //     row.height = 16;
+  //     const rowBg = isOff ? "FFF3F4F8" : (isEvenRow ? STRIPE : WHITE);
+
+  //     // Col 1: Date
+  //     row.getCell(1).value = `${fmtDay(day.date)}, ${fmtDate(day.date)}`;
+  //     row.getCell(1).font = { bold: true, size: 9, color: { argb: isOff ? GRAY : DARK } };
+
+  //     if (noSessions) {
+  //       row.getCell(2).value = "\u2014";
+  //       row.getCell(3).value = "\u2014";
+  //       row.getCell(4).value = "\u2014";
+  //       row.getCell(5).value = "\u2014";
+  //     } else {
+  //       // Col 2: Sessions count (only completed sessions with outTime)
+  //       const completedSessions = sessions.filter(s => s.outTime !== null).length;
+  //       row.getCell(2).value = completedSessions;
+  //       row.getCell(2).font = { bold: true, size: 9, color: { argb: PURPLE } };
+
+  //       // Col 3: First IN (use API-computed earliest punchIn)
+  //       row.getCell(3).value = fmtTimeIST(day.punchIn!);
+
+  //       // Col 4: Last OUT (use API-computed latest punchOut)
+  //       row.getCell(4).value = fmtTimeIST(day.punchOut!);
+
+  //       // Col 5: Total Worked (use API-computed durationMinutes)
+  //       const dayTotal = day.durationMinutes!;
+  //       empTotalMinutes += dayTotal;
+  //       row.getCell(5).value = fmtDur(dayTotal);
+  //       row.getCell(5).font = { bold: true, size: 9, color: { argb: PURPLE } };
+  //     }
+
+  //     // Col 6: Status
+  //     row.getCell(6).value = statusLabels[day.status] || day.status;
+  //     const sc = statusColors[day.status];
+  //     if (sc) {
+  //       row.getCell(6).font = { bold: true, size: 9, color: { argb: `FF${sc.fg}` } };
+  //       row.getCell(6).fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${sc.bg}` } };
+  //     }
+
+  //     for (let c = 1; c <= colCount; c++) {
+  //       row.getCell(c).alignment = { horizontal: "center", vertical: "middle" };
+  //       row.getCell(c).border = borderAll();
+  //       const ef = row.getCell(c).fill;
+  //       if (c !== 6 && !(ef && "fgColor" in ef && ef.fgColor)) {
+  //         row.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowBg } };
+  //       }
+  //       if (!row.getCell(c).font?.size) row.getCell(c).font = { size: 9, color: { argb: isOff ? GRAY : DARK } };
+  //     }
+  //     row.getCell(1).alignment = { horizontal: "left", vertical: "middle" };
+  //     r++;
+  //   }
+
+  //   // ── Employee totals row ──
+  //   const totalHours = Math.round((empTotalMinutes / 60) * 100) / 100;
+  //   const netPay = Math.round(totalHours * (emp.hourlyRate || 0));
+  //   const totRow = sheet.getRow(r);
+  //   totRow.height = 24;
+  //   totRow.getCell(1).value = "TOTAL";
+  //   totRow.getCell(2).value = "";
+  //   totRow.getCell(3).value = "";
+  //   totRow.getCell(4).value = `${totalHours}h`;
+  //   totRow.getCell(4).font = { bold: true, size: 10, color: { argb: PURPLE } };
+  //   totRow.getCell(5).value = empTotalMinutes > 0 ? fmtDur(empTotalMinutes) : "\u2014";
+  //   totRow.getCell(5).font = { bold: true, size: 10, color: { argb: PURPLE } };
+  //   totRow.getCell(6).value = `Net: ${fmt(netPay)}`;
+  //   totRow.getCell(6).font = { bold: true, size: 10, color: { argb: GREEN_FG } };
+  //   totRow.getCell(6).fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_BG } };
+
+  //   for (let c = 1; c <= colCount; c++) {
+  //     if (!totRow.getCell(c).font?.size) totRow.getCell(c).font = { bold: true, size: 10, color: { argb: PURPLE } };
+  //     if (!(totRow.getCell(c).fill && "fgColor" in totRow.getCell(c).fill && (totRow.getCell(c).fill as ExcelJS.FillPattern).fgColor)) {
+  //       totRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEEE9FF" } };
+  //     }
+  //     totRow.getCell(c).alignment = { horizontal: "center", vertical: "middle" };
+  //     totRow.getCell(c).border = {
+  //       top: { style: "medium", color: { argb: PURPLE } },
+  //       bottom: { style: "medium", color: { argb: PURPLE } },
+  //       left: { style: "thin", color: { argb: "FFE0E2E9" } },
+  //       right: { style: "thin", color: { argb: "FFE0E2E9" } },
+  //     };
+  //   }
+  //   r++;
+  // }
+
+  // // ── Generated timestamp ──
+  // sheet.getRow(r).height = 6;
+  // r++;
+  // sheet.mergeCells(r, 1, r, colCount);
+  // const genRow = sheet.getRow(r);
+  // genRow.getCell(1).value = `Generated: ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`;
+  // genRow.getCell(1).font = { size: 8, italic: true, color: { argb: GRAY } };
+  // genRow.getCell(1).alignment = { horizontal: "right" };
+  // genRow.height = 16;
+
+  // sheet.pageSetup = {
+  //   orientation: "landscape",
+  //   paperSize: 9,
+  //   fitToPage: true,
+  //   fitToWidth: 1,
+  //   fitToHeight: 0,
+  //   margins: { left: 0.25, right: 0.25, top: 0.2, bottom: 0.2, header: 0.1, footer: 0.1 },
+  // };
+
+  // ══════════════════════════════════════════════════════════════
+  // Sheet 2 — Multi-employee detailed punches (grouped by date)
+  // ══════════════════════════════════════════════════════════════
+  const punchSheet = workbook.addWorksheet("Detailed Punches");
+  const pCols = 6;
+  punchSheet.columns = [
+    { width: 24 }, // Employee
     { width: 10 }, // Session
-    { width: 14 }, // In Time
-    { width: 14 }, // Out Time
+    { width: 14 }, // IN
+    { width: 14 }, // OUT
     { width: 14 }, // Duration
     { width: 14 }, // Status
   ];
 
-  let r = 1;
+  let pr = 1;
 
   // ── Title bar ──
-  sheet.mergeCells(r, 1, r, colCount);
-  const titleCell = sheet.getCell(r, 1);
-  titleCell.value = `FLEX ATTENDANCE REPORT \u2014 ${month}`;
-  titleCell.font = { bold: true, size: 14, color: { argb: WHITE } };
-  titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
-  titleCell.alignment = { horizontal: "center", vertical: "middle" };
-  sheet.getRow(r).height = 34;
-  r++;
+  punchSheet.mergeCells(pr, 1, pr, pCols);
+  const pTitle = punchSheet.getCell(pr, 1);
+  pTitle.value = `FLEXIBLE Employees In-DETAIL PUNCHES \u2014 ${month}`;
+  pTitle.font = { bold: true, size: 14, color: { argb: WHITE } };
+  pTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
+  pTitle.alignment = { horizontal: "center", vertical: "middle" };
+  punchSheet.getRow(pr).height = 34;
+  pr++;
 
   // ── Subtitle ──
-  sheet.mergeCells(r, 1, r, colCount);
-  const subCell = sheet.getCell(r, 1);
-  subCell.value = `${flexEmps.length} Flex Employee${flexEmps.length > 1 ? "s" : ""}`;
-  subCell.font = { size: 10, color: { argb: GRAY } };
-  subCell.alignment = { horizontal: "center", vertical: "middle" };
-  subCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_GRAY } };
-  for (let c = 1; c <= colCount; c++) sheet.getRow(r).getCell(c).border = borderAll();
-  sheet.getRow(r).height = 22;
-  r++;
+  punchSheet.mergeCells(pr, 1, pr, pCols);
+  const pSub = punchSheet.getCell(pr, 1);
+  pSub.value = `${flexEmps.length} Flex Employee${flexEmps.length > 1 ? "s" : ""}`;
+  pSub.font = { size: 10, color: { argb: GRAY } };
+  pSub.alignment = { horizontal: "center", vertical: "middle" };
+  pSub.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_GRAY } };
+  for (let c = 1; c <= pCols; c++) punchSheet.getRow(pr).getCell(c).border = borderAll();
+  punchSheet.getRow(pr).height = 22;
+  pr++;
 
   // ── Spacer ──
-  sheet.getRow(r).height = 6;
-  r++;
+  punchSheet.getRow(pr).height = 6;
+  pr++;
 
-  for (let ei = 0; ei < flexEmps.length; ei++) {
-    const emp = flexEmps[ei];
-    if (ei > 0) {
-      sheet.getRow(r).height = 10;
-      r++;
-      sheet.getRow(r).height = 10;
-      r++;
+  // ── Build date-indexed data ──
+  const pDateMap = new Map<string, { empName: string; day: ReportDayDetail }[]>();
+  for (const emp2 of flexEmps) {
+    for (const day of emp2.dailyDetails) {
+      if (!pDateMap.has(day.date)) pDateMap.set(day.date, []);
+      pDateMap.get(day.date)!.push({ empName: emp2.name, day });
     }
+  }
+  const pSortedDates = [...pDateMap.keys()].sort();
 
-    // ── Employee header bar ──
-    sheet.mergeCells(r, 1, r, colCount);
-    const empCell = sheet.getCell(r, 1);
-    empCell.value = emp.name;
-    empCell.font = { bold: true, size: 12, color: { argb: WHITE } };
-    empCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
-    empCell.alignment = { horizontal: "left", vertical: "middle" };
-    sheet.getRow(r).height = 26;
-    r++;
+  const P_STRIPE = "FFF0EDFF";
+  const P_OFF_BG = "FFE5E7EB";
 
-    // ── Employee info row ──
-    const infoRow = sheet.getRow(r);
-    infoRow.height = 20;
-    sheet.mergeCells(r, 1, r, 3);
-    infoRow.getCell(1).value = `ID: ${emp.id}  \u00B7  ${emp.jobRole || "Employee"}  \u00B7  ${emp.office}`;
-    infoRow.getCell(1).font = { size: 9, color: { argb: GRAY } };
-    infoRow.getCell(1).alignment = { vertical: "middle" };
-    sheet.mergeCells(r, 4, r, colCount);
-    infoRow.getCell(4).value = `Rate: ${fmt(emp.hourlyRate || 0)}/hr`;
-    infoRow.getCell(4).font = { bold: true, size: 9, color: { argb: PURPLE } };
-    infoRow.getCell(4).alignment = { horizontal: "right", vertical: "middle" };
-    for (let c = 1; c <= colCount; c++) {
-      infoRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_GRAY } };
-      infoRow.getCell(c).border = borderAll();
-    }
-    r++;
+  for (const dateStr of pSortedDates) {
+    const entries = pDateMap.get(dateStr)!;
+    const dayOfWeek = new Date(dateStr + "T00:00:00").getDay();
+    const isOff = dayOfWeek === 0 || entries[0]?.day.status === "holiday";
 
-    // ── Spacer ──
-    sheet.getRow(r).height = 4;
-    r++;
+    // ── Date group header row ──
+    punchSheet.mergeCells(pr, 1, pr, pCols);
+    const dateRow = punchSheet.getRow(pr);
+    dateRow.height = 22;
+    dateRow.getCell(1).value = `DATE: ${fmtDay(dateStr).toUpperCase()}, ${fmtDate(dateStr).toUpperCase()}`;
+    dateRow.getCell(1).font = { bold: true, size: 10, color: { argb: isOff ? GRAY : WHITE } };
+    dateRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: isOff ? P_OFF_BG : PURPLE } };
+    dateRow.getCell(1).alignment = { horizontal: "left", vertical: "middle" };
+    for (let c = 1; c <= pCols; c++) dateRow.getCell(c).border = borderAll();
+    pr++;
 
-    // ── Table header ──
-    const headers = ["Date", "Session", "In Time", "Out Time", "Duration", "Status"];
-    const headerRow = sheet.getRow(r);
-    headers.forEach((h, idx) => {
-      const cell = headerRow.getCell(idx + 1);
+    // ── Sub-header row ──
+    const subHeaders = ["Employee", "Session", "IN", "OUT", "Duration", "Status"];
+    const subRow = punchSheet.getRow(pr);
+    subRow.height = 18;
+    subHeaders.forEach((h, idx) => {
+      const cell = subRow.getCell(idx + 1);
       cell.value = h;
-      cell.font = { bold: true, size: 9, color: { argb: WHITE } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
+      cell.font = { bold: true, size: 8, color: { argb: GRAY } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_GRAY } };
       cell.alignment = { horizontal: "center", vertical: "middle" };
       cell.border = borderAll();
     });
-    headerRow.height = 22;
-    r++;
+    pr++;
 
-    // ── Daily rows with sessions ──
-    let empTotalMinutes = 0;
-    let rowIdx = 0;
-
-    for (const day of emp.dailyDetails) {
+    // ── Employee rows for this date ──
+    for (let ei2 = 0; ei2 < entries.length; ei2++) {
+      const { empName, day } = entries[ei2];
       const sessions = day.sessions || [];
-      const isOff = day.status === "sunday" || day.status === "holiday";
-      const noSessions = sessions.length === 0 || !day.punchIn;
+      const isEven = ei2 % 2 === 1;
 
-      if (noSessions) {
-        // Single row for non-working / absent days
-        const row = sheet.getRow(r);
+      if (sessions.length === 0) {
+        // No sessions — single row for absent / sunday / holiday / leave
+        const row = punchSheet.getRow(pr);
         row.height = 16;
-        const rowBg = isOff ? "FFF3F4F8" : (rowIdx % 2 === 1 ? STRIPE : WHITE);
+        const rowBg = isOff ? P_OFF_BG : (isEven ? P_STRIPE : WHITE);
 
-        row.getCell(1).value = `${fmtDay(day.date)}, ${fmtDate(day.date)}`;
+        row.getCell(1).value = empName;
         row.getCell(1).font = { bold: true, size: 9, color: { argb: isOff ? GRAY : DARK } };
         row.getCell(2).value = "\u2014";
         row.getCell(3).value = "\u2014";
         row.getCell(4).value = "\u2014";
         row.getCell(5).value = "\u2014";
         row.getCell(6).value = statusLabels[day.status] || day.status;
-        const sc = statusColors[day.status];
-        if (sc) {
-          row.getCell(6).font = { bold: true, size: 9, color: { argb: `FF${sc.fg}` } };
-          row.getCell(6).fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${sc.bg}` } };
+        const sc2 = statusColors[day.status];
+        if (sc2) {
+          row.getCell(6).font = { bold: true, size: 9, color: { argb: `FF${sc2.fg}` } };
+          row.getCell(6).fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${sc2.bg}` } };
         }
 
-        for (let c = 1; c <= colCount; c++) {
-          row.getCell(c).alignment = { horizontal: "center", vertical: "middle" };
+        for (let c = 1; c <= pCols; c++) {
+          row.getCell(c).alignment = { horizontal: c === 1 ? "left" : "center", vertical: "middle" };
           row.getCell(c).border = borderAll();
           const ef = row.getCell(c).fill;
           if (c !== 6 && !(ef && "fgColor" in ef && ef.fgColor)) {
@@ -778,127 +973,65 @@ export async function generateFlexReportExcel(
           }
           if (!row.getCell(c).font?.size) row.getCell(c).font = { size: 9, color: { argb: isOff ? GRAY : DARK } };
         }
-        row.getCell(1).alignment = { horizontal: "left", vertical: "middle" };
-        r++;
-        rowIdx++;
+        pr++;
         continue;
       }
 
-      // Sessions rows
-      let dayTotal = 0;
+      // Session rows
       for (let si = 0; si < sessions.length; si++) {
         const sess = sessions[si];
-        const row = sheet.getRow(r);
+        const row = punchSheet.getRow(pr);
         row.height = 16;
-        const rowBg = rowIdx % 2 === 1 ? STRIPE : WHITE;
+        const rowBg = isOff ? P_OFF_BG : (isEven ? P_STRIPE : WHITE);
 
-        // Show date only on first session row
-        if (si === 0) {
-          row.getCell(1).value = `${fmtDay(day.date)}, ${fmtDate(day.date)}`;
-          row.getCell(1).font = { bold: true, size: 9, color: { argb: DARK } };
-        } else {
-          row.getCell(1).value = "";
-        }
-
+        row.getCell(1).value = si === 0 ? empName : "";
+        if (si === 0) row.getCell(1).font = { bold: true, size: 9, color: { argb: DARK } };
         row.getCell(2).value = `#${si + 1}`;
         row.getCell(2).font = { bold: true, size: 9, color: { argb: PURPLE } };
         row.getCell(3).value = fmtTimeIST(sess.inTime);
         row.getCell(4).value = sess.outTime ? fmtTimeIST(sess.outTime) : "\u2014";
         row.getCell(5).value = sess.durationMinutes ? fmtDur(sess.durationMinutes) : "\u2014";
-        if (sess.durationMinutes) {
-          row.getCell(5).font = { bold: true, size: 9, color: { argb: PURPLE } };
-          dayTotal += sess.durationMinutes;
-        }
-        row.getCell(6).value = "";
+        if (sess.durationMinutes) row.getCell(5).font = { bold: true, size: 9, color: { argb: PURPLE } };
 
-        for (let c = 1; c <= colCount; c++) {
-          row.getCell(c).alignment = { horizontal: "center", vertical: "middle" };
+        // Status on first session row only
+        if (si === 0) {
+          row.getCell(6).value = statusLabels[day.status] || day.status;
+          const sc2 = statusColors[day.status];
+          if (sc2) {
+            row.getCell(6).font = { bold: true, size: 9, color: { argb: `FF${sc2.fg}` } };
+            row.getCell(6).fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${sc2.bg}` } };
+          }
+        } else {
+          row.getCell(6).value = "";
+        }
+
+        for (let c = 1; c <= pCols; c++) {
+          row.getCell(c).alignment = { horizontal: c === 1 ? "left" : "center", vertical: "middle" };
           row.getCell(c).border = borderAll();
-          if (!row.getCell(c).font?.size) row.getCell(c).font = { size: 9, color: { argb: DARK } };
           const ef = row.getCell(c).fill;
-          if (!(ef && "fgColor" in ef && ef.fgColor)) {
+          if (c !== 6 && !(ef && "fgColor" in ef && ef.fgColor)) {
             row.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowBg } };
           }
+          if (!row.getCell(c).font?.size) row.getCell(c).font = { size: 9, color: { argb: DARK } };
         }
-        row.getCell(1).alignment = { horizontal: "left", vertical: "middle" };
-        r++;
+        pr++;
       }
-
-      // Day total row
-      empTotalMinutes += dayTotal;
-      const dtRow = sheet.getRow(r);
-      dtRow.height = 16;
-      dtRow.getCell(1).value = "";
-      dtRow.getCell(2).value = "";
-      dtRow.getCell(3).value = "";
-      dtRow.getCell(4).value = "Day Total";
-      dtRow.getCell(4).font = { bold: true, size: 8, color: { argb: GRAY } };
-      dtRow.getCell(5).value = dayTotal > 0 ? fmtDur(dayTotal) : "\u2014";
-      dtRow.getCell(5).font = { bold: true, size: 9, color: { argb: GREEN_FG } };
-
-      const sc = statusColors[day.status];
-      dtRow.getCell(6).value = statusLabels[day.status] || day.status;
-      if (sc) {
-        dtRow.getCell(6).font = { bold: true, size: 9, color: { argb: `FF${sc.fg}` } };
-        dtRow.getCell(6).fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${sc.bg}` } };
-      }
-
-      for (let c = 1; c <= colCount; c++) {
-        dtRow.getCell(c).alignment = { horizontal: "center", vertical: "middle" };
-        dtRow.getCell(c).border = borderAll();
-        const ef = dtRow.getCell(c).fill;
-        if (!(ef && "fgColor" in ef && ef.fgColor)) {
-          dtRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEEE9FF" } };
-        }
-        if (!dtRow.getCell(c).font?.size) dtRow.getCell(c).font = { size: 8, color: { argb: GRAY } };
-      }
-      r++;
-      rowIdx++;
     }
 
-    // ── Employee totals row ──
-    const totalHours = Math.round((empTotalMinutes / 60) * 100) / 100;
-    const netPay = Math.round(totalHours * (emp.hourlyRate || 0));
-    const totRow = sheet.getRow(r);
-    totRow.height = 24;
-    totRow.getCell(1).value = "TOTAL";
-    totRow.getCell(2).value = "";
-    totRow.getCell(3).value = "";
-    totRow.getCell(4).value = `${totalHours}h`;
-    totRow.getCell(4).font = { bold: true, size: 10, color: { argb: PURPLE } };
-    totRow.getCell(5).value = empTotalMinutes > 0 ? fmtDur(empTotalMinutes) : "\u2014";
-    totRow.getCell(5).font = { bold: true, size: 10, color: { argb: PURPLE } };
-    totRow.getCell(6).value = `Net: ${fmt(netPay)}`;
-    totRow.getCell(6).font = { bold: true, size: 10, color: { argb: GREEN_FG } };
-    totRow.getCell(6).fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_BG } };
-
-    for (let c = 1; c <= colCount; c++) {
-      if (!totRow.getCell(c).font?.size) totRow.getCell(c).font = { bold: true, size: 10, color: { argb: PURPLE } };
-      if (!(totRow.getCell(c).fill && "fgColor" in totRow.getCell(c).fill && (totRow.getCell(c).fill as ExcelJS.FillPattern).fgColor)) {
-        totRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEEE9FF" } };
-      }
-      totRow.getCell(c).alignment = { horizontal: "center", vertical: "middle" };
-      totRow.getCell(c).border = {
-        top: { style: "medium", color: { argb: PURPLE } },
-        bottom: { style: "medium", color: { argb: PURPLE } },
-        left: { style: "thin", color: { argb: "FFE0E2E9" } },
-        right: { style: "thin", color: { argb: "FFE0E2E9" } },
-      };
-    }
-    r++;
+    // Small gap between date groups
+    punchSheet.getRow(pr).height = 4;
+    pr++;
   }
 
   // ── Generated timestamp ──
-  sheet.getRow(r).height = 6;
-  r++;
-  sheet.mergeCells(r, 1, r, colCount);
-  const genRow = sheet.getRow(r);
-  genRow.getCell(1).value = `Generated: ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`;
-  genRow.getCell(1).font = { size: 8, italic: true, color: { argb: GRAY } };
-  genRow.getCell(1).alignment = { horizontal: "right" };
-  genRow.height = 16;
+  punchSheet.mergeCells(pr, 1, pr, pCols);
+  const pGenRow = punchSheet.getRow(pr);
+  pGenRow.getCell(1).value = `Generated: ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`;
+  pGenRow.getCell(1).font = { size: 8, italic: true, color: { argb: GRAY } };
+  pGenRow.getCell(1).alignment = { horizontal: "right" };
+  pGenRow.height = 16;
 
-  sheet.pageSetup = {
+  punchSheet.pageSetup = {
     orientation: "landscape",
     paperSize: 9,
     fitToPage: true,
