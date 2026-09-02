@@ -185,14 +185,14 @@ export default function ReportsTab() {
         <span style={{ fontSize: 15, color: "#667085" }}>Working days: <b>{workingDays}</b></span>
         {rows.length > 0 && (
           <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
-            <button className="export" onClick={handleRawExcelExport} disabled={generating}>{generating ? "..." : "Excel 1"}</button>
-            <button className="export" onClick={handleFlatExcelExport} disabled={generating}>{generating ? "..." : "Excel 2"}</button>
-            <button className="export" onClick={handleAllExcelExport} disabled={generating}>{generating ? "..." : "Excel 3"}</button>
-
+            {/* <button className="export" onClick={handleRawExcelExport} disabled={generating}>{generating ? "..." : "Excel 1"}</button>
+            <button className="export" onClick={handleFlatExcelExport} disabled={generating}>{generating ? "..." : "Excel 2"}</button> */}
+            <button className="export" onClick={handleAllExcelExport} disabled={generating}>{generating ? "..." : "Excel"}</button>
+            <button className="export" onClick={handleAllPdfExport} disabled={generating}>{generating ? "..." : "PDF"}</button>
             {rows.some((r) => r.isFlexible) && (
               <button className="export" onClick={handleFlexExcelExport} disabled={generating}>{generating ? "..." : "Flexible Employee Excel"}</button>
             )}
-            <button className="export" onClick={handleAllPdfExport} disabled={generating}>{generating ? "..." : "PDF"}</button>
+
           </div>
         )}
       </div>
@@ -326,9 +326,9 @@ export default function ReportsTab() {
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search employee or ID"
+              placeholder="Search employee or emp-ID"
               aria-label="Search reports"
-              style={{ minWidth: 180 }}
+              style={{ minWidth: 260 , padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)" }}
             />
           </div>
         </div>
