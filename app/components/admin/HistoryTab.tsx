@@ -31,6 +31,14 @@ const ACTION_CONFIG: Record<string, { label: string; color: string; icon: string
   misspunch_rejected: { label: "Miss Punch Rejected",color: "#dc2626",icon: "\u274C" },
 };
 
+/* Map action types → admin tab they should navigate to */
+const ACTION_TAB: Record<string, string> = {
+  misspunch_request: "requests", misspunch_approved: "requests", misspunch_rejected: "requests",
+  leave_request: "leaves", leave_approved: "leaves", leave_rejected: "leaves",
+  mark_present: "dashboard", mark_absent: "dashboard", mark_uh: "dashboard",
+  mark_all_present: "dashboard", mark_all_uh: "dashboard", undo_mark: "dashboard",
+};
+
 const FILTER_GROUPS = [
   { label: "All Activities", value: "" },
   { label: "Logins", value: "admin_login,employee_login" },
@@ -53,7 +61,7 @@ function timeAgo(ts: string): string {
   return new Date(ts).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export default function HistoryTab() {
+export default function HistoryTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -167,18 +175,25 @@ export default function HistoryTab() {
             <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
               {activities.map((a, i) => {
                 const cfg = ACTION_CONFIG[a.actionType] || { label: a.actionType, color: "#666", icon: "\u{1F4CC}" };
-                const initials = a.performedByName.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
+                const navTab = ACTION_TAB[a.actionType];
+                const clickable = !!navTab && !!onNavigate;
 
                 return (
                   <div
                     key={a.id}
+                    onClick={clickable ? () => onNavigate(navTab) : undefined}
                     style={{
                       display: "flex",
                       gap: 14,
                       padding: "14px 0",
                       borderBottom: i < activities.length - 1 ? "1px solid #f0f1f3" : "none",
                       alignItems: "flex-start",
+                      cursor: clickable ? "pointer" : "default",
+                      borderRadius: clickable ? 8 : 0,
+                      transition: "background .15s",
                     }}
+                    onMouseEnter={clickable ? (e) => { (e.currentTarget as HTMLDivElement).style.background = "#f6f7fb"; } : undefined}
+                    onMouseLeave={clickable ? (e) => { (e.currentTarget as HTMLDivElement).style.background = ""; } : undefined}
                   >
                     {/* Icon */}
                     <div

@@ -141,7 +141,17 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
                   <td>
                     <div className="review-actions">
                       <button className="btn-approve" style={{ fontSize: 14 }} onClick={() => { setEditing(b); setForm({ name: b.name, latitude: b.latitude, longitude: b.longitude, radius: String(b.radius || 200) }); setShowModal(true); setError(""); setSuccess(""); }}>Edit</button>
+                      {/* <button className={b.active ? "btn-reject" : "btn-approve"} style={{ fontSize: 14 }} onClick={() => toggleActive(b)}>{b.active ? "Deactivate" : "Activate"}</button> */}
                       <button className={b.active ? "btn-reject" : "btn-approve"} style={{ fontSize: 14 }} onClick={() => toggleActive(b)}>{b.active ? "Deactivate" : "Activate"}</button>
+                      {!b.active && (
+                        <button className="btn-reject" style={{ fontSize: 14 }} onClick={async () => {
+                          if (!confirm("Permanently delete this branch?")) return;
+                          const res = await fetch("/api/branches", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: b.id }) });
+                          if (res.ok) fetchBranches();
+                          else { const d = await res.json(); alert(d.error || "Could not delete."); }
+                        }}>Delete</button>
+                      )}
+
                     </div>
                   </td>
                 </tr>
@@ -210,6 +220,21 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
                     <div className="review-actions">
                       <button className="btn-approve" style={{ fontSize: 14 }} onClick={() => { setEditingDept(d); setDeptForm({ name: d.name }); setShowDeptModal(true); setDeptError(""); setDeptSuccess(""); }}>Edit</button>
                       <button className={d.active ? "btn-reject" : "btn-approve"} style={{ fontSize: 14 }} onClick={async () => {
+                        <button className={d.active ? "btn-reject" : "btn-approve"} style={{ fontSize: 14 }} onClick={async () => {
+                          await fetch("/api/departments", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: d.id, active: !d.active }) });
+                          fetchDepartments();
+                        }}>{d.active ? "Deactivate" : "Activate"}</button>
+                        {
+                          !d.active && (
+                            <button className="btn-reject" style={{ fontSize: 14 }} onClick={async () => {
+                              if (!confirm("Permanently delete this department?")) return;
+                              const res = await fetch("/api/departments", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: d.id }) });
+                              if (res.ok) fetchDepartments();
+                              else { const d = await res.json(); alert(d.error || "Could not delete."); }
+                            }}>Delete</button>
+                          )
+                        }
+
                         await fetch("/api/departments", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: d.id, active: !d.active }) });
                         fetchDepartments();
                       }}>{d.active ? "Deactivate" : "Activate"}</button>

@@ -57,6 +57,7 @@ export default function LeavesTab() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search employee or ID"
             aria-label="Search leave requests"
+            style={{ width: 200, marginRight: 8, padding: 4, borderRadius: 4, border: "1px solid #ccc" }}
           />
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
             <option value="all">All statuses</option>

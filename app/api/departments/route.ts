@@ -100,3 +100,23 @@ export async function PATCH(request: Request) {
   db.update(departments).set(updates).where(eq(departments.id, deptId)).run();
   return Response.json({ ok: true });
 }
+export async function DELETE(request: Request) {
+  const auth = await requireApiRole("admin");
+  if ("error" in auth) return auth.error;
+
+  const { id } = await request.json() as { id?: string };
+  if (!id) return Response.json({ error: "Department ID is required." }, { status: 400 });
+
+  const db = getDb();
+  const dept = db.select().from(departments).where(eq(departments.id, id)).get();
+  if (!dept) return Response.json({ error: "Department not found." }, { status: 404 });
+  if (dept.active) return Response.json({ error: "Deactivate the department before deleting." }, { status: 400 });
+
+  // Check if employees belong to this department
+  const { employees } = await import("../../../db/schema");
+  const assigned = db.select({ id: employees.id }).from(employees).where(eq(employees.department, dept.name)).limit(1).get();
+  if (assigned) return Response.json({ error: "Cannot delete — employees are still assigned to this department." }, { status: 400 });
+
+  db.delete(departments).where(eq(departments.id, id)).run();
+  return Response.json({ ok: true });
+}

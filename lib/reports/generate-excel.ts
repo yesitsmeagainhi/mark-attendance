@@ -84,8 +84,10 @@ function fmtTimeIST(ts: string): string {
 }
 
 function fmtDate(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+  const [y, m, d] = dateStr.split("-");
+  return `${d}-${m}-${y}`;
+  // const d = new Date(dateStr + "T00:00:00");
+  // return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
 }
 
 function fmtDay(dateStr: string): string {
@@ -221,7 +223,7 @@ function buildEmployeeBlock(
     const isOff = day.status === "sunday" || day.status === "holiday";
     const rowBg = isOff ? "FFF3F4F8" : (isEvenRow ? STRIPE : WHITE);
 
-    row.getCell(1).value = `${fmtDay(day.date)}, ${fmtDate(day.date)}`;
+    row.getCell(1).value = `${fmtDate(day.date)}`;
     row.getCell(1).font = { bold: true, size: 9, color: { argb: isOff ? GRAY : DARK } };
     row.getCell(2).value = day.punchIn ? fmtTimeIST(day.punchIn) : "\u2014";
     row.getCell(3).value = day.punchOut ? fmtTimeIST(day.punchOut) : "\u2014";
@@ -552,7 +554,7 @@ export async function generateRawReportExcel(
     const dateHeaderRow = sheet.getRow(r);
     dateHeaderRow.height = 22;
     const dateCell = dateHeaderRow.getCell(1);
-    dateCell.value = `${fmtDay(dateStr)}, ${fmtDate(dateStr)}`;
+    dateCell.value = `${fmtDate(dateStr)}`;
     dateCell.font = { bold: true, size: 10, color: { argb: isOff ? GRAY : WHITE } };
     dateCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: isOff ? "FFE8E9ED" : PURPLE } };
     dateCell.alignment = { horizontal: "left", vertical: "middle" };

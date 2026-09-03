@@ -466,3 +466,23 @@
 .geo-alert-card button{width:100%;padding:12px;border-radius:12px;border:0;font-weight:700;font-size:17px}
 @keyframes slideUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+/* ─── Notification Bell & Toast ─── */
+.notif-bell{position:relative;border:0;background:none;font-size:22px;cursor:pointer;padding:4px 8px;line-height:1;border-radius:8px;transition:background .15s}
+.notif-bell:hover{background:#f1edff}
+.notif-badge{position:absolute;top:-2px;right:0;min-width:18px;height:18px;border-radius:99px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center;padding:0 4px;line-height:1;pointer-events:none}
+
+/* Toast container (fixed top-right) */
+.toast-container{position:fixed;top:80px;right:24px;z-index:200;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast-item{pointer-events:auto;display:flex;align-items:center;gap:10px;background:#fff;border-radius:12px;padding:12px 16px;border-left:4px solid #667085;box-shadow:0 8px 30px rgba(0,0,0,.12);max-width:380px;animation:toast-slide-in .3s ease-out;transition:background .15s}
+.toast-clickable{cursor:pointer}
+.toast-clickable:hover{background:#f9fafb}
+.toast-icon{font-size:18px;line-height:1;flex-shrink:0}
+.toast-msg{font-size:13px;color:var(--ink);line-height:1.4;flex:1;word-break:break-word}
+.toast-time{font-size:11px;color:var(--muted);white-space:nowrap;flex-shrink:0}
+@keyframes toast-slide-in{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+
+@media(max-width:640px){
+  .toast-container{right:12px;left:12px}
+  .toast-item{max-width:100%}
+}

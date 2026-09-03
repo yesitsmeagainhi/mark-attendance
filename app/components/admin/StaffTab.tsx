@@ -102,20 +102,22 @@ export default function StaffTab() {
   function exportEmployees() {
     if (employeeList.length === 0) return;
     const headers = ["ID", "Name", "Email", "Mobile Number", "Job Role", "Department", "Work Start", "Work End", "Office", "Monthly Salary", "Status", "Added On"];
-    const rows = employeeList.map((emp) => [
-      emp.id,
-      emp.name,
-      emp.email,
-      emp.mobileNumber || "",
-      emp.jobRole || "",
-      emp.department || "",
-      emp.workStartTime || "",
-      emp.workEndTime || "",
-      emp.office || "",
-      String(emp.monthlySalary || 0),
-      emp.active ? "Active" : "Inactive",
-      new Date(emp.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
-    ]);
+    const rows = [...employeeList]
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+      .map((emp) => [
+        emp.id,
+        emp.name,
+        emp.email,
+        emp.mobileNumber || "",
+        emp.jobRole || "",
+        emp.department || "",
+        emp.workStartTime || "",
+        emp.workEndTime || "",
+        emp.office || "",
+        String(emp.monthlySalary || 0),
+        emp.active ? "Active" : "Inactive",
+        new Date(emp.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+      ]);
     const csvContent = [headers, ...rows]
       .map((row) => row.map((v) => `"${v.replace(/"/g, '""')}"`).join(","))
       .join("\n");

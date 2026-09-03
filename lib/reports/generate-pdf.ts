@@ -63,55 +63,62 @@ function buildEmployeePage(
   const M = 14; // margin
   const cw = pw - M * 2; // content width
 
+  const R = 2.5; // corner radius for rounded rects
+
   // ── 1. TITLE BAR ──
   doc.setFillColor(109, 69, 229);
-  doc.rect(M, 8, cw, 13, "F");
-  doc.setFontSize(13);
+  doc.roundedRect(M, 8, cw, 15, R, R, "F");
+  doc.setFontSize(14);
   doc.setTextColor(255, 255, 255);
   doc.setFont("Poppins", "bold");
-  doc.text("ATTENDANCE & SALARY REPORT", pw / 2, 16.5, { align: "center" });
+  doc.text("ATTENDANCE & SALARY REPORT", pw / 2, 17.5, { align: "center" });
 
   // ── 2. MONTH LABEL ──
   const [yr, mn] = month.split("-");
   const monthLabel = new Date(Number(yr), Number(mn) - 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
-  doc.setFontSize(9);
-  doc.setFont("Poppins", "normal");
-  doc.setTextColor(102, 112, 133);
-  doc.text(monthLabel, pw / 2, 27, { align: "center" });
+  doc.setFontSize(10);
+  doc.setFont("Poppins", "bold");
+  doc.setTextColor(80, 80, 100);
+  doc.text(monthLabel, pw / 2, 30, { align: "center" });
 
   // ── 3. EMPLOYEE INFO CARD ──
-  const cardY = 30;
-  const cardH = 17;
+  const cardY = 33;
+  const cardH = 19;
+  // Card background
   doc.setFillColor(248, 249, 252);
-  doc.rect(M, cardY, cw, cardH, "F");
-  doc.setDrawColor(224, 226, 232);
-  doc.setLineWidth(0.3);
-  doc.rect(M, cardY, cw, cardH, "S");
+  doc.roundedRect(M, cardY, cw, cardH, R, R, "F");
+  // Card border
+  doc.setDrawColor(210, 214, 224);
+  doc.setLineWidth(0.35);
+  doc.roundedRect(M, cardY, cw, cardH, R, R, "S");
+  // Purple left accent bar
+  doc.setFillColor(109, 69, 229);
+  doc.rect(M, cardY + 3, 1.2, cardH - 6, "F");
 
   // Left: name + details
-  doc.setFontSize(12);
+  doc.setFontSize(13);
   doc.setTextColor(23, 32, 51);
   doc.setFont("Poppins", "bold");
-  doc.text(emp.name, M + 4, cardY + 7);
+  doc.text(emp.name, M + 6, cardY + 8);
   doc.setFontSize(7.5);
   doc.setFont("Poppins", "normal");
   doc.setTextColor(107, 114, 128);
-  doc.text(`${emp.jobRole}  \u00B7  ${emp.office}  \u00B7  Shift: ${emp.shift}`, M + 4, cardY + 13);
+  doc.text(`${emp.jobRole}  \u00B7  ${emp.office}  \u00B7  Shift: ${emp.shift}`, M + 6, cardY + 14.5);
 
   // Right: working days + ID
-  doc.setFontSize(8);
+  doc.setFontSize(9);
   doc.setFont("Poppins", "bold");
   doc.setTextColor(109, 69, 229);
-  doc.text(`${workingDays} Work Days`, pw - M - 4, cardY + 7, { align: "right" });
-  doc.setFontSize(7);
+  doc.text(`${workingDays} Work Days`, pw - M - 5, cardY + 8, { align: "right" });
+  doc.setFontSize(7.5);
   doc.setFont("Poppins", "normal");
   doc.setTextColor(156, 163, 175);
-  doc.text(`ID: ${emp.id.length > 8 ? emp.id.slice(0, 8) + "\u2026" : emp.id}`, pw - M - 4, cardY + 13, { align: "right" });
+  doc.text(`ID: ${emp.id.length > 8 ? emp.id.slice(0, 8) + "\u2026" : emp.id}`, pw - M - 5, cardY + 14.5, { align: "right" });
 
   // ── 4. ATTENDANCE METRIC BOXES ──
-  const boxY = cardY + cardH + 4;
-  const boxH = 14;
-  const gap = 2.5;
+  const boxY = cardY + cardH + 5;
+  const boxH = 16;
+  const gap = 3;
   const metrics: { label: string; value: string; bg: [number, number, number]; fg: [number, number, number] }[] = [
     { label: "Present", value: String(emp.presentDays), bg: [232, 247, 239], fg: [22, 128, 82] },
     { label: "Absent", value: String(emp.absentDays), bg: [255, 237, 237], fg: [199, 51, 51] },
@@ -124,29 +131,34 @@ function buildEmployeePage(
   for (let i = 0; i < metrics.length; i++) {
     const m = metrics[i];
     const bx = M + i * (boxW + gap);
+    // Box background
     doc.setFillColor(...m.bg);
-    doc.rect(bx, boxY, boxW, boxH, "F");
+    doc.roundedRect(bx, boxY, boxW, boxH, 1.5, 1.5, "F");
+    // Subtle border
+    doc.setDrawColor(...m.fg);
+    doc.setLineWidth(0.15);
+    doc.roundedRect(bx, boxY, boxW, boxH, 1.5, 1.5, "S");
     // Value (centered, large bold)
-    doc.setFontSize(11);
+    doc.setFontSize(13);
     doc.setFont("Poppins", "bold");
     doc.setTextColor(...m.fg);
-    doc.text(m.value, bx + boxW / 2, boxY + 6.5, { align: "center" });
+    doc.text(m.value, bx + boxW / 2, boxY + 7.5, { align: "center" });
     // Label (centered, small)
     doc.setFontSize(6.5);
     doc.setFont("Poppins", "normal");
     doc.setTextColor(107, 114, 128);
-    doc.text(m.label, bx + boxW / 2, boxY + 11.5, { align: "center" });
+    doc.text(m.label, bx + boxW / 2, boxY + 13, { align: "center" });
   }
 
   // ── 5. SALARY BAR ──
-  const salY = boxY + boxH + 3;
-  const salH = 11;
+  const salY = boxY + boxH + 5;
+  const salH = 13;
   // Background
   doc.setFillColor(248, 249, 252);
-  doc.rect(M, salY, cw, salH, "F");
-  doc.setDrawColor(224, 226, 232);
-  doc.setLineWidth(0.2);
-  doc.rect(M, salY, cw, salH, "S");
+  doc.roundedRect(M, salY, cw, salH, R, R, "F");
+  doc.setDrawColor(210, 214, 224);
+  doc.setLineWidth(0.35);
+  doc.roundedRect(M, salY, cw, salH, R, R, "S");
 
   // Left: salary items
   const salItems: { label: string; value: string; color?: [number, number, number] }[] = [
@@ -155,37 +167,40 @@ function buildEmployeePage(
     { label: "Late Ded.", value: emp.lateAbsentDays > 0 ? `${emp.lateAbsentDays}d` : "\u2014" },
     { label: "Sun Bonus", value: emp.sundayBonus > 0 ? `+${fmt(emp.sundayBonus)}` : "\u2014", color: emp.sundayBonus > 0 ? [29, 78, 216] : undefined },
   ];
-  const netPayW = 46;
-  const salAreaW = cw - netPayW - 2;
+  const netPayW = 48;
+  const salAreaW = cw - netPayW - 3;
   const salItemW = salAreaW / salItems.length;
   for (let i = 0; i < salItems.length; i++) {
     const s = salItems[i];
-    const sx = M + 3 + i * salItemW;
+    const sx = M + 4 + i * salItemW;
     // Label
-    doc.setFontSize(6);
+    doc.setFontSize(6.5);
     doc.setFont("Poppins", "normal");
     doc.setTextColor(156, 163, 175);
-    doc.text(s.label, sx, salY + 4);
+    doc.text(s.label, sx, salY + 5);
     // Value
-    doc.setFontSize(8);
+    doc.setFontSize(9);
     doc.setFont("Poppins", "bold");
     doc.setTextColor(...(s.color || [23, 32, 51]));
-    doc.text(s.value, sx, salY + 8.5);
+    doc.text(s.value, sx, salY + 10);
   }
 
   // Net Pay highlight (green box on right)
   const npX = pw - M - netPayW;
   doc.setFillColor(232, 247, 239);
-  doc.rect(npX, salY, netPayW, salH, "F");
-  doc.setFontSize(6);
+  doc.roundedRect(npX, salY, netPayW, salH, R, R, "F");
+  doc.setDrawColor(22, 128, 82);
+  doc.setLineWidth(0.2);
+  doc.roundedRect(npX, salY, netPayW, salH, R, R, "S");
+  doc.setFontSize(6.5);
   doc.setFont("Poppins", "normal");
   doc.setTextColor(22, 128, 82);
-  doc.text("NET PAY", npX + 3, salY + 4);
-  doc.setFontSize(10);
+  doc.text("NET PAY", npX + 4, salY + 5);
+  doc.setFontSize(11);
   doc.setFont("Poppins", "bold");
-  doc.text(fmt(emp.netPay), npX + 3, salY + 9);
+  doc.text(fmt(emp.netPay), npX + 4, salY + 10.5);
 
-  // Optional: Short Day / UH note
+  // Optional: UH note
   let noteY = salY + salH + 1;
   const notes: string[] = [];
   if (emp.uhDays > 0) notes.push(`Unpaid Holidays: ${emp.uhDays}`);
@@ -272,6 +287,7 @@ function buildEmployeePage(
 
   // ── 7. FOOTER ──
   doc.setFontSize(6.5);
+  
   doc.setFont("Poppins", "normal");
   doc.setTextColor(156, 163, 175);
   const ph = doc.internal.pageSize.getHeight();

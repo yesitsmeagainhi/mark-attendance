@@ -5,7 +5,7 @@ import { useState } from "react";
 const barTabs = [
   { id: "dashboard", label: "Home", icon: "\u{1F3E0}" },
   { id: "staff", label: "Staff", icon: "\u{1F465}" },
-  { id: "requests", label: "Requests", icon: "\u{1F4E9}" },
+  { id: "requests", label: "Miss Punch Requests", icon: "\u{1F4E9}" },
   { id: "reports", label: "Reports", icon: "\u{1F4CA}" },
 ];
 

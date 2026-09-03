@@ -136,3 +136,23 @@ export async function PATCH(request: Request) {
   db.update(branches).set(updates).where(eq(branches.id, branchId)).run();
   return Response.json({ ok: true });
 }
+export async function DELETE(request: Request) {
+  const auth = await requireApiRole("admin");
+  if ("error" in auth) return auth.error;
+
+  const { id } = await request.json() as { id?: string };
+  if (!id) return Response.json({ error: "Branch ID is required." }, { status: 400 });
+
+  const db = getDb();
+  const branch = db.select().from(branches).where(eq(branches.id, id)).get();
+  if (!branch) return Response.json({ error: "Branch not found." }, { status: 404 });
+  if (branch.active) return Response.json({ error: "Deactivate the branch before deleting." }, { status: 400 });
+
+  // Check if employees are assigned to this branch
+  const { employeeBranches } = await import("../../../db/schema");
+  const assigned = db.select({ id: employeeBranches.id }).from(employeeBranches).where(eq(employeeBranches.branchId, id)).limit(1).get();
+  if (assigned) return Response.json({ error: "Cannot delete — employees are still assigned to this branch." }, { status: 400 });
+
+  db.delete(branches).where(eq(branches.id, id)).run();
+  return Response.json({ ok: true });
+}

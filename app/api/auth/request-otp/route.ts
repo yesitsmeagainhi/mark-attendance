@@ -1,7 +1,7 @@
 import { randomUUID, randomInt } from "node:crypto";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, lt } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { employees, otpRequests } from "../../../../db/schema";
+import { employees, otpRequests, activityLog } from "../../../../db/schema";
 
 export async function POST(request: Request) {
   let body: { mobileNumber?: string };
@@ -40,6 +40,13 @@ export async function POST(request: Request) {
       { status: 404 },
     );
   }
+
+  // Cleanup: delete all OTP entries older than 24 hours
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  db.delete(otpRequests).where(lt(otpRequests.createdAt, oneDayAgo)).run();
+
+  const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
+  db.delete(activityLog).where(lt(activityLog.timestamp, sixMonthsAgo)).run();
 
   // Expire any existing pending OTPs for this employee
   db.update(otpRequests)
