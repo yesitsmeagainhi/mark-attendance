@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
 import type { FaceEvalStatus } from "./attendance-types";
 
@@ -58,6 +58,9 @@ export default function FullscreenCameraOverlay({
   onCloseRef.current = onClose;
   onFaceUpdateRef.current = onFaceUpdate;
 
+  const monitorRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [previewFrame, setPreviewFrame] = useState<string | null>(null);
+
   // Lock body scroll
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -69,17 +72,51 @@ export default function FullscreenCameraOverlay({
   useEffect(() => {
     let cancelled = false;
     navigator.mediaDevices?.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      })
+      video: {
+        facingMode: "user",
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        zoom: 1.0,
+      } as MediaTrackConstraints,
+      audio: false,
+    })
       .then((stream) => {
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
+
+        // Disable Center Stage auto-framing on iOS/iPadOS
+        const track = stream.getVideoTracks()[0];
+        try {
+          const caps = track?.getCapabilities?.() as Record<string, unknown> | undefined;
+          if (caps?.zoom) {
+            track.applyConstraints({ advanced: [{ zoom: 1.0 } as MediaTrackConstraintSet] }).catch(() => {});
+          }
+        } catch { /* non-Safari browsers ignore this */ }
+
+        // Continuous monitor: detect zoom/resolution changes and auto-correct
+        let lastTrackW = 0, lastTrackH = 0;
+        function pollCameraState() {
+          const trk = stream.getVideoTracks()[0];
+          if (!trk) return;
+          const s = trk.getSettings();
+          const tw = s.width ?? 0, th = s.height ?? 0;
+
+          if (lastTrackW && lastTrackH && (tw !== lastTrackW || th !== lastTrackH)) {
+            try {
+              trk.applyConstraints({ advanced: [{ zoom: 1.0 } as MediaTrackConstraintSet] }).catch(() => {});
+            } catch { /* ignore */ }
+          }
+          lastTrackW = tw;
+          lastTrackH = th;
+        }
+        pollCameraState();
+        monitorRef.current = setInterval(pollCameraState, 500);
       })
       .catch(() => { if (!cancelled) onCloseRef.current(); });
     return () => {
       cancelled = true;
+      if (monitorRef.current) { clearInterval(monitorRef.current); monitorRef.current = null; }
       streamRef.current?.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     };
@@ -166,13 +203,26 @@ export default function FullscreenCameraOverlay({
     const scale = Math.min(1, 480 / Math.max(vw, vh));
     c.width = Math.round(vw * scale);
     c.height = Math.round(vh * scale);
-    c.getContext("2d")?.drawImage(video, 0, 0, c.width, c.height);
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    // Mirror horizontally to match what the user sees in the camera
+    ctx.translate(c.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, c.width, c.height);
     const frame = c.toDataURL("image/jpeg", 0.60);
-    // Stop camera before calling parent
+    setPreviewFrame(frame);
+  }, []);
+
+  const handleConfirm = useCallback(() => {
+    if (!previewFrame) return;
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
-    onCaptureFrame(frame);
-  }, [onCaptureFrame]);
+    onCaptureFrame(previewFrame);
+  }, [previewFrame, onCaptureFrame]);
+
+  const handleRetake = useCallback(() => {
+    setPreviewFrame(null);
+  }, []);
 
   const isReady = faceStatus === "ready";
   const isOutsideGeoFence = withinGeoFence === false;
@@ -182,95 +232,93 @@ export default function FullscreenCameraOverlay({
 
   return createPortal(
     <div className="fullscreen-camera-overlay">
-      <video ref={videoRef} autoPlay muted playsInline className="fco-video" />
-      <canvas ref={canvasRef} className="fco-canvas" />
+      {/* Camera view — hidden during preview */}
+      <video ref={videoRef} autoPlay muted playsInline className="fco-video" style={previewFrame ? { display: "none" } : undefined} />
+      <canvas ref={canvasRef} className="fco-canvas" style={previewFrame ? { display: "none" } : undefined} />
 
-      <div className="fco-top-bar">
-        <button className="fco-close-btn" onClick={onClose} aria-label="Close camera">
-          &times;
-        </button>
-        <span className={`fco-punch-badge ${nextPunchType === "OUT" ? "fco-punch-out" : ""}`}>
-          {nextPunchType === "IN" ? "PUNCH IN" : "PUNCH OUT"}
-        </span>
-        <div className="fco-gps-status">
-          {locationLoading && <span className="fco-gps-loading">GPS...</span>}
-          {location && (
-            <span className="fco-gps-ok">
-              GPS &plusmn;{Math.round(location.accuracy)}m
+      {previewFrame ? (
+        <>
+          <img src={previewFrame} alt="Selfie preview" className="fco-preview-img" />
+          <div className="fco-preview-label">Review your selfie</div>
+          <div className="fco-preview-actions">
+            <button className="fco-retake-btn" onClick={handleRetake}>
+              Retake
+            </button>
+            <button className={`fco-confirm-btn ${nextPunchType === "OUT" ? "fco-confirm-out" : ""}`} onClick={handleConfirm} disabled={saving}>
+              {saving ? "Saving..." : nextPunchType === "IN" ? "Confirm & Punch In" : "Confirm & Punch Out"}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="fco-top-bar">
+            <button className="fco-close-btn" onClick={onClose} aria-label="Close camera">
+              &times;
+            </button>
+            <span className={`fco-punch-badge ${nextPunchType === "OUT" ? "fco-punch-out" : ""}`}>
+              {nextPunchType === "IN" ? "PUNCH IN" : "PUNCH OUT"}
             </span>
-          )}
-          {locationError && !locationLoading && (
-            <button className="fco-gps-retry" onClick={onRetryGPS}>Enable GPS</button>
-          )}
-          {!location && !locationLoading && !locationError && (
-            <button className="fco-gps-retry" onClick={onRetryGPS}>Enable GPS</button>
-          )}
-        </div>
-      </div>
-
-      {/* {(officeName || shiftDisplay) && (
-        <div className="fco-info-strip">
-          {officeName && <span>{officeName}</span>}
-          {officeName && shiftDisplay && <span className="fco-sep">&middot;</span>}
-          {shiftDisplay && <span>{shiftDisplay}</span>}
-          {currentlyIn && lastPunchTime && (
-            <>
-              <span className="fco-sep">&middot;</span>
-              <span>In: {lastPunchTime}</span>
-              {elapsed && (
-                <>
-                  <span className="fco-sep">&middot;</span>
-                  <span>{elapsed}</span>
-                </>
+            <div className="fco-gps-status">
+              {locationLoading && <span className="fco-gps-loading">GPS...</span>}
+              {location && (
+                <span className="fco-gps-ok">
+                  GPS &plusmn;{Math.round(location.accuracy)}m
+                </span>
               )}
-            </>
+              {locationError && !locationLoading && (
+                <button className="fco-gps-retry" onClick={onRetryGPS}>Enable GPS</button>
+              )}
+              {!location && !locationLoading && !locationError && (
+                <button className="fco-gps-retry" onClick={onRetryGPS}>Enable GPS</button>
+              )}
+            </div>
+          </div>
+
+          {isOutsideGeoFence && geoFenceInfo && (
+            <div className="fco-geofence-alert">
+              <span className="fco-geofence-icon">&#9888;</span>
+              <span>Outside office range — {geoFenceInfo.distance >= 1000
+                ? `${(geoFenceInfo.distance / 1000).toFixed(1)} km`
+                : `${geoFenceInfo.distance} m`} from {geoFenceInfo.branchName} (allowed: {geoFenceInfo.allowedRadius} m)</span>
+            </div>
           )}
-        </div>
-      )} */}
 
-      {isOutsideGeoFence && geoFenceInfo && (
-        <div className="fco-geofence-alert">
-          <span className="fco-geofence-icon">&#9888;</span>
-          <span>Outside office range — {geoFenceInfo.distance >= 1000
-            ? `${(geoFenceInfo.distance / 1000).toFixed(1)} km`
-            : `${geoFenceInfo.distance} m`} from {geoFenceInfo.branchName} (allowed: {geoFenceInfo.allowedRadius} m)</span>
-        </div>
+          <div className={`fco-guidance ${isOutsideGeoFence ? "fco-guidance-no-face" : `fco-guidance-${faceStatus}`}`}>
+            <span className="fco-guidance-dot" />
+            {isOutsideGeoFence ? "You are outside the office area" : faceGuidance}
+          </div>
+
+          {!modelsLoaded && !modelError && (
+            <div className="fco-model-loading">Loading face detection...</div>
+          )}
+          {modelError && (
+            <div className="fco-model-error">{modelError}</div>
+          )}
+
+          <div className="fco-bottom-area">
+            <button
+              className={`fco-capture-btn ${nextPunchType === "OUT" ? "fco-capture-out" : ""} ${canCapture ? "" : "fco-capture-disabled"} ${isOutsideGeoFence ? "fco-capture-geoblocked" : ""}`}
+              onClick={handleCapture}
+              disabled={!canCapture}
+            >
+              <span className="fco-capture-ring" />
+            </button>
+            <div className={`fco-capture-label ${isOutsideGeoFence ? "fco-capture-label-red" : ""}`}>
+              {saving
+                ? "Saving..."
+                : !location
+                  ? "Waiting for GPS..."
+                  : isOutsideGeoFence
+                    ? "Move closer to office to punch"
+                    : modelsLoaded && !modelError && !isReady
+                      ? faceGuidance
+                      : nextPunchType === "IN"
+                        ? "Capture & Punch In"
+                        : "Capture & Punch Out"}
+            </div>
+          </div>
+        </>
       )}
-
-      <div className={`fco-guidance ${isOutsideGeoFence ? "fco-guidance-no-face" : `fco-guidance-${faceStatus}`}`}>
-        <span className="fco-guidance-dot" />
-        {isOutsideGeoFence ? "You are outside the office area" : faceGuidance}
-      </div>
-
-      {!modelsLoaded && !modelError && (
-        <div className="fco-model-loading">Loading face detection...</div>
-      )}
-      {modelError && (
-        <div className="fco-model-error">{modelError}</div>
-      )}
-
-      <div className="fco-bottom-area">
-        <button
-          className={`fco-capture-btn ${nextPunchType === "OUT" ? "fco-capture-out" : ""} ${canCapture ? "" : "fco-capture-disabled"} ${isOutsideGeoFence ? "fco-capture-geoblocked" : ""}`}
-          onClick={handleCapture}
-          disabled={!canCapture}
-        >
-          <span className="fco-capture-ring" />
-        </button>
-        <div className={`fco-capture-label ${isOutsideGeoFence ? "fco-capture-label-red" : ""}`}>
-          {saving
-            ? "Saving..."
-            : !location
-              ? "Waiting for GPS..."
-              : isOutsideGeoFence
-                ? "Move closer to office to punch"
-                : modelsLoaded && !modelError && !isReady
-                  ? faceGuidance
-                  : nextPunchType === "IN"
-                    ? "Capture & Punch In"
-                    : "Capture & Punch Out"}
-        </div>
-      </div>
     </div>,
     document.body,
   );
@@ -357,3 +405,6 @@ function drawOverlay(
   }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+
+

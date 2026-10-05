@@ -20,7 +20,9 @@ function LoginInner() {
 
   // Redirect already-authenticated users to their dashboard
   useEffect(() => {
-    fetch("/api/auth/session-check", { cache: "no-store" })
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    fetch("/api/auth/session-check", { cache: "no-store", signal: ctrl.signal })
       .then((r) => r.ok ? r.json() : null)
       .then((data: { valid?: boolean; role?: string } | null) => {
         if (data?.valid) {
@@ -29,7 +31,8 @@ function LoginInner() {
           setChecking(false);
         }
       })
-      .catch(() => setChecking(false));
+      .catch(() => setChecking(false))
+      .finally(() => clearTimeout(timer));
   }, [router]);
 
   // Admin login state

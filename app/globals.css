@@ -376,6 +376,18 @@
 @keyframes slideDown{from{transform:translateX(-50%) translateY(-10px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
 @keyframes pulseFade{0%,100%{opacity:1}50%{opacity:.5}}
 
+/* Selfie preview confirmation */
+.fco-preview-overlay{position:fixed;inset:0;z-index:310;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;padding:24px;padding-top:calc(24px + env(safe-area-inset-top,0px));padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));animation:fadeInPreview .25s ease}
+.fco-preview-img{width:auto;height:auto;max-width:90%;max-height:60vh;border-radius:16px;object-fit:contain;box-shadow:0 8px 32px rgba(0,0,0,.5);border:3px solid rgba(255,255,255,.15)}
+.fco-preview-label{margin-top:18px;font-size:16px;font-weight:600;color:rgba(255,255,255,.7);text-align:center}
+.fco-preview-actions{display:flex;gap:16px;margin-top:24px;width:100%;max-width:340px}
+.fco-retake-btn{flex:1;padding:14px 0;border-radius:12px;border:2px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s}
+.fco-retake-btn:active{background:rgba(255,255,255,.1)}
+.fco-confirm-btn{flex:1.4;padding:14px 0;border-radius:12px;border:none;background:var(--purple);color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;transition:transform .15s,opacity .15s}
+.fco-confirm-btn:active{transform:scale(.97)}
+.fco-confirm-btn:disabled{opacity:.5;cursor:not-allowed}
+.fco-confirm-out{background:#ef4444}
+@keyframes fadeInPreview{from{opacity:0}to{opacity:1}}
 
 .employee-layout {
   min-height: 100dvh;
