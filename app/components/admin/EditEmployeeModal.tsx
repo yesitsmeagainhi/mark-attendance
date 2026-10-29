@@ -29,6 +29,7 @@ export default function EditEmployeeModal({
     monthlySalary: String(employee.monthlySalary || ""),
     hourlyRate: String((employee as { hourlyRate?: number }).hourlyRate || ""),
     flexibleHours: employee.flexibleHours ?? false,
+    paidHolidays: employee.paidHolidays ?? true,
     active: employee.active,
   });
   const [error, setError] = useState("");
@@ -65,6 +66,7 @@ export default function EditEmployeeModal({
         monthlySalary: form.flexibleHours ? 0 : (parseInt(form.monthlySalary, 10) || 0),
         hourlyRate: form.flexibleHours ? (parseInt(form.hourlyRate, 10) || 0) : 0,
         flexibleHours: form.flexibleHours,
+        paidHolidays: form.paidHolidays,
         active: form.active,
       };
 
@@ -186,6 +188,22 @@ export default function EditEmployeeModal({
               {form.flexibleHours ? "Enabled" : "Disabled"}
             </button>
           </label>
+          {!form.flexibleHours && (
+            <label style={{ display: "flex", alignItems: "center", gap: 10, flexDirection: "row" }}>
+              <span style={{ flex: 1 }}>
+                Paid holidays
+                <small style={{ display: "block", color: "#9ca3af", fontWeight: 400 }}>Salary is not deducted on paid holidays</small>
+              </span>
+              <button
+                type="button"
+                className={form.paidHolidays ? "btn-approve" : "btn-reject"}
+                style={{ fontSize: 14 }}
+                onClick={() => setForm({ ...form, paidHolidays: !form.paidHolidays })}
+              >
+                {form.paidHolidays ? "Eligible" : "Not eligible"}
+              </button>
+            </label>
+          )}
           {form.flexibleHours ? (
             <label>
               <span>Hourly rate (&#8377;/hr)</span>

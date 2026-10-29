@@ -1,9 +1,10 @@
-import { eq, and, sql, desc, gte, lte } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { attendance, employees, leaveRequests, holidays } from "../../../../db/schema";
+import { attendance, employees, leaveRequests } from "../../../../db/schema";
 import { getAppIdentity } from "../../../authz";
 import { getEffectiveRules } from "../../../../lib/rules";
 import { calculateTotalDuration } from "../../../../lib/time-utils";
+import { getHolidayCalendar } from "../../../../lib/holidays";
 
 export async function GET(request: Request) {
   const identity = await getAppIdentity();
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
 
   // Get employee's work start time for grace calculation
   const emp = db
-    .select({ workStartTime: employees.workStartTime, flexibleHours: employees.flexibleHours })
+    .select({ workStartTime: employees.workStartTime, flexibleHours: employees.flexibleHours, paidHolidays: employees.paidHolidays })
     .from(employees)
     .where(eq(employees.id, identity.employeeId))
     .get();
@@ -109,12 +110,8 @@ export async function GET(request: Request) {
     .all();
 
   // Get holidays in the same period
-  const holidayRecords = db
-    .select({ date: holidays.date })
-    .from(holidays)
-    .where(and(gte(holidays.date, firstDay), lte(holidays.date, lastDay)))
-    .all();
-  const holidayDates = new Set(holidayRecords.map((h) => h.date));
+  const holidayCal = getHolidayCalendar(firstDay, lastDay);
+  const empForHolidays = { id: identity.employeeId, paidHolidays: emp?.paidHolidays ?? true };
 
   // Group records by date (store all punches for multi-session support)
   type DayPunches = { punchIn?: string; punchOut?: string; office?: string; photoKeyIn?: string; photoKeyOut?: string; isAdminUH?: boolean; allPunches: { punchType: string; serverTimestamp: string }[] };
@@ -178,6 +175,7 @@ export async function GET(request: Request) {
     photoKeyIn: string | null;
     photoKeyOut: string | null;
     sessions?: SessionInfo[];
+    holidayName?: string;
   }> = [];
 
   function buildSessions(allPunches: { punchType: string; serverTimestamp: string }[]): SessionInfo[] {
@@ -203,6 +201,7 @@ export async function GET(request: Request) {
   let lateDays = 0;
   let halfDays = 0;
   let uhDays = 0;
+  let paidHolidayDays = 0;
   let sundayWorkedDays = 0;
 
   for (const dateStr of iterDates) {
@@ -236,9 +235,16 @@ export async function GET(request: Request) {
 
     // No punch — check for UH/holiday or mark absent
     if (!dayData?.punchIn) {
-      if (holidayDates.has(dateStr) || dayData?.isAdminUH) {
+      const holiday = holidayCal.byDate.get(dateStr);
+      if (holiday && (isFlexible || holidayCal.isPaidFor(holiday, empForHolidays))) {
+        // Hourly (flex) employees are paid by hours, so it's just a day off for them
+        if (!isFlexible) paidHolidayDays++;
+        result.push({ date: dateStr, punchInTime: null, punchOutTime: null, duration: null, status: isFlexible ? "Holiday" : "Paid Holiday", lateByMinutes: null, office: null, photoKeyIn: null, photoKeyOut: null, holidayName: holiday.name });
+        continue;
+      }
+      if (holiday || dayData?.isAdminUH) {
         uhDays++;
-        result.push({ date: dateStr, punchInTime: null, punchOutTime: null, duration: null, status: "UH", lateByMinutes: null, office: null, photoKeyIn: null, photoKeyOut: null });
+        result.push({ date: dateStr, punchInTime: null, punchOutTime: null, duration: null, status: "UH", lateByMinutes: null, office: null, photoKeyIn: null, photoKeyOut: null, holidayName: holiday?.name });
         continue;
       }
       // Only mark absent for past days, not today
@@ -308,6 +314,7 @@ export async function GET(request: Request) {
     lateDays,
     halfDays,
     uhDays,
+    paidHolidayDays,
     sundayWorkedDays,
     absentDays: result.filter((r) => r.status === "Absent" || r.status === "Short Day").length,
     leaveDays: result.filter((r) => r.status === "Leave").length,

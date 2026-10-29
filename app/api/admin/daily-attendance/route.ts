@@ -1,8 +1,9 @@
 import { eq, and, sql, desc } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { attendance, employees, holidays } from "../../../../db/schema";
+import { attendance, employees } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
 import { getEffectiveRulesBatch } from "../../../../lib/rules";
+import { getHolidayCalendar } from "../../../../lib/holidays";
 
 export async function GET(request: Request) {
   const auth = await requireApiRole("admin");
@@ -21,6 +22,7 @@ export async function GET(request: Request) {
       workStartTime: employees.workStartTime,
       workEndTime: employees.workEndTime,
       flexibleHours: employees.flexibleHours,
+      paidHolidays: employees.paidHolidays,
     })
     .from(employees)
     .where(and(eq(employees.active, true), sql`${employees.role} != 'admin'`))
@@ -46,11 +48,8 @@ export async function GET(request: Request) {
     .all();
 
   // Check if date is a holiday
-  const holiday = db
-    .select({ id: holidays.id, type: holidays.type, note: holidays.note })
-    .from(holidays)
-    .where(eq(holidays.date, date))
-    .get();
+  const holidayCal = getHolidayCalendar(date, date);
+  const holiday = holidayCal.byDate.get(date);
 
   // Load rules for all employees at once
   const rulesByEmp = getEffectiveRulesBatch(allEmployees.map((e) => e.id));
@@ -106,7 +105,7 @@ export async function GET(request: Request) {
       }
     } else if (holiday) {
       // Only apply holiday status if employee has no punch record
-      status = "unpaid_holiday";
+      status = emp.flexibleHours || holidayCal.isPaidFor(holiday, emp) ? "paid_holiday" : "unpaid_holiday";
     } else {
       // No punch record — check if it's a past date
       const today = new Date().toISOString().slice(0, 10);
@@ -180,7 +179,8 @@ export async function GET(request: Request) {
   return Response.json({
     date,
     isHoliday: !!holiday,
-    holidayType: holiday?.type || null,
+    holidayType: holiday ? (holiday.paid ? "paid_holiday" : "unpaid_holiday") : null,
+    holidayName: holiday?.name || null,
     employees: result,
     summary: { total: allEmployees.length, checkedIn, absent },
   });

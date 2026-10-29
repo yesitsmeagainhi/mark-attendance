@@ -18,6 +18,7 @@ export const employees = sqliteTable("employees", {
   hourlyRate: integer("hourly_rate").notNull().default(0),
   profilePhotoKey: text("profile_photo_key"),
   flexibleHours: integer("flexible_hours", { mode: "boolean" }).notNull().default(false),
+  paidHolidays: integer("paid_holidays", { mode: "boolean" }).notNull().default(true),
   dateOfBirth: text("date_of_birth").notNull().default(""),
   profileEditCount: integer("profile_edit_count").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -67,7 +68,17 @@ export const holidays = sqliteTable("holidays", {
   id: text("id").primaryKey(),
   date: text("date").notNull().unique(),
   type: text("type").notNull(),
+  name: text("name").notNull().default("Holiday"),
+  paid: integer("paid", { mode: "boolean" }).notNull().default(true),
   note: text("note"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const holidayEmployeeOverrides = sqliteTable("holiday_employee_overrides", {
+  id: text("id").primaryKey(),
+  holidayId: text("holiday_id").notNull().references(() => holidays.id, { onDelete: "cascade" }),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  paid: integer("paid", { mode: "boolean" }).notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 

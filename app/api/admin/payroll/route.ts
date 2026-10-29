@@ -1,9 +1,10 @@
 import { eq, and, sql, gte, lte } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { attendance, employees, leaveRequests, holidays } from "../../../../db/schema";
+import { attendance, employees, leaveRequests } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
 import { getEffectiveRulesBatch } from "../../../../lib/rules";
 import { calculateTotalDuration } from "../../../../lib/time-utils";
+import { getHolidayCalendar } from "../../../../lib/holidays";
 
 export async function GET(request: Request) {
   const auth = await requireApiRole("admin");
@@ -23,12 +24,8 @@ export async function GET(request: Request) {
   const db = getDb();
 
   // Calculate working days (exclude Sundays and holidays)
-  const holidayRecords = db
-    .select({ date: holidays.date })
-    .from(holidays)
-    .where(and(gte(holidays.date, firstDay), lte(holidays.date, lastDayStr)))
-    .all();
-  const holidayDates = new Set(holidayRecords.map((h) => h.date));
+  const holidayCal = getHolidayCalendar(firstDay, lastDayStr);
+  const holidayDates = holidayCal.dates;
 
   let workingDays = 0;
   for (let d = 1; d <= lastDay; d++) {
@@ -46,6 +43,7 @@ export async function GET(request: Request) {
       hourlyRate: employees.hourlyRate,
       workStartTime: employees.workStartTime,
       flexibleHours: employees.flexibleHours,
+      paidHolidays: employees.paidHolidays,
     })
     .from(employees)
     .where(and(eq(employees.active, true), sql`${employees.role} != 'admin'`))
@@ -121,6 +119,7 @@ export async function GET(request: Request) {
     let lateDays = 0;
     let uhDays = 0;
     let sundayWorkedDays = 0;
+    let unpaidHolidayDays = 0;
     let shortDays = 0;
     let halfDays = 0;
     let totalMinutesWorked = 0; // for flex/hourly employees
@@ -154,8 +153,13 @@ export async function GET(request: Request) {
         continue;
       }
 
-      // Holiday — skip
-      if (holidayDates.has(dateStr)) continue;
+      // Holiday — paid days are skipped; unpaid ones (not worked) are deducted
+      const holiday = holidayCal.byDate.get(dateStr);
+      if (holiday) {
+        const workedHoliday = !!(entry?.punchIn && entry?.punchOut);
+        if (!emp.flexibleHours && !workedHoliday && !holidayCal.isPaidFor(holiday, emp)) unpaidHolidayDays++;
+        continue;
+      }
 
       // No punch record at all
       if (!entry) continue;
@@ -238,7 +242,7 @@ export async function GET(request: Request) {
     // Late-to-absent conversion: every 3 lates = 0.5 day deduction (half-day steps)
     const lateDeductionDays = Math.floor(lateDays / 3) * 0.5;
     const halfDayDeduction = halfDays * 0.5;
-    const totalDeductionDays = absentDays + halfDayDeduction + lateDeductionDays;
+    const totalDeductionDays = absentDays + halfDayDeduction + lateDeductionDays + unpaidHolidayDays;
     // Per-day rate uses total calendar days in month (including Sundays)
     const perDayRate = Math.round(emp.monthlySalary / lastDay);
     const deduction = Math.round(perDayRate * totalDeductionDays);
@@ -260,6 +264,7 @@ export async function GET(request: Request) {
       lateAbsentDays: lateDeductionDays,
       lateDays,
       leaveDays,
+      unpaidHolidayDays,
       sundayWorkedDays,
       sundayBonus,
       deduction,

@@ -28,6 +28,7 @@ export async function GET(request: Request) {
       monthlySalary: employees.monthlySalary,
       hourlyRate: employees.hourlyRate,
       flexibleHours: employees.flexibleHours,
+      paidHolidays: employees.paidHolidays,
       createdAt: employees.createdAt,
     })
     .from(employees)
@@ -75,6 +76,7 @@ export async function PATCH(request: Request) {
     hourlyRate?: number;
     active?: boolean;
     flexibleHours?: boolean;
+    paidHolidays?: boolean;
     assignedBranchIds?: string[];
   };
   try {
@@ -127,6 +129,7 @@ export async function PATCH(request: Request) {
   if (body.hourlyRate !== undefined) updates.hourlyRate = Math.max(0, Math.round(Number(body.hourlyRate) || 0));
   if (body.active !== undefined) updates.active = body.active;
   if (body.flexibleHours !== undefined) updates.flexibleHours = body.flexibleHours;
+  if (body.paidHolidays !== undefined) updates.paidHolidays = body.paidHolidays;
 
   // Sync branch assignments if provided
   if (body.assignedBranchIds !== undefined) {

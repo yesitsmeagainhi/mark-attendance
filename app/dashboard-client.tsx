@@ -20,6 +20,7 @@ import ReportsTab from "./components/admin/ReportsTab";
 import PayrollTab from "./components/admin/PayrollTab";
 import AdminHistoryTab from "./components/admin/HistoryTab";
 import SettingsTab from "./components/admin/SettingsTab";
+import HolidaysTab from "./components/admin/HolidaysTab";
 
 /* ── Action config for notification icon/color (mirrors HistoryTab) ── */
 const NOTIF_CONFIG: Record<string, { icon: string; color: string }> = {
@@ -37,6 +38,9 @@ const NOTIF_CONFIG: Record<string, { icon: string; color: string }> = {
   misspunch_request:  { icon: "\u23F0",    color: "#d97706" },
   misspunch_approved: { icon: "\u2705",    color: "#059669" },
   misspunch_rejected: { icon: "\u274C",    color: "#dc2626" },
+  holiday_added:      { icon: "\u{1F389}", color: "#0d9488" },
+  holiday_updated:    { icon: "\u{1F389}", color: "#0d9488" },
+  holiday_removed:    { icon: "\u{1F389}", color: "#ea580c" },
 };
 
 type Toast = { id: string; actionType: string; icon: string; color: string; description: string; timestamp: string };
@@ -47,6 +51,7 @@ const ACTION_TAB: Record<string, string> = {
   leave_request: "leaves", leave_approved: "leaves", leave_rejected: "leaves",
   mark_present: "dashboard", mark_absent: "dashboard", mark_uh: "dashboard",
   mark_all_present: "dashboard", mark_all_uh: "dashboard", undo_mark: "dashboard",
+  holiday_added: "holidays", holiday_updated: "holidays", holiday_removed: "holidays",
 };
 
 function timeAgo(ts: string): string {
@@ -300,6 +305,7 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
           {adminTab === "staff" && <StaffTab />}
           {adminTab === "requests" && <RequestsTab />}
           {adminTab === "leaves" && <LeavesTab />}
+          {adminTab === "holidays" && <HolidaysTab />}
           {adminTab === "reports" && <ReportsTab />}
           {/* {adminTab === "payroll" && <PayrollTab />} */}
           {adminTab === "history" && <AdminHistoryTab onNavigate={setAdminTab} />}

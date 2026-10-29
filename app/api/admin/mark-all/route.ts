@@ -30,12 +30,14 @@ export async function POST(request: Request) {
     // Insert or replace holiday record
     const existing = db.select({ id: holidays.id }).from(holidays).where(eq(holidays.date, date)).get();
     if (existing) {
-      db.update(holidays).set({ type: "unpaid_holiday" }).where(eq(holidays.id, existing.id)).run();
+      db.update(holidays).set({ type: "unpaid_holiday", paid: false }).where(eq(holidays.id, existing.id)).run();
     } else {
       db.insert(holidays).values({
         id: crypto.randomUUID(),
         date,
         type: "unpaid_holiday",
+        name: "Unpaid Holiday",
+        paid: false,
       }).run();
     }
     logActivity({

@@ -3,7 +3,7 @@ import { sql, desc } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { employees } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
-import ExcelJS from "exceljs";
+import { parseCSVRows, parseXlsxRows } from "../../../../lib/spreadsheet-import";
 
 type RowInput = {
   name?: string;
@@ -157,65 +157,6 @@ function processRows(rows: RowInput[]) {
   return { created, errors };
 }
 
-// ExcelJS cell values can be objects (hyperlinks, rich text, formulas, etc.)
-// This extracts the plain text string from any cell value type.
-function cellToString(val: unknown): string {
-  if (val === null || val === undefined) return "";
-  if (typeof val === "string") return val;
-  if (typeof val === "number" || typeof val === "boolean") return String(val);
-  if (val instanceof Date) {
-    // Excel stores time-only values (e.g. "09:00") as Date with base year 1899/1900
-    if (val.getFullYear() <= 1900) {
-      const h = String(val.getUTCHours()).padStart(2, "0");
-      const m = String(val.getUTCMinutes()).padStart(2, "0");
-      return `${h}:${m}`;
-    }
-    return val.toISOString();
-  }
-  if (typeof val === "object") {
-    // Hyperlink: { text: "...", hyperlink: "..." }
-    if ("text" in val && typeof (val as { text: unknown }).text === "string") return (val as { text: string }).text;
-    // Rich text: { richText: [{ text: "..." }, ...] }
-    if ("richText" in val && Array.isArray((val as { richText: unknown[] }).richText)) {
-      return (val as { richText: { text: string }[] }).richText.map((r) => r.text || "").join("");
-    }
-    // Formula result: { result: "..." }
-    if ("result" in val) return cellToString((val as { result: unknown }).result);
-  }
-  return String(val);
-}
-
-async function parseXlsxRows(buffer: ArrayBuffer): Promise<RowInput[]> {
-  const workbook = new ExcelJS.Workbook();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await workbook.xlsx.load(Buffer.from(buffer) as any);
-  const sheet = workbook.worksheets[0];
-  if (!sheet || sheet.rowCount < 2) return [];
-
-  // Read headers from first row
-  const headerRow = sheet.getRow(1);
-  const headers: string[] = [];
-  headerRow.eachCell((cell, colNum) => {
-    headers[colNum] = cellToString(cell.value).trim();
-  });
-
-  const rows: RowInput[] = [];
-  for (let r = 2; r <= sheet.rowCount; r++) {
-    const row = sheet.getRow(r);
-    const obj: Record<string, string> = {};
-    let hasAnyValue = false;
-    row.eachCell((cell, colNum) => {
-      const header = headers[colNum];
-      if (header) {
-        obj[header] = cellToString(cell.value).trim();
-        if (obj[header]) hasAnyValue = true;
-      }
-    });
-    if (hasAnyValue) rows.push(obj as RowInput);
-  }
-  return rows;
-}
-
 export async function POST(request: Request) {
   const auth = await requireApiRole("admin");
   if ("error" in auth) return auth.error;
@@ -234,10 +175,10 @@ export async function POST(request: Request) {
     const fileName = file.name.toLowerCase();
     if (fileName.endsWith(".xlsx")) {
       const buffer = await file.arrayBuffer();
-      rows = await parseXlsxRows(buffer);
+      rows = (await parseXlsxRows(buffer)) as RowInput[];
     } else if (fileName.endsWith(".csv")) {
       const text = await file.text();
-      rows = parseCSVRows(text);
+      rows = parseCSVRows(text) as RowInput[];
     } else {
       return Response.json({ error: "Unsupported file format. Please upload a .csv or .xlsx file." }, { status: 400 });
     }
@@ -262,40 +203,4 @@ export async function POST(request: Request) {
 
   const result = processRows(rows);
   return Response.json(result, { status: result.created.length > 0 ? 201 : 400 });
-}
-
-function parseCSVRows(text: string): RowInput[] {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length < 2) return [];
-  const headers = splitCSVLine(lines[0]).map((h) => h.trim());
-  const rows: RowInput[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const values = splitCSVLine(lines[i]);
-    const obj: Record<string, string> = {};
-    for (let j = 0; j < headers.length; j++) {
-      obj[headers[j]] = (values[j] || "").trim();
-    }
-    rows.push(obj as RowInput);
-  }
-  return rows;
-}
-
-function splitCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
-      else if (ch === '"') { inQuotes = false; }
-      else { current += ch; }
-    } else {
-      if (ch === '"') { inQuotes = true; }
-      else if (ch === ',') { result.push(current); current = ""; }
-      else { current += ch; }
-    }
-  }
-  result.push(current);
-  return result;
 }

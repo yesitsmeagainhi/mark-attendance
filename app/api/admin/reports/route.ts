@@ -1,9 +1,10 @@
 import { eq, and, sql, gte, lte } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { attendance, employees, leaveRequests, holidays } from "../../../../db/schema";
+import { attendance, employees, leaveRequests } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
 import { getEffectiveRulesBatch } from "../../../../lib/rules";
 import { calculateTotalDuration, calculateBreakDuration } from "../../../../lib/time-utils";
+import { getHolidayCalendar } from "../../../../lib/holidays";
 
 type SessionInfo = { inTime: string; outTime: string | null; durationMinutes: number | null };
 
@@ -54,6 +55,7 @@ export async function GET(request: Request) {
       monthlySalary: employees.monthlySalary,
       hourlyRate: employees.hourlyRate,
       flexibleHours: employees.flexibleHours,
+      paidHolidays: employees.paidHolidays,
       createdAt: employees.createdAt,
     })
     .from(employees)
@@ -91,15 +93,8 @@ export async function GET(request: Request) {
     ))
     .all();
 
-  const holidayRecords = db
-    .select({ date: holidays.date })
-    .from(holidays)
-    .where(and(
-      gte(holidays.date, firstDay),
-      lte(holidays.date, lastDayStr),
-    ))
-    .all();
-  const holidayDates = new Set(holidayRecords.map((h) => h.date));
+  const holidayCal = getHolidayCalendar(firstDay, lastDayStr);
+  const holidayDates = holidayCal.dates;
 
   // Total working days in the full month (for per-day rate calculation)
   let totalMonthWorkingDays = 0;
@@ -155,6 +150,7 @@ export async function GET(request: Request) {
     let uhDays = 0;
     let weeklyOffs = 0;
     let holidayCount = 0;
+    let unpaidHolidayDays = 0;
     let totalWorkedMinutes = 0;
     let sundayWorkedDays = 0;
     let shortDays = 0;
@@ -213,9 +209,18 @@ export async function GET(request: Request) {
         }
         continue;
       }
-      if (holidayDates.has(dateStr)) {
-        holidayCount++;
-        dailyDetails.push({ date: dateStr, punchIn: null, punchOut: null, durationMinutes: null, breakMinutes: null, status: "holiday" });
+      const holiday = holidayCal.byDate.get(dateStr);
+      if (holiday) {
+        // Unpaid only if the employee isn't paid for it and didn't work that day
+        const holidayEntry = dayMap.get(dateStr);
+        const workedHoliday = !!(holidayEntry?.punchIn && holidayEntry?.punchOut);
+        if (emp.flexibleHours || workedHoliday || holidayCal.isPaidFor(holiday, emp)) {
+          holidayCount++;
+          dailyDetails.push({ date: dateStr, punchIn: null, punchOut: null, durationMinutes: null, breakMinutes: null, status: "holiday" });
+        } else {
+          unpaidHolidayDays++;
+          dailyDetails.push({ date: dateStr, punchIn: null, punchOut: null, durationMinutes: null, breakMinutes: null, status: "uh" });
+        }
         continue;
       }
       if (empLeaveDates.has(dateStr)) {
@@ -299,7 +304,7 @@ export async function GET(request: Request) {
     const attendancePct = countableDays > 0 ? Math.round(((presentDays + halfDays * 0.5) / countableDays) * 100) : 100;
 
     // Salary calculations (per-day rate uses total calendar days in month, including Sundays)
-    const totalDeductionDays = absentDays + halfDayDeduction + lateDeductionDays;
+    const totalDeductionDays = absentDays + halfDayDeduction + lateDeductionDays + unpaidHolidayDays;
     const perDayRate = Math.round(emp.monthlySalary / lastDay);
     const deduction = Math.round(perDayRate * totalDeductionDays);
     const sundayBonus = sundayWorkedDays * perDayRate;
@@ -322,7 +327,8 @@ export async function GET(request: Request) {
       lateAbsentDays: lateDeductionDays,
       lateDays,
       leaveDays,
-      uhDays,
+      uhDays: uhDays + unpaidHolidayDays,
+      unpaidHolidayDays,
       weeklyOffs,
       holidayCount,
       attendancePct,

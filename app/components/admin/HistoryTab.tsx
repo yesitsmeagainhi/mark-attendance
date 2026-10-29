@@ -29,6 +29,9 @@ const ACTION_CONFIG: Record<string, { label: string; color: string; icon: string
   misspunch_request:  { label: "Miss Punch Request",color: "#d97706", icon: "\u23F0" },
   misspunch_approved: { label: "Miss Punch Approved",color: "#059669",icon: "\u2705" },
   misspunch_rejected: { label: "Miss Punch Rejected",color: "#dc2626",icon: "\u274C" },
+  holiday_added:      { label: "Holiday Added",     color: "#0d9488", icon: "\u{1F389}" },
+  holiday_updated:    { label: "Holiday Updated",   color: "#0d9488", icon: "\u{1F389}" },
+  holiday_removed:    { label: "Holiday Removed",   color: "#ea580c", icon: "\u{1F389}" },
 };
 
 /* Map action types → admin tab they should navigate to */
@@ -37,6 +40,7 @@ const ACTION_TAB: Record<string, string> = {
   leave_request: "leaves", leave_approved: "leaves", leave_rejected: "leaves",
   mark_present: "dashboard", mark_absent: "dashboard", mark_uh: "dashboard",
   mark_all_present: "dashboard", mark_all_uh: "dashboard", undo_mark: "dashboard",
+  holiday_added: "holidays", holiday_updated: "holidays", holiday_removed: "holidays",
 };
 
 const FILTER_GROUPS = [
@@ -45,6 +49,7 @@ const FILTER_GROUPS = [
   { label: "Attendance", value: "mark_present,mark_absent,mark_uh,mark_all_present,mark_all_uh,undo_mark" },
   { label: "Leave", value: "leave_request,leave_approved,leave_rejected" },
   { label: "Miss Punch", value: "misspunch_request,misspunch_approved,misspunch_rejected" },
+  { label: "Holidays", value: "holiday_added,holiday_updated,holiday_removed" },
 ];
 
 function timeAgo(ts: string): string {

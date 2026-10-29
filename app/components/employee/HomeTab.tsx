@@ -14,6 +14,14 @@ const menuItems = [
 
 export default function HomeTab({ displayName, onNavigate, onOpenCamera, todayStatus }: { displayName: string; onNavigate: (tab: string) => void; onOpenCamera: () => void; todayStatus: TodayStatus | null }) {
   const [currentTime, setCurrentTime] = useState<ReturnType<typeof getIST> | null>(null);
+  const [upcomingHolidays, setUpcomingHolidays] = useState<{ date: string; name: string; paid: boolean }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/attendance/holidays")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.holidays) setUpcomingHolidays(d.holidays); })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     setCurrentTime(getIST());
@@ -184,6 +192,35 @@ export default function HomeTab({ displayName, onNavigate, onOpenCamera, todaySt
           </button>
         )}
       </div>
+
+      {/* Upcoming holidays */}
+      {upcomingHolidays.length > 0 && (
+        <div style={{
+          background: "#fff",
+          border: "1px solid var(--line)",
+          borderRadius: 14,
+          padding: "14px 18px",
+          marginBottom: 24,
+          boxShadow: "0 2px 8px rgba(0,0,0,.04)",
+        }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginBottom: 10 }}>
+            &#127881; Upcoming {upcomingHolidays[0].paid ? "paid " : ""}holidays
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {upcomingHolidays.map((h) => (
+              <div key={h.date} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15 }}>
+                <span style={{ minWidth: 92, color: "var(--muted)", fontVariantNumeric: "tabular-nums" }}>
+                  {new Date(`${h.date}T00:00:00`).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" })}
+                </span>
+                <span style={{ flex: 1, fontWeight: 600, color: "var(--ink)" }}>{h.name}</span>
+                {h.paid && (
+                  <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: "#e8f7ef", color: "#168052" }}>Paid</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Menu Blocks */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

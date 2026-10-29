@@ -60,6 +60,7 @@ export default function FullscreenCameraOverlay({
 
   const monitorRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [previewFrame, setPreviewFrame] = useState<string | null>(null);
+  const [cameraFacingMode, setCameraFacingMode] = useState<"user" | "environment">("user");
 
   // Lock body scroll
   useEffect(() => {
@@ -68,12 +69,12 @@ export default function FullscreenCameraOverlay({
     return () => { document.body.style.overflow = prev; };
   }, []);
 
-  // Start camera stream (runs once on mount)
+  // Start/restart the stream whenever the selected camera changes.
   useEffect(() => {
     let cancelled = false;
     navigator.mediaDevices?.getUserMedia({
       video: {
-        facingMode: "user",
+        facingMode: { ideal: cameraFacingMode },
         width: { ideal: 1280 },
         height: { ideal: 720 },
         zoom: 1.0,
@@ -90,7 +91,7 @@ export default function FullscreenCameraOverlay({
         try {
           const caps = track?.getCapabilities?.() as Record<string, unknown> | undefined;
           if (caps?.zoom) {
-            track.applyConstraints({ advanced: [{ zoom: 1.0 } as MediaTrackConstraintSet] }).catch(() => {});
+            track.applyConstraints({ advanced: [{ zoom: 1.0 } as MediaTrackConstraintSet] }).catch(() => { });
           }
         } catch { /* non-Safari browsers ignore this */ }
 
@@ -104,7 +105,7 @@ export default function FullscreenCameraOverlay({
 
           if (lastTrackW && lastTrackH && (tw !== lastTrackW || th !== lastTrackH)) {
             try {
-              trk.applyConstraints({ advanced: [{ zoom: 1.0 } as MediaTrackConstraintSet] }).catch(() => {});
+              trk.applyConstraints({ advanced: [{ zoom: 1.0 } as MediaTrackConstraintSet] }).catch(() => { });
             } catch { /* ignore */ }
           }
           lastTrackW = tw;
@@ -120,7 +121,7 @@ export default function FullscreenCameraOverlay({
       streamRef.current?.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     };
-  }, []);
+  }, [cameraFacingMode]);
 
   // Sync canvas size with video
   useEffect(() => {
@@ -166,7 +167,9 @@ export default function FullscreenCameraOverlay({
           // Use the evaluation from parent
           const result = evaluateDetectionsLocal(resized, dw, dh);
           onFaceUpdateRef.current(result.status, result.guidance);
-          if (resized.length > 0) drawOverlay(ctx, resized, result.status, dw);
+          if (resized.length > 0) {
+            drawOverlay(ctx, resized, result.status, dw, cameraFacingMode === "user");
+          }
         } catch {
           // skip frame
         }
@@ -192,7 +195,7 @@ export default function FullscreenCameraOverlay({
       ctx?.clearRect(0, 0, canvas.width, canvas.height);
       onFaceUpdateRef.current("no-face", "Position your face in the frame");
     };
-  }, [modelsLoaded, modelError]);
+  }, [modelsLoaded, modelError, cameraFacingMode]);
 
   const handleCapture = useCallback(() => {
     const video = videoRef.current;
@@ -205,13 +208,15 @@ export default function FullscreenCameraOverlay({
     c.height = Math.round(vh * scale);
     const ctx = c.getContext("2d");
     if (!ctx) return;
-    // Mirror horizontally to match what the user sees in the camera
-    ctx.translate(c.width, 0);
-    ctx.scale(-1, 1);
+    // Mirror only the front-camera image to match its selfie preview.
+    if (cameraFacingMode === "user") {
+      ctx.translate(c.width, 0);
+      ctx.scale(-1, 1);
+    }
     ctx.drawImage(video, 0, 0, c.width, c.height);
     const frame = c.toDataURL("image/jpeg", 0.60);
     setPreviewFrame(frame);
-  }, []);
+  }, [cameraFacingMode]);
 
   const handleConfirm = useCallback(() => {
     if (!previewFrame) return;
@@ -233,7 +238,17 @@ export default function FullscreenCameraOverlay({
   return createPortal(
     <div className="fullscreen-camera-overlay">
       {/* Camera view — hidden during preview */}
-      <video ref={videoRef} autoPlay muted playsInline className="fco-video" style={previewFrame ? { display: "none" } : undefined} />
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        playsInline
+        className="fco-video"
+        style={{
+          ...(previewFrame ? { display: "none" } : {}),
+          transform: cameraFacingMode === "user" ? "scaleX(-1)" : "none",
+        }}
+      />
       <canvas ref={canvasRef} className="fco-canvas" style={previewFrame ? { display: "none" } : undefined} />
 
       {previewFrame ? (
@@ -258,6 +273,26 @@ export default function FullscreenCameraOverlay({
             <span className={`fco-punch-badge ${nextPunchType === "OUT" ? "fco-punch-out" : ""}`}>
               {nextPunchType === "IN" ? "PUNCH IN" : "PUNCH OUT"}
             </span>
+            <button
+              type="button"
+              onClick={() => setCameraFacingMode((mode) => mode === "user" ? "environment" : "user")}
+              aria-label={cameraFacingMode === "user" ? "Switch to back camera" : "Switch to front camera"}
+              title={cameraFacingMode === "user" ? "Switch to back camera" : "Switch to front camera"}
+              style={{
+                border: "1px solid rgba(255,255,255,0.45)",
+                borderRadius: 999,
+                padding: "8px 12px",
+                marginLeft: 8,
+                color: "#fff",
+                background: "rgba(0,0,0,0.35)",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {cameraFacingMode === "user" ? "↻ Back camera" : "↻ Front camera"}
+            </button>
             <div className="fco-gps-status">
               {locationLoading && <span className="fco-gps-loading">GPS...</span>}
               {location && (
@@ -365,6 +400,7 @@ function drawOverlay(
   detections: any[],
   status: FaceEvalStatus,
   fw: number,
+  mirrored: boolean,
 ) {
   const colorMap: Record<string, string> = {
     ready: "#22c55e", "eyes-closed": "#eab308", "off-center": "#eab308",
@@ -373,7 +409,7 @@ function drawOverlay(
   const color = colorMap[status] || "#ef4444";
   for (const det of detections) {
     const box = det.detection.box;
-    const mx = fw - box.x - box.width;
+    const mx = mirrored ? fw - box.x - box.width : box.x;
     const cornerLen = Math.min(box.width, box.height) * 0.15;
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
@@ -394,7 +430,8 @@ function drawOverlay(
     if (status !== "no-face" && status !== "multiple") {
       const eyeColor = status === "eyes-closed" ? "#ef4444" : "#22c55e";
       for (const eye of [det.landmarks.getLeftEye(), det.landmarks.getRightEye()]) {
-        const ecx = fw - eye.reduce((s: number, p: { x: number }) => s + p.x, 0) / eye.length;
+        const eyeCenterX = eye.reduce((s: number, p: { x: number }) => s + p.x, 0) / eye.length;
+        const ecx = mirrored ? fw - eyeCenterX : eyeCenterX;
         const ecy = eye.reduce((s: number, p: { y: number }) => s + p.y, 0) / eye.length;
         ctx.fillStyle = eyeColor;
         ctx.beginPath();

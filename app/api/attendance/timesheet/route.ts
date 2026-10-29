@@ -1,9 +1,10 @@
-import { eq, and, sql, gte, lte } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { attendance, employees, leaveRequests, holidays } from "../../../../db/schema";
+import { attendance, employees, leaveRequests } from "../../../../db/schema";
 import { getAppIdentity } from "../../../authz";
 import { getEffectiveRules } from "../../../../lib/rules";
 import { calculateTotalDuration } from "../../../../lib/time-utils";
+import { getHolidayCalendar } from "../../../../lib/holidays";
 
 export async function GET(request: Request) {
   const identity = await getAppIdentity();
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
 
   // Get employee work schedule + flexibleHours
   const emp = db
-    .select({ workStartTime: employees.workStartTime, workEndTime: employees.workEndTime, flexibleHours: employees.flexibleHours })
+    .select({ workStartTime: employees.workStartTime, workEndTime: employees.workEndTime, flexibleHours: employees.flexibleHours, paidHolidays: employees.paidHolidays })
     .from(employees)
     .where(eq(employees.id, identity.employeeId))
     .get();
@@ -76,12 +77,8 @@ export async function GET(request: Request) {
     .all();
 
   // Get holidays for this month
-  const holidayRecords = db
-    .select({ date: holidays.date })
-    .from(holidays)
-    .where(and(gte(holidays.date, monthStart), lte(holidays.date, monthEnd)))
-    .all();
-  const holidayDates = new Set(holidayRecords.map((h) => h.date));
+  const holidayCal = getHolidayCalendar(monthStart, monthEnd);
+  const empForHolidays = { id: identity.employeeId, paidHolidays: emp?.paidHolidays ?? true };
 
   // Group attendance by date, tracking all punches for multi-session duration
   type DayPunches = {
@@ -159,6 +156,7 @@ export async function GET(request: Request) {
     punchOut: string | null;
     duration: number | null;
     sessions?: SessionInfo[];
+    holidayName?: string;
   }> = [];
 
   let totalMinutesWorked = 0;
@@ -166,6 +164,7 @@ export async function GET(request: Request) {
   let absentDays = 0;
   let leaveDaysCount = 0;
   let uhDays = 0;
+  let paidHolidayDays = 0;
   let halfDays = 0;
   let sundayWorkedDays = 0;
 
@@ -210,9 +209,15 @@ export async function GET(request: Request) {
 
     // No punch at all — check for UH/holiday or mark absent
     if (!dayData?.punchIn) {
-      if (holidayDates.has(dateStr) || dayData?.isAdminUH) {
+      const holiday = holidayCal.byDate.get(dateStr);
+      if (holiday && (isFlexible || holidayCal.isPaidFor(holiday, empForHolidays))) {
+        if (!isFlexible) paidHolidayDays++;
+        days.push({ date: dateStr, dayOfWeek, status: "holiday", punchIn: null, punchOut: null, duration: null, holidayName: holiday.name });
+        continue;
+      }
+      if (holiday || dayData?.isAdminUH) {
         uhDays++;
-        days.push({ date: dateStr, dayOfWeek, status: "uh", punchIn: null, punchOut: null, duration: null });
+        days.push({ date: dateStr, dayOfWeek, status: "uh", punchIn: null, punchOut: null, duration: null, holidayName: holiday?.name });
         continue;
       }
       absentDays++;
@@ -272,6 +277,7 @@ export async function GET(request: Request) {
     halfDays,
     leaveDays: leaveDaysCount,
     uhDays,
+    paidHolidayDays,
     sundayWorkedDays,
     isFlexible,
   });

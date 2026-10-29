@@ -24,6 +24,7 @@ type HistoryRecord = {
   photoKeyIn: string | null;
   photoKeyOut: string | null;
   sessions?: SessionInfo[];
+  holidayName?: string;
 };
 
 type HistoryData = {
@@ -33,6 +34,7 @@ type HistoryData = {
   lateDays: number;
   halfDays: number;
   uhDays: number;
+  paidHolidayDays?: number;
   absentDays: number;
   leaveDays: number;
   sundayWorkedDays: number;
@@ -47,6 +49,7 @@ type DayData = {
   punchOut: string | null;
   duration: number | null;
   sessions?: SessionInfo[];
+  holidayName?: string;
 };
 
 type TimesheetData = {
@@ -58,6 +61,7 @@ type TimesheetData = {
   absentDays: number;
   leaveDays: number;
   uhDays: number;
+  paidHolidayDays?: number;
   sundayWorkedDays: number;
   isFlexible?: boolean;
 };
@@ -134,7 +138,8 @@ export default function HistoryTab() {
     if (s === "Late") return "late";
     if (s === "Absent" || s === "Short Day") return "absent";
     if (s === "Half Day") return "late";
-    if (s === "Leave" || s === "UH") return "grace";
+    if (s === "Paid Holiday") return "on-time";
+    if (s === "Leave" || s === "UH" || s === "Holiday") return "grace";
     if (s === "Overtime") return "overtime";
     if (s === "Sunday") return "grace";
     return "";
@@ -251,7 +256,7 @@ export default function HistoryTab() {
                     )}
                     {cell.status === "sunday" && <div className="day-times">Off</div>}
                     {cell.status === "leave" && <div className="day-times">Leave</div>}
-                    {cell.status === "holiday" && <div className="day-times">Holiday</div>}
+                    {cell.status === "holiday" && <div className="day-times" title={cell.holidayName}>{cell.holidayName || "Holiday"}{!tsData?.isFlexible && <><br />Paid</>}</div>}
                     {cell.status === "uh" && <div className="day-times">UH</div>}
                     {cell.status === "absent" && <div className="day-times">Absent</div>}
                   </div>
@@ -283,6 +288,12 @@ export default function HistoryTab() {
                   <div className="emp-status-header"><b>Leave</b></div>
                   <div className="emp-status-detail"><strong>{tsData.leaveDays}</strong><span className="pending-text">days</span></div>
                 </article>
+                {(tsData.paidHolidayDays ?? 0) > 0 && (
+                  <article className="emp-status-card">
+                    <div className="emp-status-header"><b>Paid Holiday</b></div>
+                    <div className="emp-status-detail"><strong>{tsData.paidHolidayDays}</strong><span className="pending-text">days</span></div>
+                  </article>
+                )}
                 {tsData.uhDays > 0 && (
                   <article className="emp-status-card">
                     <div className="emp-status-header"><b>UH</b></div>
@@ -319,6 +330,9 @@ export default function HistoryTab() {
           <article><span className="metric-icon amber">&#189;</span><div><small>Half Day</small><strong>{data.halfDays}</strong><em>days</em></div></article>
           <article><span className="metric-icon red">&times;</span><div><small>Absent</small><strong>{data.absentDays}</strong><em>days</em></div></article>
           <article><span className="metric-icon purple">&#9673;</span><div><small>Leave</small><strong>{data.leaveDays}</strong><em>days</em></div></article>
+          {(data.paidHolidayDays ?? 0) > 0 && (
+            <article><span className="metric-icon green">&#9733;</span><div><small>Paid Holiday</small><strong>{data.paidHolidayDays}</strong><em>days</em></div></article>
+          )}
           {(data.uhDays ?? 0) > 0 && (
             <article><span className="metric-icon amber">&#9632;</span><div><small>UH</small><strong>{data.uhDays}</strong><em>days</em></div></article>
           )}
@@ -398,6 +412,9 @@ export default function HistoryTab() {
                     </td>
                     <td>
                       <span className={`grace-badge ${statusClass(r.status)}`}>{r.status}</span>
+                      {r.holidayName && (
+                        <small style={{ display: "block", color: "#667085", fontSize: 13, marginTop: 2 }}>{r.holidayName}</small>
+                      )}
                       {r.lateByMinutes !== null && r.lateByMinutes > 0 && (
                         <small style={{ display: "block", color: "#e67e22", fontSize: 13, marginTop: 2 }}>
                           by {r.lateByMinutes >= 60

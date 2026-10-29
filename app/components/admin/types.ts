@@ -12,6 +12,7 @@ export type EmployeeRow = {
   active: boolean;
   monthlySalary: number;
   flexibleHours: boolean;
+  paidHolidays?: boolean;
   assignedBranchIds: string[];
   createdAt: string;
 };

@@ -265,6 +265,7 @@ type DailyResponse = {
   date: string;
   isHoliday: boolean;
   holidayType: string | null;
+  holidayName?: string | null;
   employees: DailyEmployee[];
   summary: { total: number; checkedIn: number; absent: number };
 };
@@ -427,6 +428,7 @@ export default function DashboardTab() {
       late: { cls: "status late", label: "Late" },
       absent: { cls: "status absent", label: "Absent" },
       unpaid_holiday: { cls: "badge-pending", label: "UH" },
+      paid_holiday: { cls: "badge-admin", label: "Paid holiday" },
       not_marked: { cls: "badge-admin", label: "Not marked" },
     };
     const s = map[status] || { cls: "badge-admin", label: status };
@@ -497,7 +499,10 @@ export default function DashboardTab() {
       {data?.isHoliday && (
         <div className="tip" style={{ marginBottom: 18 }}>
           <span>&#9888;</span>
-          <p><b>Unpaid Holiday</b><br />This date has been marked as an unpaid holiday for all employees.</p>
+          <p>
+            <b>{data.holidayName || "Holiday"} &middot; {data.holidayType === "paid_holiday" ? "Paid" : "Unpaid"}</b><br />
+            {allEmps.filter((e) => e.status === "paid_holiday").length} paid, {uh} unpaid. Manage it from the Holidays tab.
+          </p>
         </div>
       )}
 
