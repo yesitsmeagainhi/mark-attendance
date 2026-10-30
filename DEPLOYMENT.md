@@ -207,6 +207,90 @@ pm2 restart attendly
 
 ---
 
+## Automatic Weekly Backups (Email + Google Drive)
+
+Every Sunday at 11:00 PM IST the server creates one zip containing:
+
+- `attendance.db`: the complete database (employees, attendance, leaves, miss punches, holidays, journals, rules, activity log, everything)
+- `attendance-data.xlsx`: every table as a readable Excel sheet (password hashes, login tokens and OTP codes left out)
+- `uploads/`: all attendance selfies and profile photos
+
+The zip is uploaded to a **"Attendly Backups"** folder in Google Drive and emailed together with the Excel file. If the zip grows past the email limit (20 MB by default), the email carries the database and Excel only, and the full zip stays in Drive. The last 8 backups are also kept on the server in `data/backups/full/`.
+
+Admins can see the last backup's result and run one immediately from **Settings → Automatic backups → Back up now**.
+
+### 1. Email settings
+
+Use a Gmail account with 2-Step Verification on, then create an **App password** at <https://myaccount.google.com/apppasswords>.
+
+### 2. Google Drive settings (one time, ~10 minutes)
+
+1. Go to <https://console.cloud.google.com/>, create a project (e.g. "Attendly Backups").
+2. **APIs & Services → Library** → enable **Google Drive API**.
+3. **APIs & Services → OAuth consent screen** → User type **External** → fill in the app name and your email → add yourself as a test user → then click **Publish app** ("In production"). *If you leave it in "Testing", Google expires the token every 7 days and backups stop uploading.*
+4. **APIs & Services → Credentials → Create credentials → OAuth client ID** → Application type **Desktop app** → **Download JSON**. This `client_secret_....json` file holds only the Client ID and secret; it never contains a refresh token. That comes from the next step.
+5. On **your own computer** (it opens a browser), in the project folder run:
+
+   ```bash
+   npm run backup:google-auth -- "C:\Users\you\Downloads\client_secret_xxx.json"
+   ```
+
+   Open the printed link, sign in with the Google account that should store the backups, and allow access (Google may warn the app is unverified: click **Advanced → Go to app**). The terminal prints the three `GOOGLE_...=` lines for `.env`.
+
+The app only gets access to files it creates itself (`drive.file` scope); it cannot read anything else in that Drive.
+
+### 3. Add the settings to `.env` on the server
+
+```bash
+nano /var/www/mark_attendance/.env
+```
+
+```bash
+# Email
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USER=you@gmail.com
+SMTP_PASS="xxxx xxxx xxxx xxxx"          # Gmail app password, in quotes because it has spaces
+BACKUP_EMAIL_TO=you@gmail.com              # comma-separate for several recipients
+# BACKUP_EMAIL_MAX_MB=20                   # optional: lower it if your mail provider rejects large mails
+
+# Google Drive
+GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-xxx
+GOOGLE_REFRESH_TOKEN=1//xxx
+```
+
+Then `pm2 restart attendly` so the "Back up now" button sees the new settings, and test it once:
+
+```bash
+cd /var/www/mark_attendance && npm run backup:full
+```
+
+### 4. Schedule it weekly
+
+```bash
+timedatectl            # check the server time zone
+crontab -e
+```
+
+If the server is on **UTC** (the Hostinger default), 11:00 PM IST Sunday is 17:30 UTC Sunday:
+
+```cron
+30 17 * * 0 cd /var/www/mark_attendance && /usr/bin/npm run backup:full >> /var/log/attendly-backup.log 2>&1
+```
+
+If the server is set to **Asia/Kolkata**, use `0 23 * * 0` instead. Check the log any time with `tail -50 /var/log/attendly-backup.log`.
+
+### Restoring from a backup
+
+1. Unzip the backup.
+2. `pm2 stop attendly`
+3. Copy `attendance.db` to `/var/www/mark_attendance/data/attendance.db` and delete any `attendance.db-wal` / `attendance.db-shm` files next to it.
+4. Copy the `uploads/` folder to `/var/www/mark_attendance/data/uploads/`.
+5. `pm2 start attendly`
+
+---
+
 ## Troubleshooting
 
 ### Port already in use

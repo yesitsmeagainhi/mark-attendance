@@ -41,6 +41,7 @@ const NOTIF_CONFIG: Record<string, { icon: string; color: string }> = {
   holiday_added:      { icon: "\u{1F389}", color: "#0d9488" },
   holiday_updated:    { icon: "\u{1F389}", color: "#0d9488" },
   holiday_removed:    { icon: "\u{1F389}", color: "#ea580c" },
+  backup_run:         { icon: "\u{1F4BE}", color: "#2563eb" },
 };
 
 type Toast = { id: string; actionType: string; icon: string; color: string; description: string; timestamp: string };
@@ -52,6 +53,7 @@ const ACTION_TAB: Record<string, string> = {
   mark_present: "dashboard", mark_absent: "dashboard", mark_uh: "dashboard",
   mark_all_present: "dashboard", mark_all_uh: "dashboard", undo_mark: "dashboard",
   holiday_added: "holidays", holiday_updated: "holidays", holiday_removed: "holidays",
+  backup_run: "settings",
 };
 
 function timeAgo(ts: string): string {

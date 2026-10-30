@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { BranchRow, DepartmentRow } from "./types";
 import AttendanceRulesSection from "./AttendanceRulesSection";
+import BackupSection from "./BackupSection";
 
 export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
   const [branchList, setBranchList] = useState<BranchRow[]>([]);
@@ -295,6 +296,8 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
       )}
 
       <AttendanceRulesSection />
+
+      <BackupSection />
 
       {/* Admin Users section */}
       <section className="table-card" style={{ marginTop: 24 }}>

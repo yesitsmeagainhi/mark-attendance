@@ -4,7 +4,7 @@ import { employees } from "../../../../db/schema";
 import { getAppIdentity } from "../../../authz";
 import { getHolidayCalendar } from "../../../../lib/holidays";
 
-/** Upcoming holidays the logged-in employee is paid for (or all holidays for hourly staff). */
+/** Upcoming holidays for the logged-in employee, each marked paid or unpaid for them. */
 export async function GET() {
   const identity = await getAppIdentity();
   if (!identity) {
@@ -25,11 +25,12 @@ export async function GET() {
   const cal = getHolidayCalendar(today, until);
   const empForHolidays = { id: identity.employeeId, paidHolidays: emp?.paidHolidays ?? true };
 
+  // Every holiday is listed (the office is closed either way); paid says whether this employee is paid for it.
+  // null for hourly staff, who are paid by hours worked.
   const upcoming = [...cal.byDate.values()]
-    .filter((h) => isFlexible || cal.isPaidFor(h, empForHolidays))
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 5)
-    .map((h) => ({ date: h.date, name: h.name, paid: !isFlexible }));
+    .map((h) => ({ date: h.date, name: h.name, paid: isFlexible ? null : cal.isPaidFor(h, empForHolidays) }));
 
   return Response.json({ holidays: upcoming, isFlexible });
 }

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { getDb } from "../../../../db";
 import { employees, sessions, otpRequests } from "../../../../db/schema";
 import { logActivity } from "../../../../lib/activity-logger";
+import { purgeOldOtps } from "../../../../lib/otp";
 
 export async function POST(request: Request) {
   let body: { employeeId?: string; otpCode?: string };
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
 
   const db = getDb();
   const now = new Date().toISOString();
+  purgeOldOtps();
 
   const otpRecord = db
     .select({ id: otpRequests.id })

@@ -41,3 +41,6 @@ next-env.d.ts
 
 # data (SQLite database and uploaded photos)
 /data/
+
+# Google OAuth client credentials (backups)
+client_secret*.json

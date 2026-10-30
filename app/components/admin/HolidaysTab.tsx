@@ -143,12 +143,18 @@ export default function HolidaysTab() {
                 <tr><td colSpan={6} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>Loading...</td></tr>
               ) : list.map((h) => {
                 const paidFor = h.paidEmployeeIds.filter((id) => salaried.some((e) => e.id === id)).length;
+                const notPaid = salaried.filter((e) => !h.paidEmployeeIds.includes(e.id));
                 return (
                   <tr key={h.id}>
                     <td><b>{formatDate(h.date)}</b></td>
                     <td>{h.name}</td>
                     <td><span className={`status ${h.paid ? "" : "late"}`}>&#9679; {h.paid ? "Paid" : "Unpaid"}</span></td>
-                    <td>{paidFor} / {salaried.length} employees</td>
+                    <td>
+                      {paidFor} / {salaried.length} employees
+                      {notPaid.length > 0 && paidFor > 0 && (
+                        <small style={{ display: "block", color: "#a86400" }}>Not paid: {notPaid.map((e) => e.name).join(", ")}</small>
+                      )}
+                    </td>
                     <td><small>{h.date < today ? "Past" : h.date === today ? "Today" : "Upcoming"}</small></td>
                     <td>
                       <div className="review-actions">

@@ -2,6 +2,7 @@ import { randomUUID, randomInt } from "node:crypto";
 import { eq, and, sql, lt } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { employees, otpRequests, activityLog } from "../../../../db/schema";
+import { purgeOldOtps } from "../../../../lib/otp";
 
 export async function POST(request: Request) {
   let body: { mobileNumber?: string };
@@ -41,9 +42,8 @@ export async function POST(request: Request) {
     );
   }
 
-  // Cleanup: delete all OTP entries older than 24 hours
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  db.delete(otpRequests).where(lt(otpRequests.createdAt, oneDayAgo)).run();
+  // Cleanup: delete OTPs that expired more than an hour ago
+  purgeOldOtps();
 
   const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
   db.delete(activityLog).where(lt(activityLog.timestamp, sixMonthsAgo)).run();

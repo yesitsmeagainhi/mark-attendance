@@ -32,6 +32,7 @@ const ACTION_CONFIG: Record<string, { label: string; color: string; icon: string
   holiday_added:      { label: "Holiday Added",     color: "#0d9488", icon: "\u{1F389}" },
   holiday_updated:    { label: "Holiday Updated",   color: "#0d9488", icon: "\u{1F389}" },
   holiday_removed:    { label: "Holiday Removed",   color: "#ea580c", icon: "\u{1F389}" },
+  backup_run:         { label: "Backup",            color: "#2563eb", icon: "\u{1F4BE}" },
 };
 
 /* Map action types → admin tab they should navigate to */
@@ -41,6 +42,7 @@ const ACTION_TAB: Record<string, string> = {
   mark_present: "dashboard", mark_absent: "dashboard", mark_uh: "dashboard",
   mark_all_present: "dashboard", mark_all_uh: "dashboard", undo_mark: "dashboard",
   holiday_added: "holidays", holiday_updated: "holidays", holiday_removed: "holidays",
+  backup_run: "settings",
 };
 
 const FILTER_GROUPS = [

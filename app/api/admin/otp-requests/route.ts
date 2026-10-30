@@ -2,6 +2,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { employees, otpRequests } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
+import { purgeOldOtps } from "../../../../lib/otp";
 
 export async function GET() {
   const auth = await requireApiRole("admin");
@@ -20,6 +21,9 @@ export async function GET() {
       ),
     )
     .run();
+
+  // Delete OTPs that expired more than an hour ago (this endpoint is polled every 10s by the admin dashboard)
+  purgeOldOtps();
 
   // Fetch remaining pending OTPs
   const pending = db

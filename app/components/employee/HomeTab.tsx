@@ -14,7 +14,7 @@ const menuItems = [
 
 export default function HomeTab({ displayName, onNavigate, onOpenCamera, todayStatus }: { displayName: string; onNavigate: (tab: string) => void; onOpenCamera: () => void; todayStatus: TodayStatus | null }) {
   const [currentTime, setCurrentTime] = useState<ReturnType<typeof getIST> | null>(null);
-  const [upcomingHolidays, setUpcomingHolidays] = useState<{ date: string; name: string; paid: boolean }[]>([]);
+  const [upcomingHolidays, setUpcomingHolidays] = useState<{ date: string; name: string; paid: boolean | null }[]>([]);
 
   useEffect(() => {
     fetch("/api/attendance/holidays")
@@ -204,7 +204,7 @@ export default function HomeTab({ displayName, onNavigate, onOpenCamera, todaySt
           boxShadow: "0 2px 8px rgba(0,0,0,.04)",
         }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginBottom: 10 }}>
-            &#127881; Upcoming {upcomingHolidays[0].paid ? "paid " : ""}holidays
+            &#127881; Upcoming holidays
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {upcomingHolidays.map((h) => (
@@ -213,8 +213,10 @@ export default function HomeTab({ displayName, onNavigate, onOpenCamera, todaySt
                   {new Date(`${h.date}T00:00:00`).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" })}
                 </span>
                 <span style={{ flex: 1, fontWeight: 600, color: "var(--ink)" }}>{h.name}</span>
-                {h.paid && (
-                  <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: "#e8f7ef", color: "#168052" }}>Paid</span>
+                {h.paid !== null && (
+                  <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: h.paid ? "#e8f7ef" : "#fff4e0", color: h.paid ? "#168052" : "#a86400" }}>
+                    {h.paid ? "Paid" : "Unpaid"}
+                  </span>
                 )}
               </div>
             ))}

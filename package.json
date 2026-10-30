@@ -11,7 +11,9 @@
     "start": "next start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
-    "backup": "tsx scripts/daily-backup.ts"
+    "backup": "tsx scripts/daily-backup.ts",
+    "backup:full": "tsx scripts/full-backup.ts",
+    "backup:google-auth": "tsx scripts/google-drive-auth.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
@@ -20,6 +22,7 @@
     "face-api.js": "^0.22.2",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
+    "jszip": "^3.10.1",
     "next": "16.2.6",
     "nodemailer": "^9.0.5",
     "react": "19.2.6",
