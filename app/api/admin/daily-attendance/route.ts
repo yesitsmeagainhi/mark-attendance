@@ -4,6 +4,7 @@ import { attendance, employees } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
 import { getEffectiveRulesBatch } from "../../../../lib/rules";
 import { getHolidayCalendar } from "../../../../lib/holidays";
+import { isPunchRemovalEnabled } from "../../../../lib/features";
 
 export async function GET(request: Request) {
   const auth = await requireApiRole("admin");
@@ -168,6 +169,10 @@ export async function GET(request: Request) {
         : null,
       durationMinutes,
       sessions,
+      // Every punch of the day, oldest first, so an admin can remove a wrong one
+      punches: [...empRecords]
+        .sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp))
+        .map((r) => ({ id: r.id, type: r.punchType, time: r.serverTimestamp, source: r.source, photoKey: r.photoKey, office: r.office })),
       status,
       source,
     };
@@ -183,5 +188,6 @@ export async function GET(request: Request) {
     holidayName: holiday?.name || null,
     employees: result,
     summary: { total: allEmployees.length, checkedIn, absent },
+    punchRemovalEnabled: isPunchRemovalEnabled(),
   });
 }

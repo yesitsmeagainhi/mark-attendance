@@ -32,6 +32,7 @@ const NOTIF_CONFIG: Record<string, { icon: string; color: string }> = {
   mark_uh:            { icon: "\u{1F6AB}", color: "#7c3aed" },
   mark_all_present:   { icon: "\u2714\u2714", color: "#059669" },
   mark_all_uh:        { icon: "\u{1F6AB}", color: "#7c3aed" },
+  punch_removed:      { icon: "\u2716",    color: "#c73333" },
   undo_mark:          { icon: "\u21A9",    color: "#ea580c" },
   leave_request:      { icon: "\u{1F4CB}", color: "#0891b2" },
   leave_approved:     { icon: "\u2705",    color: "#059669" },
@@ -52,7 +53,7 @@ const ACTION_TAB: Record<string, string> = {
   misspunch_request: "requests", misspunch_approved: "requests", misspunch_rejected: "requests",
   leave_request: "leaves", leave_approved: "leaves", leave_rejected: "leaves",
   mark_present: "dashboard", mark_absent: "dashboard", mark_uh: "dashboard",
-  mark_all_present: "dashboard", mark_all_uh: "dashboard", undo_mark: "dashboard",
+  mark_all_present: "dashboard", mark_all_uh: "dashboard", undo_mark: "dashboard", punch_removed: "dashboard",
   holiday_added: "holidays", holiday_updated: "holidays", holiday_removed: "holidays",
   backup_run: "settings",
 };

@@ -256,7 +256,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import type { DailyEmployee, BranchRow, DepartmentRow } from "./types";
+import type { DailyEmployee, DailyPunch, BranchRow, DepartmentRow } from "./types";
 import AddEmployeeModal from "./AddEmployeeModal";
 import JournalsSection from "./JournalsSection";
 import OtpRequestsSection from "./OtpRequestsSection";
@@ -268,6 +268,8 @@ type DailyResponse = {
   holidayName?: string | null;
   employees: DailyEmployee[];
   summary: { total: number; checkedIn: number; absent: number };
+  /** ENABLE_PUNCH_REMOVAL=true in the server's .env */
+  punchRemovalEnabled?: boolean;
 };
 
 function isRealPhoto(key: string) {
@@ -302,6 +304,8 @@ export default function DashboardTab() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [confirmAction, setConfirmAction] = useState<{ label: string; detail: string; onConfirm: () => void } | null>(null);
+  const [punchesFor, setPunchesFor] = useState<string | null>(null);
+  const [removingPunch, setRemovingPunch] = useState<string | null>(null);
   const fetchData = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
@@ -393,6 +397,26 @@ export default function DashboardTab() {
         });
       },
     });
+  }
+
+  async function removePunch(employeeName: string, punch: DailyPunch) {
+    const label = punch.type === "IN" ? "punch in" : "punch out";
+    if (!confirm(`Remove ${employeeName}'s ${label} at ${formatTime(punch.time)} on ${selectedDate}?\n\nPayroll and reports update immediately. The removal is recorded in History.`)) return;
+    setRemovingPunch(punch.id);
+    setError(null);
+    try {
+      const response = await fetch("/api/admin/punches", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: punch.id }),
+      });
+      if (!response.ok) throw new Error(await getApiError(response));
+      await fetchData(true);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to remove punch.");
+    } finally {
+      setRemovingPunch(null);
+    }
   }
 
   function confirmMarkAll(action: "present" | "unpaid_holiday") {
@@ -708,6 +732,9 @@ export default function DashboardTab() {
                         {isAdminMarked && (
                           <button className="btn-action btn-undo" disabled={!!actionInProgress} onClick={() => confirmUndoMark(emp.id, emp.name)} title="Undo">&#8617;</button>
                         )}
+                        {data?.punchRemovalEnabled && emp.punches?.length > 0 && (
+                          <button className="btn-action" style={{ width: "auto", padding: "0 8px" }} disabled={!!actionInProgress} onClick={() => setPunchesFor(emp.id)} title="View or remove individual punches">Punches</button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -724,6 +751,49 @@ export default function DashboardTab() {
       </section>
 
       <JournalsSection />
+
+      {/* Individual punches of one employee for the selected date */}
+      {(() => {
+        const emp = punchesFor && data?.punchRemovalEnabled ? data.employees.find((e) => e.id === punchesFor) : null;
+        if (!emp) return null;
+        const sourceLabel: Record<string, string> = { selfie: "Selfie", admin: "Marked by admin", "miss-punch": "Miss-punch request" };
+        return (
+          <div className="modal-overlay" onClick={() => setPunchesFor(null)}>
+            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>{emp.name} &middot; {selectedDate}</h2>
+                <button className="modal-close" onClick={() => setPunchesFor(null)}>&times;</button>
+              </div>
+              <div style={{ padding: "0 20px 20px" }}>
+                <p style={{ color: "#667085", marginTop: 0 }}>Remove a punch that was recorded by mistake. Payroll and reports update immediately.</p>
+                {emp.punches.length === 0 && <p style={{ color: "#8990a0" }}>No punches left for this day.</p>}
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {emp.punches.map((p) => (
+                    <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12, border: "1px solid #e7e9ee", borderRadius: 10, padding: "8px 12px" }}>
+                      {isRealPhoto(p.photoKey) ? (
+                        <img
+                          className="table-thumb"
+                          src={`/api/attendance/photo?key=${encodeURIComponent(p.photoKey)}`}
+                          alt={p.type}
+                          style={{ cursor: "pointer" }}
+                          onClick={() => setViewPhoto(`/api/attendance/photo?key=${encodeURIComponent(p.photoKey)}`)}
+                        />
+                      ) : <span className="table-thumb" style={{ display: "inline-block", background: "#f3f4f8" }} />}
+                      <span style={{ flex: 1 }}>
+                        <b style={{ color: p.type === "IN" ? "#168052" : "#c73333" }}>{p.type === "IN" ? "Punch In" : "Punch Out"}</b> &middot; {formatTime(p.time)}
+                        <small style={{ display: "block", color: "#667085" }}>{sourceLabel[p.source] || p.source}{p.office ? ` · ${p.office}` : ""}</small>
+                      </span>
+                      <button className="btn-reject" style={{ fontSize: 14 }} disabled={removingPunch !== null} onClick={() => removePunch(emp.name, p)}>
+                        {removingPunch === p.id ? "Removing..." : "Remove"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Photo lightbox */}
       {viewPhoto && (

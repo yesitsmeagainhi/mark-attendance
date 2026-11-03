@@ -35,9 +35,12 @@ export type DailyEmployee = {
   punchOut: { time: string; photoKey: string; source: string; office: string; latitude: string | null; longitude: string | null } | null;
   durationMinutes: number | null;
   sessions: FlexSession[];
+  punches: DailyPunch[];
   status: string;
   source: string | null;
 };
+
+export type DailyPunch = { id: string; type: string; time: string; source: string; photoKey: string; office: string };
 
 export type MissPunchRow = {
   id: string;

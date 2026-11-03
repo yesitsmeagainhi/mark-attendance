@@ -291,6 +291,23 @@ If the server is set to **Asia/Kolkata**, use `0 23 * * 0` instead. Check the lo
 
 ---
 
+## Server switches
+
+### Removing individual punches (off by default)
+
+Lets admins remove a single wrong punch from the Dashboard (**Punches** button in an employee's row). While it is off, the button is hidden and the server refuses removals.
+
+Turn it on:
+
+```bash
+echo "ENABLE_PUNCH_REMOVAL=true" >> /var/www/mark_attendance/.env
+pm2 restart attendly
+```
+
+Turn it off again: delete that line from `.env` (or set it to `false`) and run `pm2 restart attendly`.
+
+---
+
 ## Troubleshooting
 
 ### Port already in use

@@ -22,6 +22,7 @@ const ACTION_CONFIG: Record<string, { label: string; color: string; icon: string
   mark_uh:            { label: "Marked UH",         color: "#7c3aed", icon: "\u{1F6AB}" },
   mark_all_present:   { label: "Mark All Present",  color: "#059669", icon: "\u2714\u2714" },
   mark_all_uh:        { label: "Mark All UH",       color: "#7c3aed", icon: "\u{1F6AB}" },
+  punch_removed:      { label: "Punch Removed",     color: "#c73333", icon: "✖" },
   undo_mark:          { label: "Undo Mark",         color: "#ea580c", icon: "\u21A9" },
   leave_request:      { label: "Leave Request",     color: "#0891b2", icon: "\u{1F4CB}" },
   leave_approved:     { label: "Leave Approved",    color: "#059669", icon: "\u2705" },
@@ -40,7 +41,7 @@ const ACTION_TAB: Record<string, string> = {
   misspunch_request: "requests", misspunch_approved: "requests", misspunch_rejected: "requests",
   leave_request: "leaves", leave_approved: "leaves", leave_rejected: "leaves",
   mark_present: "dashboard", mark_absent: "dashboard", mark_uh: "dashboard",
-  mark_all_present: "dashboard", mark_all_uh: "dashboard", undo_mark: "dashboard",
+  mark_all_present: "dashboard", mark_all_uh: "dashboard", undo_mark: "dashboard", punch_removed: "dashboard",
   holiday_added: "holidays", holiday_updated: "holidays", holiday_removed: "holidays",
   backup_run: "settings",
 };
@@ -48,7 +49,7 @@ const ACTION_TAB: Record<string, string> = {
 const FILTER_GROUPS = [
   { label: "All Activities", value: "" },
   { label: "Logins", value: "admin_login,employee_login" },
-  { label: "Attendance", value: "mark_present,mark_absent,mark_uh,mark_all_present,mark_all_uh,undo_mark" },
+  { label: "Attendance", value: "mark_present,mark_absent,mark_uh,mark_all_present,mark_all_uh,undo_mark,punch_removed" },
   { label: "Leave", value: "leave_request,leave_approved,leave_rejected" },
   { label: "Miss Punch", value: "misspunch_request,misspunch_approved,misspunch_rejected" },
   { label: "Holidays", value: "holiday_added,holiday_updated,holiday_removed" },
