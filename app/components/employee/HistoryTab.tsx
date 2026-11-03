@@ -37,7 +37,7 @@ type HistoryData = {
   paidHolidayDays?: number;
   absentDays: number;
   leaveDays: number;
-  sundayWorkedDays: number;
+  weekOffWorkedDays: number;
   isFlexible?: boolean;
 };
 
@@ -62,7 +62,7 @@ type TimesheetData = {
   leaveDays: number;
   uhDays: number;
   paidHolidayDays?: number;
-  sundayWorkedDays: number;
+  weekOffWorkedDays: number;
   isFlexible?: boolean;
 };
 
@@ -141,7 +141,7 @@ export default function HistoryTab() {
     if (s === "Paid Holiday") return "on-time";
     if (s === "Leave" || s === "UH" || s === "Holiday") return "grace";
     if (s === "Overtime") return "overtime";
-    if (s === "Sunday") return "grace";
+    if (s === "Week Off") return "grace";
     return "";
   };
 
@@ -254,7 +254,7 @@ export default function HistoryTab() {
                         )}
                       </>
                     )}
-                    {cell.status === "sunday" && <div className="day-times">Off</div>}
+                    {cell.status === "week-off" && <div className="day-times">Week Off</div>}
                     {cell.status === "leave" && <div className="day-times">Leave</div>}
                     {cell.status === "holiday" && <div className="day-times" title={cell.holidayName}>{cell.holidayName || "Holiday"}{!tsData?.isFlexible && <><br />Paid</>}</div>}
                     {cell.status === "uh" && <div className="day-times">UH</div>}
@@ -300,10 +300,10 @@ export default function HistoryTab() {
                     <div className="emp-status-detail"><strong>{tsData.uhDays}</strong><span className="pending-text">days</span></div>
                   </article>
                 )}
-                {(tsData.sundayWorkedDays ?? 0) > 0 && (
+                {(tsData.weekOffWorkedDays ?? 0) > 0 && (
                   <article className="emp-status-card">
                     <div className="emp-status-header"><b>Overtime</b></div>
-                    <div className="emp-status-detail"><strong>{tsData.sundayWorkedDays}</strong><span className="pending-text">days</span></div>
+                    <div className="emp-status-detail"><strong>{tsData.weekOffWorkedDays}</strong><span className="pending-text">days</span></div>
                   </article>
                 )}
               </section>
@@ -336,8 +336,8 @@ export default function HistoryTab() {
           {(data.uhDays ?? 0) > 0 && (
             <article><span className="metric-icon amber">&#9632;</span><div><small>UH</small><strong>{data.uhDays}</strong><em>days</em></div></article>
           )}
-          {(data.sundayWorkedDays ?? 0) > 0 && (
-            <article><span className="metric-icon purple">&#9201;</span><div><small>Overtime</small><strong>{data.sundayWorkedDays}</strong><em>days</em></div></article>
+          {(data.weekOffWorkedDays ?? 0) > 0 && (
+            <article><span className="metric-icon purple">&#9201;</span><div><small>Overtime</small><strong>{data.weekOffWorkedDays}</strong><em>days</em></div></article>
           )}
         </section>
 

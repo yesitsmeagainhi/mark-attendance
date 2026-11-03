@@ -4,12 +4,14 @@ const statusLabels: Record<string, string> = {
   present: "Present",
   late: "Late",
   absent: "Absent",
+  "missed-out": "Missed Out",
+  "in-progress": "In Progress",
   "half-day": "Half Day",
   "short-day": "Short Day",
   leave: "Leave",
   uh: "UH",
-  sunday: "Sunday",
-  "sunday-worked": "Sun Work",
+  "week-off": "Week Off",
+  "weekoff-worked": "WO Worked",
   holiday: "Holiday",
 };
 
@@ -17,16 +19,18 @@ const statusColors: Record<string, { bg: [number, number, number]; fg: [number, 
   present: { bg: [232, 247, 239], fg: [22, 128, 82] },
   late: { bg: [255, 244, 220], fg: [168, 100, 0] },
   absent: { bg: [255, 237, 237], fg: [199, 51, 51] },
+  "missed-out": { bg: [252, 231, 243], fg: [190, 24, 93] },
+  "in-progress": { bg: [239, 246, 255], fg: [37, 99, 235] },
   "half-day": { bg: [255, 244, 220], fg: [168, 100, 0] },
   "short-day": { bg: [255, 237, 237], fg: [199, 51, 51] },
   leave: { bg: [239, 246, 255], fg: [37, 99, 235] },
   uh: { bg: [255, 244, 220], fg: [168, 100, 0] },
-  sunday: { bg: [243, 244, 248], fg: [102, 112, 133] },
-  "sunday-worked": { bg: [219, 234, 254], fg: [29, 78, 216] },
+  "week-off": { bg: [243, 244, 248], fg: [102, 112, 133] },
+  "weekoff-worked": { bg: [219, 234, 254], fg: [29, 78, 216] },
   holiday: { bg: [243, 244, 248], fg: [102, 112, 133] },
 };
 
-const offStatuses = new Set(["sunday", "holiday", "leave", "uh"]);
+const offStatuses = new Set(["week-off", "holiday", "leave", "uh"]);
 
 function fmtDur(mins: number): string {
   const h = Math.floor(mins / 60);
@@ -125,7 +129,7 @@ function buildEmployeePage(
     { label: "Half Day", value: String(emp.halfDays || 0), bg: [255, 244, 220], fg: [168, 100, 0] },
     { label: "Late", value: emp.lateAbsentDays > 0 ? `${emp.lateDays} (=${emp.lateAbsentDays}d)` : String(emp.lateDays), bg: [255, 244, 220], fg: [168, 100, 0] },
     { label: "Leave", value: String(emp.leaveDays), bg: [239, 246, 255], fg: [37, 99, 235] },
-    { label: "Sun Work", value: String(emp.sundayWorkedDays), bg: [219, 234, 254], fg: [29, 78, 216] },
+    { label: "WO Worked", value: String(emp.weekOffWorkedDays), bg: [219, 234, 254], fg: [29, 78, 216] },
   ];
   const boxW = (cw - gap * (metrics.length - 1)) / metrics.length;
   for (let i = 0; i < metrics.length; i++) {
@@ -165,7 +169,7 @@ function buildEmployeePage(
     { label: "Salary", value: fmt(emp.monthlySalary) },
     { label: "Deduction", value: emp.deduction > 0 ? `-${fmt(emp.deduction)}` : "\u2014", color: emp.deduction > 0 ? [199, 51, 51] : undefined },
     { label: "Late Ded.", value: emp.lateAbsentDays > 0 ? `${emp.lateAbsentDays}d` : "\u2014" },
-    { label: "Sun Bonus", value: emp.sundayBonus > 0 ? `+${fmt(emp.sundayBonus)}` : "\u2014", color: emp.sundayBonus > 0 ? [29, 78, 216] : undefined },
+    { label: "WO Extra Pay", value: emp.weekOffBonus > 0 ? `+${fmt(emp.weekOffBonus)}` : "\u2014", color: emp.weekOffBonus > 0 ? [29, 78, 216] : undefined },
   ];
   const netPayW = 48;
   const salAreaW = cw - netPayW - 3;
@@ -203,6 +207,7 @@ function buildEmployeePage(
   // Optional: UH note
   let noteY = salY + salH + 1;
   const notes: string[] = [];
+  if (emp.missedPunchOutDays) notes.push(`Missed punch-out: ${emp.missedPunchOutDays} day${emp.missedPunchOutDays > 1 ? "s" : ""} (counted as absent until corrected)`);
   if (emp.uhDays > 0) notes.push(`Unpaid Holidays: ${emp.uhDays}`);
   if (notes.length > 0) {
     doc.setFontSize(6.5);
@@ -219,7 +224,7 @@ function buildEmployeePage(
     return [
       fmtDate(day.date),
       day.punchIn ? fmtTimeIST(day.punchIn) : "A",
-      day.punchOut ? fmtTimeIST(day.punchOut) : "A",
+      day.punchOut ? fmtTimeIST(day.punchOut) : day.status === "missed-out" ? "Missed" : day.status === "in-progress" ? "—" : "A",
       day.breakMinutes ? fmtDur(day.breakMinutes) : "\u2014",
       day.durationMinutes ? fmtDur(day.durationMinutes) : "A",
       statusLabels[day.status] || day.status,

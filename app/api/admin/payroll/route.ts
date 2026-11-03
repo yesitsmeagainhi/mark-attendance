@@ -5,6 +5,7 @@ import { requireApiRole } from "../../../authz";
 import { getEffectiveRulesBatch } from "../../../../lib/rules";
 import { calculateTotalDuration } from "../../../../lib/time-utils";
 import { getHolidayCalendar } from "../../../../lib/holidays";
+import { dayOfWeek, eachDate, resolveWeekOffs, weekBounds, type DayKind } from "../../../../lib/week-off";
 
 export async function GET(request: Request) {
   const auth = await requireApiRole("admin");
@@ -23,16 +24,14 @@ export async function GET(request: Request) {
 
   const db = getDb();
 
-  // Calculate working days (exclude Sundays and holidays)
-  const holidayCal = getHolidayCalendar(firstDay, lastDayStr);
-  const holidayDates = holidayCal.dates;
+  // Week-offs rotate, so load whole Mon–Sun weeks around the month
+  const range = weekBounds(firstDay, lastDayStr);
+  const monthDates = eachDate(firstDay, lastDayStr);
+  const holidayCal = getHolidayCalendar(range.start, range.end);
+  const monthHolidays = monthDates.filter((d) => holidayCal.byDate.has(d)).length;
 
-  let workingDays = 0;
-  for (let d = 1; d <= lastDay; d++) {
-    const dateStr = `${month}-${String(d).padStart(2, "0")}`;
-    const dayOfWeek = new Date(year, mon - 1, d).getDay();
-    if (dayOfWeek !== 0 && !holidayDates.has(dateStr)) workingDays++;
-  }
+  // Nominal working days (one week-off per week) — per-employee figures are computed below
+  const workingDays = monthDates.filter((d) => dayOfWeek(d) !== 0 && !holidayCal.byDate.has(d)).length;
 
   // Get all active employees
   const allEmployees = db
@@ -61,8 +60,8 @@ export async function GET(request: Request) {
     })
     .from(attendance)
     .where(and(
-      sql`date(${attendance.serverTimestamp}) >= ${firstDay}`,
-      sql`date(${attendance.serverTimestamp}) <= ${lastDayStr}`,
+      sql`date(${attendance.serverTimestamp}) >= ${range.start}`,
+      sql`date(${attendance.serverTimestamp}) <= ${range.end}`,
     ))
     .all();
 
@@ -102,8 +101,8 @@ export async function GET(request: Request) {
     .from(leaveRequests)
     .where(and(
       eq(leaveRequests.status, "approved"),
-      lte(leaveRequests.fromDate, lastDayStr),
-      gte(leaveRequests.toDate, firstDay),
+      lte(leaveRequests.fromDate, range.end),
+      gte(leaveRequests.toDate, range.start),
     ))
     .all();
 
@@ -118,7 +117,7 @@ export async function GET(request: Request) {
     const punchDates = new Set<string>();
     let lateDays = 0;
     let uhDays = 0;
-    let sundayWorkedDays = 0;
+    let weekOffWorkedDays = 0;
     let unpaidHolidayDays = 0;
     let shortDays = 0;
     let halfDays = 0;
@@ -126,32 +125,35 @@ export async function GET(request: Request) {
     const halfDayMinutes = empRules.minimum_hours_for_half_day * 60;
     const fullDayMinutes = empRules.minimum_hours_for_full_day * 60;
 
-    // Count leave days
-    let leaveDays = 0;
+    const leaveDates = new Set<string>();
     for (const leave of leaves) {
       if (leave.employeeId !== emp.id) continue;
-      const from = new Date(Math.max(new Date(leave.fromDate).getTime(), new Date(firstDay).getTime()));
-      const to = new Date(Math.min(new Date(leave.toDate).getTime(), new Date(lastDayStr).getTime()));
-      for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-        if (d.getDay() !== 0) leaveDays++;
-      }
+      const from = leave.fromDate > range.start ? leave.fromDate : range.start;
+      const to = leave.toDate < range.end ? leave.toDate : range.end;
+      for (const d of eachDate(from, to)) leaveDates.add(d);
     }
 
+    const isUHEntry = (entry: DayEntry) =>
+      !entry.inRecords.some((r) => r.source !== "admin") && entry.photoKey === "admin/unpaid-holiday";
+
+    const { weekOff, extraPay } = resolveWeekOffs(firstDay, lastDayStr, (date): DayKind => {
+      if (holidayCal.byDate.has(date)) return "holiday";
+      if (leaveDates.has(date)) return "excused";
+      const entry = dayMap.get(date);
+      if (entry && isUHEntry(entry)) return "excused";
+      if (entry?.punchIn && (entry.punchOut || date === today)) return "worked";
+      return "off";
+    }, today);
+
+    // Days this employee was expected to work: whole month minus holidays and their week-offs
+    const empWorkingDays = monthDates.filter((d) => !holidayCal.byDate.has(d) && !weekOff.has(d) && !extraPay.has(d)).length;
+    const leaveDays = monthDates.filter((d) => leaveDates.has(d) && !holidayCal.byDate.has(d) && !weekOff.has(d)).length;
+
     // Iterate every day of the month
-    for (let d = 1; d <= lastDay; d++) {
-      const dateStr = `${month}-${String(d).padStart(2, "0")}`;
+    for (const dateStr of monthDates) {
       if (dateStr > today) break;
-      const dayOfWeek = new Date(year, mon - 1, d).getDay();
 
       const entry = dayMap.get(dateStr);
-
-      // Sunday — check if employee worked (has both IN and OUT)
-      if (dayOfWeek === 0) {
-        if (entry?.punchIn && entry?.punchOut) {
-          sundayWorkedDays++;
-        }
-        continue;
-      }
 
       // Holiday — paid days are skipped; unpaid ones (not worked) are deducted
       const holiday = holidayCal.byDate.get(dateStr);
@@ -161,13 +163,24 @@ export async function GET(request: Request) {
         continue;
       }
 
+      // Week-off taken — nothing to count
+      if (weekOff.has(dateStr)) continue;
+
+      // Worked every day of the week — this day earns extra pay
+      if (extraPay.has(dateStr)) {
+        weekOffWorkedDays++;
+        if (emp.flexibleHours && entry) {
+          const sorted = [...entry.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
+          totalMinutesWorked += calculateTotalDuration(sorted);
+        }
+        continue;
+      }
+
       // No punch record at all
       if (!entry) continue;
 
       // Check for UH
-      const hasSelfie = entry.inRecords.some((r) => r.source !== "admin");
-      const isUH = !hasSelfie && entry.photoKey === "admin/unpaid-holiday";
-      if (isUH) { uhDays++; continue; }
+      if (isUHEntry(entry)) { uhDays++; continue; }
 
       // If punch-out is missing, treat as absent/incomplete (no hours counted)
       if (!entry.punchOut) continue;
@@ -225,29 +238,29 @@ export async function GET(request: Request) {
         netPay,
         // Unused fields set to 0 for type consistency
         monthlySalary: 0,
-        workingDays,
+        workingDays: empWorkingDays,
         presentDays,
         absentDays: 0,
         halfDays: 0,
         lateAbsentDays: 0,
         lateDays: 0,
-        sundayWorkedDays,
-        sundayBonus: 0,
+        weekOffWorkedDays,
+        weekOffBonus: 0,
         deduction: 0,
       };
     }
 
-    const effectiveWorkDays = workingDays - uhDays - leaveDays;
+    const effectiveWorkDays = empWorkingDays - uhDays - leaveDays;
     const absentDays = Math.max(0, effectiveWorkDays - presentDays - halfDays);
     // Late-to-absent conversion: every 3 lates = 0.5 day deduction (half-day steps)
     const lateDeductionDays = Math.floor(lateDays / 3) * 0.5;
     const halfDayDeduction = halfDays * 0.5;
     const totalDeductionDays = absentDays + halfDayDeduction + lateDeductionDays + unpaidHolidayDays;
-    // Per-day rate uses total calendar days in month (including Sundays)
+    // Per-day rate uses total calendar days in month (including week-offs)
     const perDayRate = Math.round(emp.monthlySalary / lastDay);
     const deduction = Math.round(perDayRate * totalDeductionDays);
-    const sundayBonus = Math.round(sundayWorkedDays * perDayRate);
-    const netPay = emp.monthlySalary - deduction + sundayBonus;
+    const weekOffBonus = Math.round(weekOffWorkedDays * perDayRate);
+    const netPay = emp.monthlySalary - deduction + weekOffBonus;
 
     return {
       id: emp.id,
@@ -257,7 +270,7 @@ export async function GET(request: Request) {
       totalHours: 0,
       totalMinutes: 0,
       monthlySalary: emp.monthlySalary,
-      workingDays,
+      workingDays: empWorkingDays,
       presentDays,
       absentDays,
       halfDays,
@@ -265,8 +278,8 @@ export async function GET(request: Request) {
       lateDays,
       leaveDays,
       unpaidHolidayDays,
-      sundayWorkedDays,
-      sundayBonus,
+      weekOffWorkedDays,
+      weekOffBonus,
       deduction,
       netPay,
     };
@@ -275,7 +288,7 @@ export async function GET(request: Request) {
   return Response.json({
     month,
     workingDays,
-    totalHolidays: holidayDates.size,
+    totalHolidays: monthHolidays,
     employees: payroll,
   });
 }

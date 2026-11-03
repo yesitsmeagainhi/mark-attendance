@@ -11,7 +11,6 @@ export default function AttendanceTab({ employeeId, displayName, camera }: { emp
     location, locationError, locationLoading, acquireLocation,
     nextPunchType, currentlyIn, elapsed, shiftDisplay,
     openCamera,
-    geoAlert, dismissGeoAlert,
   } = camera;
 
   const [currentTime, setCurrentTime] = useState(getIST());
@@ -249,17 +248,7 @@ export default function AttendanceTab({ employeeId, displayName, camera }: { emp
         </div>
       )}
 
-      {geoAlert && (
-        <div className="geo-alert-overlay" onClick={dismissGeoAlert}>
-          <div className="geo-alert-card" onClick={(e) => e.stopPropagation()}>
-            <div className="geo-alert-icon">&#9888;</div>
-            <h3>Outside Office Range</h3>
-            <p>You are <b>{geoAlert.distance >= 1000 ? `${(geoAlert.distance / 1000).toFixed(1)} km` : `${geoAlert.distance} m`}</b> away from <b>{geoAlert.branchName}</b>.</p>
-            <p className="geo-alert-sub">Allowed range is <b>{geoAlert.allowedRadius} m</b>. Please move closer to mark attendance.</p>
-            <button className="primary" onClick={dismissGeoAlert}>OK</button>
-          </div>
-        </div>
-      )}
+      {/* Punch result and outside-range popups are shown by PunchResultDialog in dashboard-client */}
     </>
   );
 }

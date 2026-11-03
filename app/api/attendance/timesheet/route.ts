@@ -5,6 +5,7 @@ import { getAppIdentity } from "../../../authz";
 import { getEffectiveRules } from "../../../../lib/rules";
 import { calculateTotalDuration } from "../../../../lib/time-utils";
 import { getHolidayCalendar } from "../../../../lib/holidays";
+import { resolveWeekOffs, weekBounds, type DayKind } from "../../../../lib/week-off";
 
 export async function GET(request: Request) {
   const identity = await getAppIdentity();
@@ -26,6 +27,8 @@ export async function GET(request: Request) {
   const monthStart = `${month}-01`;
   const monthEnd = `${month}-${String(daysInMonth).padStart(2, "0")}`;
   const today = now.toISOString().slice(0, 10);
+  // Week-offs rotate, so load whole Mon–Sun weeks around the month
+  const range = weekBounds(monthStart, monthEnd);
 
   const db = getDb();
 
@@ -53,8 +56,8 @@ export async function GET(request: Request) {
     .where(
       and(
         eq(attendance.employeeId, identity.employeeId),
-        sql`date(${attendance.serverTimestamp}) >= ${monthStart}`,
-        sql`date(${attendance.serverTimestamp}) <= ${monthEnd}`,
+        sql`date(${attendance.serverTimestamp}) >= ${range.start}`,
+        sql`date(${attendance.serverTimestamp}) <= ${range.end}`,
       ),
     )
     .all();
@@ -70,14 +73,14 @@ export async function GET(request: Request) {
       and(
         eq(leaveRequests.employeeId, identity.employeeId),
         eq(leaveRequests.status, "approved"),
-        sql`${leaveRequests.fromDate} <= ${monthEnd}`,
-        sql`${leaveRequests.toDate} >= ${monthStart}`,
+        sql`${leaveRequests.fromDate} <= ${range.end}`,
+        sql`${leaveRequests.toDate} >= ${range.start}`,
       ),
     )
     .all();
 
   // Get holidays for this month
-  const holidayCal = getHolidayCalendar(monthStart, monthEnd);
+  const holidayCal = getHolidayCalendar(range.start, range.end);
   const empForHolidays = { id: identity.employeeId, paidHolidays: emp?.paidHolidays ?? true };
 
   // Group attendance by date, tracking all punches for multi-session duration
@@ -122,9 +125,18 @@ export async function GET(request: Request) {
     const to = new Date(l.toDate);
     for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
       const ds = d.toISOString().slice(0, 10);
-      if (ds >= monthStart && ds <= monthEnd) leaveDates.add(ds);
+      if (ds >= range.start && ds <= range.end) leaveDates.add(ds);
     }
   }
+
+  const { weekOff, extraPay } = resolveWeekOffs(monthStart, monthEnd, (date): DayKind => {
+    if (holidayCal.byDate.has(date)) return "holiday";
+    if (leaveDates.has(date)) return "excused";
+    const dayData = byDate[date];
+    if (dayData?.punchIn && (dayData.punchOut || date === today)) return "worked";
+    if (dayData?.isAdminUH) return "excused";
+    return "off";
+  }, today);
 
   // Build session info helper for flex employees
   type SessionInfo = { inTime: string; outTime: string | null; durationMinutes: number | null };
@@ -166,13 +178,12 @@ export async function GET(request: Request) {
   let uhDays = 0;
   let paidHolidayDays = 0;
   let halfDays = 0;
-  let sundayWorkedDays = 0;
+  let weekOffWorkedDays = 0;
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${month}-${String(d).padStart(2, "0")}`;
     const dateObj = new Date(year, mon - 1, d);
     const dayOfWeek = dateObj.getDay();
-    const isSunday = dayOfWeek === 0;
     const isFuture = dateStr > today;
 
     if (isFuture) {
@@ -180,22 +191,23 @@ export async function GET(request: Request) {
       continue;
     }
 
-    if (isSunday) {
-      // Check if employee worked on Sunday
-      const sundayData = byDate[dateStr];
-      if (sundayData?.punchIn && sundayData?.punchOut) {
-        const sorted = [...sundayData.allPunches]
-          .filter((p) => p.punchType === "IN" || p.punchType === "OUT")
-          .sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
-        const totalDur = calculateTotalDuration(sorted);
-        const duration: number | null = totalDur > 0 ? totalDur : null;
-        sundayWorkedDays++;
-        presentDays++;
-        if (duration) totalMinutesWorked += totalDur;
-        days.push({ date: dateStr, dayOfWeek, status: "extra-pay", punchIn: sundayData.punchIn, punchOut: sundayData.punchOut, duration, sessions: isFlexible ? buildSessions(sundayData.allPunches) : undefined });
-      } else {
-        days.push({ date: dateStr, dayOfWeek, status: "sunday", punchIn: null, punchOut: null, duration: null });
-      }
+    if (weekOff.has(dateStr)) {
+      days.push({ date: dateStr, dayOfWeek, status: "week-off", punchIn: null, punchOut: null, duration: null });
+      continue;
+    }
+
+    if (extraPay.has(dateStr)) {
+      // Worked every day of the week — this day earns extra pay
+      const woData = byDate[dateStr];
+      const sorted = [...woData.allPunches]
+        .filter((p) => p.punchType === "IN" || p.punchType === "OUT")
+        .sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
+      const totalDur = calculateTotalDuration(sorted);
+      const duration: number | null = totalDur > 0 ? totalDur : null;
+      weekOffWorkedDays++;
+      presentDays++;
+      if (duration) totalMinutesWorked += totalDur;
+      days.push({ date: dateStr, dayOfWeek, status: "extra-pay", punchIn: woData.punchIn ?? null, punchOut: woData.punchOut ?? null, duration, sessions: isFlexible ? buildSessions(woData.allPunches) : undefined });
       continue;
     }
 
@@ -278,7 +290,7 @@ export async function GET(request: Request) {
     leaveDays: leaveDaysCount,
     uhDays,
     paidHolidayDays,
-    sundayWorkedDays,
+    weekOffWorkedDays,
     isFlexible,
   });
 }

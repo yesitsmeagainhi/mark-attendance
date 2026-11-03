@@ -5,6 +5,7 @@ import TabNavigation from "./components/employee/TabNavigation";
 import HomeTab from "./components/employee/HomeTab";
 import AttendanceTab from "./components/employee/AttendanceTab";
 import FullscreenCameraOverlay from "./components/employee/FullscreenCameraOverlay";
+import PunchResultDialog from "./components/employee/PunchResultDialog";
 import { useAttendanceCamera } from "./hooks/useAttendanceCamera";
 import MissPunchTab from "./components/employee/MissPunchTab";
 import LeaveTab from "./components/employee/LeaveTab";
@@ -273,6 +274,10 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
           {activeTab === "profile" && <ProfileTab onSignOut={handleSignOut} />}
         </div>
       ) : null}
+
+      {view === "employee" && !camera.cameraOpen && (
+        <PunchResultDialog saving={camera.saving} result={camera.punchResult} geoAlert={camera.geoAlert} onClose={camera.dismissPunchResult} />
+      )}
 
       {view === "employee" && camera.cameraOpen && (
         <FullscreenCameraOverlay

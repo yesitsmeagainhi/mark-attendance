@@ -28,9 +28,11 @@ const statusBadge: Record<string, { bg: string; color: string; label: string; sh
   present: { bg: "#e8f7ef", color: "#168052", label: "Present", short: "P" },
   late: { bg: "#fff4dc", color: "#a86400", label: "Late", short: "LC" },
   absent: { bg: "#ffeded", color: "#c73333", label: "Absent", short: "A" },
+  "missed-out": { bg: "#fce7f3", color: "#be185d", label: "Missed Punch-Out", short: "MO" },
+  "in-progress": { bg: "#eff6ff", color: "#2563eb", label: "In Progress", short: "IN" },
   leave: { bg: "#eff6ff", color: "#2563eb", label: "Leave", short: "L" },
   uh: { bg: "#fff4dc", color: "#a86400", label: "Unpaid Holiday", short: "UH" },
-  sunday: { bg: "#f3f4f8", color: "#667085", label: "Weekly Off", short: "WO" },
+  "week-off": { bg: "#f3f4f8", color: "#667085", label: "Weekly Off", short: "WO" },
   holiday: { bg: "#f3f4f8", color: "#667085", label: "Holiday", short: "H" },
 };
 
@@ -164,7 +166,7 @@ export default function StaffDatewiseModal({ employeeId, employeeName, onClose }
                 <tbody>
                   {data.dailyDetails.map((day) => {
                     const badge = statusBadge[day.status] || statusBadge.absent;
-                    const isOff = day.status === "sunday" || day.status === "holiday";
+                    const isOff = day.status === "week-off" || day.status === "holiday";
                     return (
                       <tr key={day.date} style={{ background: isOff ? "#fafafa" : undefined }}>
                         <td>{fmtDate(day.date)}</td>

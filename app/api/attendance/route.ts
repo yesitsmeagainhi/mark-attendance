@@ -8,6 +8,11 @@ import { getEffectiveRules } from "../../../lib/rules";
 
 const allowedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
+/** Rejected punches leave no trace in the database, so log why (visible in `pm2 logs`). */
+function logRejected(employeeId: string, punchType: string, reason: string) {
+  console.warn(`[punch rejected] ${new Date().toISOString()} ${employeeId} ${punchType}: ${reason}`);
+}
+
 export async function GET() {
   const identity = await getAppIdentity();
   if (!identity || identity.role !== "admin") {
@@ -98,6 +103,7 @@ export async function POST(request: Request) {
   // The geo-fence check itself will still reject genuinely wrong positions.
   const accuracy = parseFloat(form.get("accuracy") as string || "0");
   if (accuracy > 200) {
+    logRejected(employeeId, punchType, `GPS accuracy ±${Math.round(accuracy)}m`);
     return Response.json(
       { error: `GPS accuracy is too low (±${Math.round(accuracy)}m). Please move to an open area or wait for a better GPS signal and try again.` },
       { status: 400 },
@@ -109,8 +115,14 @@ export async function POST(request: Request) {
   // easily take 30-40s, so a 30s threshold caused false rejections on
   // rapid flex-employee punch cycles.  60s is still tight enough that an
   // employee can't walk outside a 200m geo-fence in that window.
+  // Prefer the age the phone measured on its own clock (gpsAgeMs): comparing the
+  // phone's timestamp with the server clock rejected every punch from a phone
+  // whose clock was more than a minute off.
+  const gpsAgeMs = parseFloat(form.get("gpsAgeMs") as string || "");
   const gpsTimestamp = parseFloat(form.get("gpsTimestamp") as string || "0");
-  if (gpsTimestamp > 0 && Date.now() - gpsTimestamp > 60_000) {
+  const gpsAge = !isNaN(gpsAgeMs) ? gpsAgeMs : gpsTimestamp > 0 ? Date.now() - gpsTimestamp : 0;
+  if (gpsAge > 60_000) {
+    logRejected(employeeId, punchType, `GPS expired (${Math.round(gpsAge / 1000)}s old)`);
     return Response.json(
       { error: "GPS location has expired. Please wait for a fresh GPS reading and try again." },
       { status: 400 },
@@ -149,6 +161,7 @@ export async function POST(request: Request) {
   const matchedBranch = findNearestBranch(empLat, empLon, activeBranches, accuracy);
   if (!matchedBranch) {
     const closest = findClosestBranch(empLat, empLon, activeBranches);
+    logRejected(employeeId, punchType, closest ? `outside geo-fence: ${Math.round(closest.distance)}m from ${closest.name} (allowed ${closest.radius}m, ±${Math.round(accuracy)}m)` : "outside geo-fence");
     const assignedBranchNames = assignedIds.size > 0
       ? activeBranches.map((b) => b.name).join(", ")
       : null;
@@ -168,6 +181,11 @@ export async function POST(request: Request) {
   }
 
   const office = matchedBranch.name;
+
+  // Read the photo before checking punch state: no await may sit between the
+  // check and the insert, or a double-tap sends two requests that both pass
+  // the check and record two punch-ins in a row.
+  const photoBytes = await photo.arrayBuffer();
 
   // Multi-cycle punch state machine
   const today = new Date().toISOString().slice(0, 10);
@@ -201,6 +219,7 @@ export async function POST(request: Request) {
         // Regular employees: check lunch break rules
         const empRules = getEffectiveRules(employeeId);
         if (!empRules.lunch_break_enabled) {
+          logRejected(employeeId, punchType, "re-entry not enabled");
           return Response.json(
             { error: "Re-entry is not enabled for your account. Contact your administrator." },
             { status: 403 },
@@ -220,6 +239,7 @@ export async function POST(request: Request) {
       }
     } else {
       // Last punch was IN — already punched in
+      logRejected(employeeId, punchType, "already punched in");
       return Response.json(
         { error: "You are already punched in." },
         { status: 409 },
@@ -228,6 +248,7 @@ export async function POST(request: Request) {
   } else {
     // punchType === "OUT"
     if (!lastPunch || lastPunch.punchType === "OUT") {
+      logRejected(employeeId, punchType, lastPunch ? "already punched out" : "no punch-in today");
       return Response.json(
         { error: lastPunch ? "You are already punched out. Punch in first." : "You must punch in before punching out." },
         { status: 400 },
@@ -239,7 +260,7 @@ export async function POST(request: Request) {
   const id = crypto.randomUUID();
   const photoKey = `attendance/${today}/${employeeId}/${id}.jpg`;
 
-  putFile(photoKey, await photo.arrayBuffer(), { contentType: photo.type });
+  putFile(photoKey, photoBytes, { contentType: photo.type });
 
   try {
     db.insert(attendance)

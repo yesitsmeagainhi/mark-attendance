@@ -30,6 +30,7 @@ type ReportRow = {
   hourlyRate?: number;
   presentDays: number;
   absentDays: number;
+  missedPunchOutDays?: number;
   halfDays: number;
   shortDays: number;
   lateAbsentDays: number;
@@ -40,8 +41,8 @@ type ReportRow = {
   holidayCount: number;
   attendancePct: number;
   totalWorkedMinutes: number;
-  sundayWorkedDays: number;
-  sundayBonus: number;
+  weekOffWorkedDays: number;
+  weekOffBonus: number;
   perDayRate: number;
   deduction: number;
   netPay: number;
@@ -68,12 +69,14 @@ const statusBadge: Record<string, { bg: string; color: string; label: string }> 
   present: { bg: "#e8f7ef", color: "#168052", label: "Present" },
   late: { bg: "#fff4dc", color: "#a86400", label: "Late" },
   absent: { bg: "#ffeded", color: "#c73333", label: "Absent" },
+  "missed-out": { bg: "#fce7f3", color: "#be185d", label: "Missed Punch-Out" },
+  "in-progress": { bg: "#eff6ff", color: "#2563eb", label: "In Progress" },
   "half-day": { bg: "#fff4dc", color: "#a86400", label: "Half Day" },
   "short-day": { bg: "#ffeded", color: "#c73333", label: "Short Day" },
   leave: { bg: "#eff6ff", color: "#2563eb", label: "Leave" },
   uh: { bg: "#fff4dc", color: "#a86400", label: "UH" },
-  sunday: { bg: "#f3f4f8", color: "#667085", label: "Sun" },
-  "sunday-worked": { bg: "#dbeafe", color: "#1d4ed8", label: "Sun Work" },
+  "week-off": { bg: "#f3f4f8", color: "#667085", label: "WO" },
+  "weekoff-worked": { bg: "#dbeafe", color: "#1d4ed8", label: "WO Worked" },
   holiday: { bg: "#f3f4f8", color: "#667085", label: "Holiday" },
 };
 
@@ -248,6 +251,7 @@ export default function ReportsTab() {
               { label: "Present", value: selectedEmp.presentDays, bg: "#e8f7ef", color: "#168052" },
               ...(selectedEmp.halfDays > 0 ? [{ label: "Half Day", value: selectedEmp.halfDays, bg: "#fff4dc", color: "#a86400" }] : []),
               { label: "Absent", value: selectedEmp.absentDays, bg: "#ffeded", color: "#c73333" },
+              ...(selectedEmp.missedPunchOutDays ? [{ label: "Missed Punch-Out", value: selectedEmp.missedPunchOutDays, bg: "#fce7f3", color: "#be185d" }] : []),
               ...(selectedEmp.shortDays > 0 ? [{ label: "Short Day", value: selectedEmp.shortDays, bg: "#ffeded", color: "#c73333" }] : []),
               { label: "Late", value: selectedEmp.lateDays, bg: "#fff4dc", color: "#a86400" },
               { label: "Leave", value: selectedEmp.leaveDays, bg: "#eff6ff", color: "#2563eb" },
@@ -256,8 +260,8 @@ export default function ReportsTab() {
               ...(selectedEmp.monthlySalary > 0 ? [
                 { label: "Salary", value: `\u20B9${selectedEmp.monthlySalary.toLocaleString("en-IN")}`, bg: "#f9fafb", color: "#172033" },
                 { label: "Deduction", value: selectedEmp.deduction > 0 ? `-\u20B9${selectedEmp.deduction.toLocaleString("en-IN")}` : "\u2014", bg: "#ffeded", color: "#c73333" },
-                ...(selectedEmp.sundayBonus > 0 ? [
-                  { label: "Sun Bonus", value: `+\u20B9${selectedEmp.sundayBonus.toLocaleString("en-IN")}`, bg: "#dbeafe", color: "#1d4ed8" },
+                ...(selectedEmp.weekOffBonus > 0 ? [
+                  { label: "WO Extra Pay", value: `+\u20B9${selectedEmp.weekOffBonus.toLocaleString("en-IN")}`, bg: "#dbeafe", color: "#1d4ed8" },
                 ] : []),
                 { label: "Net Pay", value: `\u20B9${selectedEmp.netPay.toLocaleString("en-IN")}`, bg: "#e8f7ef", color: "#168052" },
               ] : []),
@@ -284,7 +288,7 @@ export default function ReportsTab() {
               <tbody>
                 {selectedEmp.dailyDetails.map((day) => {
                   const badge = statusBadge[day.status] || statusBadge.absent;
-                  const isOff = (day.status === "sunday" || day.status === "holiday");
+                  const isOff = (day.status === "week-off" || day.status === "holiday");
                   return (
                     <tr key={day.date} style={{ background: isOff ? "#fafafa" : undefined }}>
                       <td style={{ padding: "10px 14px", borderTop: "1px solid #eff0f3", fontSize: 15, fontWeight: 600 }}>

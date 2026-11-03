@@ -28,6 +28,8 @@ export type ReportEmployee = {
   hourlyRate?: number;
   presentDays: number;
   absentDays: number;
+  /** Past days with a punch-in but no punch-out (included in absentDays) */
+  missedPunchOutDays?: number;
   halfDays: number;
   lateAbsentDays: number;
   lateDays: number;
@@ -37,8 +39,8 @@ export type ReportEmployee = {
   holidayCount: number;
   attendancePct: number;
   totalWorkedMinutes: number;
-  sundayWorkedDays: number;
-  sundayBonus: number;
+  weekOffWorkedDays: number;
+  weekOffBonus: number;
   perDayRate: number;
   deduction: number;
   netPay: number;
@@ -49,12 +51,14 @@ const statusLabels: Record<string, string> = {
   present: "Present",
   late: "Late",
   absent: "Absent",
+  "missed-out": "Missed Punch-Out",
+  "in-progress": "In Progress",
   "half-day": "Half Day",
   "short-day": "Short Day",
   leave: "Leave",
   uh: "Unpaid Holiday",
-  sunday: "Sunday",
-  "sunday-worked": "Sun Work",
+  "week-off": "Week Off",
+  "weekoff-worked": "WO Worked",
   holiday: "Holiday",
 };
 
@@ -62,12 +66,14 @@ const statusColors: Record<string, { bg: string; fg: string }> = {
   present: { bg: "E8F7EF", fg: "168052" },
   late: { bg: "FFF4DC", fg: "A86400" },
   absent: { bg: "FFEDED", fg: "C73333" },
+  "missed-out": { bg: "FCE7F3", fg: "BE185D" },
+  "in-progress": { bg: "EFF6FF", fg: "2563EB" },
   "half-day": { bg: "FFF4DC", fg: "A86400" },
   "short-day": { bg: "FFEDED", fg: "C73333" },
   leave: { bg: "EFF6FF", fg: "2563EB" },
   uh: { bg: "FFF4DC", fg: "A86400" },
-  sunday: { bg: "F3F4F8", fg: "667085" },
-  "sunday-worked": { bg: "DBEAFE", fg: "1D4ED8" },
+  "week-off": { bg: "F3F4F8", fg: "667085" },
+  "weekoff-worked": { bg: "DBEAFE", fg: "1D4ED8" },
   holiday: { bg: "F3F4F8", fg: "667085" },
 };
 
@@ -156,8 +162,8 @@ function buildEmployeeBlock(
   const infoGrid: [string, string, string, string, string, string][] = [
     ["Name", emp.name, "Emp ID", emp.id, "Branch", emp.office],
     ["Role", emp.jobRole || "Employee", "Shift", emp.shift, "Work Days", String(workingDays)],
-    ["Present", String(emp.presentDays), "Half Day", String(emp.halfDays || 0), "Absent", String(emp.absentDays)],
-    ["Late", `${emp.lateDays}${emp.lateAbsentDays > 0 ? ` (=${emp.lateAbsentDays}d ded.)` : ""}`, "Leave", String(emp.leaveDays), "Sun Work", `${emp.sundayWorkedDays}${emp.sundayBonus > 0 ? ` (+${fmt(emp.sundayBonus)})` : ""}`],
+    ["Present", String(emp.presentDays), "Half Day", String(emp.halfDays || 0), "Absent", `${emp.absentDays}${emp.missedPunchOutDays ? ` (${emp.missedPunchOutDays} missed punch-out)` : ""}`],
+    ["Late", `${emp.lateDays}${emp.lateAbsentDays > 0 ? ` (=${emp.lateAbsentDays}d ded.)` : ""}`, "Leave", String(emp.leaveDays), "WO Worked", `${emp.weekOffWorkedDays}${emp.weekOffBonus > 0 ? ` (+${fmt(emp.weekOffBonus)})` : ""}`],
     ["Salary", fmt(emp.monthlySalary), "Deduction", emp.deduction > 0 ? `-${fmt(emp.deduction)}` : "\u2014", "Net Pay", fmt(emp.netPay)],
   ];
 
@@ -220,13 +226,13 @@ function buildEmployeeBlock(
     if (day.breakMinutes) totalBreakMins += day.breakMinutes;
 
     const isEvenRow = di % 2 === 1;
-    const isOff = day.status === "sunday" || day.status === "holiday";
+    const isOff = day.status === "week-off" || day.status === "holiday";
     const rowBg = isOff ? "FFF3F4F8" : (isEvenRow ? STRIPE : WHITE);
 
     row.getCell(1).value = `${fmtDate(day.date)}`;
     row.getCell(1).font = { bold: true, size: 9, color: { argb: isOff ? GRAY : DARK } };
     row.getCell(2).value = day.punchIn ? fmtTimeIST(day.punchIn) : "\u2014";
-    row.getCell(3).value = day.punchOut ? fmtTimeIST(day.punchOut) : "\u2014";
+    row.getCell(3).value = day.punchOut ? fmtTimeIST(day.punchOut) : day.status === "missed-out" ? "Missed" : "\u2014";
     row.getCell(4).value = day.breakMinutes ? fmtDur(day.breakMinutes) : "\u2014";
     row.getCell(5).value = day.durationMinutes ? fmtDur(day.durationMinutes) : "\u2014";
     if (day.durationMinutes) row.getCell(5).font = { bold: true, size: 9, color: { argb: PURPLE } };
@@ -546,8 +552,8 @@ export async function generateRawReportExcel(
   let r = 4;
   for (const dateStr of sortedDates) {
     const entries = dateMap.get(dateStr)!;
-    const dayOfWeek = new Date(dateStr + "T00:00:00");
-    const isOff = dayOfWeek.getDay() === 0 || entries[0]?.day.status === "holiday";
+    // Week-offs rotate per employee — grey the date only if it's off for everyone
+    const isOff = entries[0]?.day.status === "holiday" || entries.every((e) => e.day.status === "week-off");
 
     // Date header row
     sheet.mergeCells(r, 1, r, colCount);
@@ -588,7 +594,7 @@ export async function generateRawReportExcel(
       row.getCell(1).alignment = { vertical: "middle" };
 
       row.getCell(2).value = day.punchIn ? fmtTimeIST(day.punchIn) : "\u2014";
-      row.getCell(3).value = day.punchOut ? fmtTimeIST(day.punchOut) : "\u2014";
+      row.getCell(3).value = day.punchOut ? fmtTimeIST(day.punchOut) : day.status === "missed-out" ? "Missed" : "\u2014";
 
       row.getCell(4).value = day.durationMinutes ? fmtDur(day.durationMinutes) : "\u2014";
       if (day.durationMinutes) row.getCell(4).font = { bold: true, size: 9, color: { argb: PURPLE } };
@@ -749,7 +755,7 @@ export async function generateFlexReportExcel(
   //   for (let di = 0; di < emp.dailyDetails.length; di++) {
   //     const day = emp.dailyDetails[di];
   //     const sessions = day.sessions || [];
-  //     const isOff = day.status === "sunday" || day.status === "holiday";
+  //     const isOff = day.status === "week-off" || day.status === "holiday";
   //     const noSessions = !day.punchIn || !day.punchOut || !day.durationMinutes;
   //     const isEvenRow = di % 2 === 1;
 
@@ -913,8 +919,8 @@ export async function generateFlexReportExcel(
 
   for (const dateStr of pSortedDates) {
     const entries = pDateMap.get(dateStr)!;
-    const dayOfWeek = new Date(dateStr + "T00:00:00").getDay();
-    const isOff = dayOfWeek === 0 || entries[0]?.day.status === "holiday";
+    // Week-offs rotate per employee — grey the date only if it's off for everyone
+    const isOff = entries[0]?.day.status === "holiday" || entries.every((e) => e.day.status === "week-off");
 
     // ── Date group header row ──
     punchSheet.mergeCells(pr, 1, pr, pCols);
@@ -948,7 +954,7 @@ export async function generateFlexReportExcel(
       const isEven = ei2 % 2 === 1;
 
       if (sessions.length === 0) {
-        // No sessions — single row for absent / sunday / holiday / leave
+        // No sessions — single row for absent / week-off / holiday / leave
         const row = punchSheet.getRow(pr);
         row.height = 16;
         const rowBg = isOff ? P_OFF_BG : (isEven ? P_STRIPE : WHITE);

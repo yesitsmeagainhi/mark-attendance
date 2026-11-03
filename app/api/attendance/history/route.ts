@@ -5,6 +5,7 @@ import { getAppIdentity } from "../../../authz";
 import { getEffectiveRules } from "../../../../lib/rules";
 import { calculateTotalDuration } from "../../../../lib/time-utils";
 import { getHolidayCalendar } from "../../../../lib/holidays";
+import { resolveWeekOffs, weekBounds, type DayKind } from "../../../../lib/week-off";
 
 export async function GET(request: Request) {
   const identity = await getAppIdentity();
@@ -55,6 +56,9 @@ export async function GET(request: Request) {
     }
   }
 
+  // Week-offs rotate, so load whole Mon–Sun weeks around the requested range
+  const range = weekBounds(firstDay, lastDay);
+
   const db = getDb();
 
   // Get employee's work start time for grace calculation
@@ -84,8 +88,8 @@ export async function GET(request: Request) {
     .where(
       and(
         eq(attendance.employeeId, identity.employeeId),
-        sql`date(${attendance.serverTimestamp}) >= ${firstDay}`,
-        sql`date(${attendance.serverTimestamp}) <= ${lastDay}`,
+        sql`date(${attendance.serverTimestamp}) >= ${range.start}`,
+        sql`date(${attendance.serverTimestamp}) <= ${range.end}`,
       ),
     )
     .orderBy(desc(attendance.serverTimestamp))
@@ -103,14 +107,14 @@ export async function GET(request: Request) {
       and(
         eq(leaveRequests.employeeId, identity.employeeId),
         eq(leaveRequests.status, "approved"),
-        sql`${leaveRequests.toDate} >= ${firstDay}`,
-        sql`${leaveRequests.fromDate} <= ${lastDay}`,
+        sql`${leaveRequests.toDate} >= ${range.start}`,
+        sql`${leaveRequests.fromDate} <= ${range.end}`,
       ),
     )
     .all();
 
   // Get holidays in the same period
-  const holidayCal = getHolidayCalendar(firstDay, lastDay);
+  const holidayCal = getHolidayCalendar(range.start, range.end);
   const empForHolidays = { id: identity.employeeId, paidHolidays: emp?.paidHolidays ?? true };
 
   // Group records by date (store all punches for multi-session support)
@@ -161,6 +165,15 @@ export async function GET(request: Request) {
 
   // Build daily records
   const today = new Date().toISOString().slice(0, 10);
+
+  const { weekOff, extraPay } = resolveWeekOffs(firstDay, lastDay, (date): DayKind => {
+    if (holidayCal.byDate.has(date)) return "holiday";
+    if (leaveDates.has(date)) return "excused";
+    const dayData = byDate[date];
+    if (dayData?.punchIn && (dayData.punchOut || date === today)) return "worked";
+    if (dayData?.isAdminUH) return "excused";
+    return "off";
+  }, today);
   const halfDayMinutes = empRules.minimum_hours_for_half_day * 60;
   const fullDayMinutes = empRules.minimum_hours_for_full_day * 60;
   type SessionInfo = { inTime: string; outTime: string | null; durationMinutes: number | null };
@@ -202,29 +215,26 @@ export async function GET(request: Request) {
   let halfDays = 0;
   let uhDays = 0;
   let paidHolidayDays = 0;
-  let sundayWorkedDays = 0;
+  let weekOffWorkedDays = 0;
 
   for (const dateStr of iterDates) {
     const dayData = byDate[dateStr];
     const isLeave = leaveDates.has(dateStr);
 
-    // Sunday handling — check if employee worked
-    const [yr2, mn2, dy2] = dateStr.split("-").map(Number);
-    const isSunday = new Date(yr2, mn2 - 1, dy2).getDay() === 0;
-    if (isSunday) {
-      if (dayData?.punchIn && dayData?.punchOut) {
-        // Worked on Sunday — Extra Pay (counts as present)
-        const sorted = [...dayData.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
-        const totalDur = calculateTotalDuration(sorted);
-        const duration: number | null = totalDur > 0 ? totalDur : null;
-        sundayWorkedDays++;
-        presentDays++;
-        const sessions = isFlexible ? buildSessions(dayData.allPunches) : undefined;
-        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut, duration, status: "Overtime", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null, sessions });
-      } else {
-        // Regular Sunday off
-        result.push({ date: dateStr, punchInTime: null, punchOutTime: null, duration: null, status: "Sunday", lateByMinutes: null, office: null, photoKeyIn: null, photoKeyOut: null });
-      }
+    if (weekOff.has(dateStr)) {
+      result.push({ date: dateStr, punchInTime: null, punchOutTime: null, duration: null, status: "Week Off", lateByMinutes: null, office: null, photoKeyIn: null, photoKeyOut: null });
+      continue;
+    }
+
+    if (extraPay.has(dateStr)) {
+      // Worked every day of the week — Extra Pay (counts as present)
+      const sorted = [...dayData.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
+      const totalDur = calculateTotalDuration(sorted);
+      const duration: number | null = totalDur > 0 ? totalDur : null;
+      weekOffWorkedDays++;
+      presentDays++;
+      const sessions = isFlexible ? buildSessions(dayData.allPunches) : undefined;
+      result.push({ date: dateStr, punchInTime: dayData.punchIn ?? null, punchOutTime: dayData.punchOut ?? null, duration, status: "Overtime", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null, sessions });
       continue;
     }
 
@@ -315,7 +325,7 @@ export async function GET(request: Request) {
     halfDays,
     uhDays,
     paidHolidayDays,
-    sundayWorkedDays,
+    weekOffWorkedDays,
     absentDays: result.filter((r) => r.status === "Absent" || r.status === "Short Day").length,
     leaveDays: result.filter((r) => r.status === "Leave").length,
     isFlexible,

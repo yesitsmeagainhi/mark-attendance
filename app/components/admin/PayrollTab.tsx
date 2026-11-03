@@ -14,8 +14,8 @@ type PayrollRow = {
   lateAbsentDays: number;
   lateDays: number;
   leaveDays: number;
-  sundayWorkedDays: number;
-  sundayBonus: number;
+  weekOffWorkedDays: number;
+  weekOffBonus: number;
   deduction: number;
   netPay: number;
   // Flex/hourly employee fields
@@ -73,7 +73,7 @@ export default function PayrollTab() {
 
   const totalSalary = rows.reduce((s, r) => s + r.monthlySalary, 0);
   const totalDeduction = rows.reduce((s, r) => s + r.deduction, 0);
-  const totalSundayBonus = rows.reduce((s, r) => s + (r.sundayBonus || 0), 0);
+  const totalWeekOffBonus = rows.reduce((s, r) => s + (r.weekOffBonus || 0), 0);
   const totalNetPay = rows.reduce((s, r) => s + r.netPay, 0);
 
   return (
@@ -102,7 +102,7 @@ export default function PayrollTab() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Employee</th><th>Salary / Rate</th><th>Present / Hours</th><th>Absent</th><th>Late</th><th>Leave</th><th>Sun Work</th><th>Deduction</th><th>Sun Bonus</th><th>Net Pay</th></tr>
+              <tr><th>Employee</th><th>Salary / Rate</th><th>Present / Hours</th><th>Absent</th><th>Late</th><th>Leave</th><th>WO Worked</th><th>Deduction</th><th>WO Extra Pay</th><th>Net Pay</th></tr>
             </thead>
             <tbody>
               {loading ? (
@@ -168,9 +168,9 @@ export default function PayrollTab() {
                         )}
                       </td>
                       <td>{r.leaveDays}</td>
-                      <td>{r.sundayWorkedDays > 0 ? <span className="grace-badge grace">{r.sundayWorkedDays}</span> : <span style={{ color: "#b0b5c0" }}>0</span>}</td>
+                      <td>{r.weekOffWorkedDays > 0 ? <span className="grace-badge grace">{r.weekOffWorkedDays}</span> : <span style={{ color: "#b0b5c0" }}>0</span>}</td>
                       <td style={{ color: r.deduction > 0 ? "#c73333" : undefined }}>{r.deduction > 0 ? `-${fmt(r.deduction)}` : "\u2014"}</td>
-                      <td style={{ color: r.sundayBonus > 0 ? "#168052" : undefined }}>{r.sundayBonus > 0 ? `+${fmt(r.sundayBonus)}` : "\u2014"}</td>
+                      <td style={{ color: r.weekOffBonus > 0 ? "#168052" : undefined }}>{r.weekOffBonus > 0 ? `+${fmt(r.weekOffBonus)}` : "\u2014"}</td>
                     </>
                   )}
                   <td><b>{fmt(r.netPay)}</b></td>
@@ -182,7 +182,7 @@ export default function PayrollTab() {
                   <td><b>{fmt(totalSalary)}</b></td>
                   <td></td><td></td><td></td><td></td><td></td>
                   <td style={{ color: "#c73333" }}><b>{totalDeduction > 0 ? `-${fmt(totalDeduction)}` : "\u2014"}</b></td>
-                  <td style={{ color: "#168052" }}><b>{totalSundayBonus > 0 ? `+${fmt(totalSundayBonus)}` : "\u2014"}</b></td>
+                  <td style={{ color: "#168052" }}><b>{totalWeekOffBonus > 0 ? `+${fmt(totalWeekOffBonus)}` : "\u2014"}</b></td>
                   <td><b>{fmt(totalNetPay)}</b></td>
                 </tr>
               )}

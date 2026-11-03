@@ -12,6 +12,8 @@ export type GeoAlert = {
   allowedRadius: number;
 };
 
+export type PunchResult = { ok: boolean; punchType: "IN" | "OUT"; text: string; time?: string };
+
 export type UseAttendanceCameraReturn = {
   cameraOpen: boolean;
   openCamera: () => void;
@@ -40,9 +42,38 @@ export type UseAttendanceCameraReturn = {
   handleCaptureFrame: (frame: string) => Promise<void>;
   geoAlert: GeoAlert | null;
   dismissGeoAlert: () => void;
+  /** Outcome of the last punch, shown as a popup on whichever tab the employee is on */
+  punchResult: PunchResult | null;
+  dismissPunchResult: () => void;
   withinGeoFence: boolean | null; // null = checking, true = inside, false = outside
   geoFenceInfo: { branchName: string; distance: number; allowedRadius: number } | null;
 };
+
+const STALE_GPS_MS = 30_000;
+
+type GpsFix = { latitude: number; longitude: number; accuracy: number; timestamp: number };
+
+/** One fresh (never cached) GPS reading; falls back to WiFi/cell position, null if both fail. */
+function getFreshPosition(): Promise<GpsFix | null> {
+  const toFix = (p: GeolocationPosition): GpsFix => ({
+    latitude: p.coords.latitude,
+    longitude: p.coords.longitude,
+    accuracy: p.coords.accuracy,
+    timestamp: p.timestamp,
+  });
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve(toFix(p)),
+      () => navigator.geolocation.getCurrentPosition(
+        (p) => resolve(toFix(p)),
+        () => resolve(null),
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 },
+      ),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    );
+  });
+}
 
 export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = {}): UseAttendanceCameraReturn {
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -66,6 +97,8 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
   // Geo-fence alert
   const [geoAlert, setGeoAlert] = useState<GeoAlert | null>(null);
   const dismissGeoAlert = useCallback(() => setGeoAlert(null), []);
+  const [punchResult, setPunchResult] = useState<PunchResult | null>(null);
+  const dismissPunchResult = useCallback(() => { setPunchResult(null); setGeoAlert(null); }, []);
 
   // Real-time geo-fence check
   type BranchRecord = { id: string; name: string; latitude: string; longitude: string; radius: number };
@@ -285,23 +318,48 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
     setCameraOpen(false);
     setSaving(true);
     setMessage("");
+    setPunchResult(null);
+    const punchType = (nextPunchType ?? "IN") as "IN" | "OUT";
     try {
+      // The reading taken when the camera opened can be a minute old by the time
+      // the selfie is confirmed (and the browser may have handed back a cached one),
+      // which the server rejects as expired. Take a fresh reading if it's stale.
+      let fix = location;
+      if (Date.now() - fix.timestamp > STALE_GPS_MS) {
+        setMessage("Updating GPS location...");
+        const fresh = await getFreshPosition();
+        if (fresh) {
+          fix = fresh;
+          setLocation(fresh);
+        }
+        setMessage("");
+      }
       const blob = await (await fetch(frame)).blob();
       const form = new FormData();
       form.append("photo", blob, "selfie.jpg");
       form.append("punchType", nextPunchType as string);
       form.append("office", todayStatus?.office || "");
-      form.append("latitude", location.latitude.toString());
-      form.append("longitude", location.longitude.toString());
-      form.append("accuracy", location.accuracy.toString());
-      form.append("gpsTimestamp", location.timestamp.toString());
+      form.append("latitude", fix.latitude.toString());
+      form.append("longitude", fix.longitude.toString());
+      form.append("accuracy", fix.accuracy.toString());
+      form.append("gpsTimestamp", fix.timestamp.toString());
+      // Age measured on the phone's own clock, so a phone whose clock is off
+      // doesn't get every punch rejected as "GPS expired"
+      form.append("gpsAgeMs", Math.max(0, Date.now() - fix.timestamp).toString());
       const response = await fetch("/api/attendance", { method: "POST", body: form });
-      const result = await response.json() as { error?: string; geoAlert?: GeoAlert; serverTimestamp?: string };
+      // A server/proxy error page isn't JSON; don't let that surface as "Unexpected token <"
+      const result = await response.json().catch(() => ({})) as { error?: string; geoAlert?: GeoAlert; serverTimestamp?: string };
       if (!response.ok) {
         if (result.geoAlert) setGeoAlert(result.geoAlert);
         throw new Error(result.error || "Could not mark attendance.");
       }
-      setMessage(nextPunchType === "IN" ? "Punch in recorded successfully." : "Punch out recorded. Have a great evening!");
+      setMessage(nextPunchType === "IN" ? "Punch in recorded successfully." : "Punch out recorded. Attendance complete!");
+      setPunchResult({
+        ok: true,
+        punchType,
+        text: punchType === "IN" ? "Punch in recorded." : "Punch out recorded. Attendance complete!",
+        time: result.serverTimestamp,
+      });
       setPhoto(null);
       // Optimistically flip the punch state so the button text and next
       // punchType update immediately — prevents the stale-closure race
@@ -336,7 +394,11 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
       // Await the authoritative status refresh before re-enabling the button
       await fetchStatus();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not mark attendance.");
+      const text = error instanceof TypeError
+        ? "No internet connection, so your punch was not saved. Check your connection and try again."
+        : error instanceof Error ? error.message : "Could not mark attendance.";
+      setMessage(text);
+      setPunchResult({ ok: false, punchType, text });
     } finally {
       setSaving(false);
     }
@@ -352,6 +414,7 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
     nextPunchType, currentlyIn, lastPunchTime, shiftDisplay, elapsed,
     handleCaptureFrame,
     geoAlert, dismissGeoAlert,
+    punchResult, dismissPunchResult,
     withinGeoFence, geoFenceInfo,
   };
 }

@@ -62,21 +62,32 @@ export default function FullscreenCameraOverlay({
   const [previewFrame, setPreviewFrame] = useState<string | null>(null);
   const [cameraFacingMode, setCameraFacingMode] = useState<"user" | "environment">("user");
 
-  // Lock body scroll
+  // Lock body scroll, and block iOS Safari pinch-zoom while the camera is open
+  // (Safari ignores user-scalable=no; its gesture events are the reliable way)
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    const blockGesture = (e: Event) => e.preventDefault();
+    document.addEventListener("gesturestart", blockGesture);
+    document.addEventListener("gesturechange", blockGesture);
+    return () => {
+      document.body.style.overflow = prev;
+      document.removeEventListener("gesturestart", blockGesture);
+      document.removeEventListener("gesturechange", blockGesture);
+    };
   }, []);
 
   // Start/restart the stream whenever the selected camera changes.
   useEffect(() => {
     let cancelled = false;
+    // Ask for a frame in the same orientation as the screen: a landscape 1280x720
+    // feed on an upright iPhone gets cropped to fill the screen and looks zoomed in.
+    const portrait = window.innerHeight > window.innerWidth;
     navigator.mediaDevices?.getUserMedia({
       video: {
         facingMode: { ideal: cameraFacingMode },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        width: { ideal: portrait ? 720 : 1280 },
+        height: { ideal: portrait ? 1280 : 720 },
         zoom: 1.0,
       } as MediaTrackConstraints,
       audio: false,
