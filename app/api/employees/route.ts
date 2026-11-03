@@ -29,6 +29,7 @@ export async function GET(request: Request) {
       hourlyRate: employees.hourlyRate,
       flexibleHours: employees.flexibleHours,
       paidHolidays: employees.paidHolidays,
+      punchAnywhere: employees.punchAnywhere,
       createdAt: employees.createdAt,
     })
     .from(employees)
@@ -77,6 +78,7 @@ export async function PATCH(request: Request) {
     active?: boolean;
     flexibleHours?: boolean;
     paidHolidays?: boolean;
+    punchAnywhere?: boolean;
     assignedBranchIds?: string[];
   };
   try {
@@ -130,6 +132,7 @@ export async function PATCH(request: Request) {
   if (body.active !== undefined) updates.active = body.active;
   if (body.flexibleHours !== undefined) updates.flexibleHours = body.flexibleHours;
   if (body.paidHolidays !== undefined) updates.paidHolidays = body.paidHolidays;
+  if (body.punchAnywhere !== undefined) updates.punchAnywhere = body.punchAnywhere;
 
   // Sync branch assignments if provided
   if (body.assignedBranchIds !== undefined) {

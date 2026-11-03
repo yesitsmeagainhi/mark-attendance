@@ -13,6 +13,7 @@ export type EmployeeRow = {
   monthlySalary: number;
   flexibleHours: boolean;
   paidHolidays?: boolean;
+  punchAnywhere?: boolean;
   assignedBranchIds: string[];
   createdAt: string;
 };

@@ -4,7 +4,7 @@ import * as schema from "./schema";
 import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 
-const DB_PATH = resolve(process.cwd(), "data", "attendance.db");
+const DB_PATH = resolve(/* turbopackIgnore: true */ process.cwd(), "data", "attendance.db");
 const MIGRATIONS_DIR = resolve(process.cwd(), "drizzle");
 
 let _db: ReturnType<typeof drizzle> | null = null;

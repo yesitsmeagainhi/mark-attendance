@@ -30,6 +30,7 @@ export default function EditEmployeeModal({
     hourlyRate: String((employee as { hourlyRate?: number }).hourlyRate || ""),
     flexibleHours: employee.flexibleHours ?? false,
     paidHolidays: employee.paidHolidays ?? true,
+    punchAnywhere: employee.punchAnywhere ?? false,
     active: employee.active,
   });
   const [error, setError] = useState("");
@@ -67,6 +68,7 @@ export default function EditEmployeeModal({
         hourlyRate: form.flexibleHours ? (parseInt(form.hourlyRate, 10) || 0) : 0,
         flexibleHours: form.flexibleHours,
         paidHolidays: form.paidHolidays,
+        punchAnywhere: form.punchAnywhere,
         active: form.active,
       };
 
@@ -148,7 +150,21 @@ export default function EditEmployeeModal({
               <input type="time" value={form.workEndTime} onChange={(e) => setForm({ ...form, workEndTime: e.target.value })} required />
             </label>
           </div>
-          <div>
+          <label style={{ display: "flex", alignItems: "center", gap: 10, flexDirection: "row" }}>
+            <span style={{ flex: 1 }}>
+              Punch from anywhere
+              <small style={{ display: "block", color: "#9ca3af", fontWeight: 400 }}>Skip the branch range check (field / remote staff). Location is still recorded.</small>
+            </span>
+            <button
+              type="button"
+              className={form.punchAnywhere ? "btn-approve" : "btn-reject"}
+              style={{ fontSize: 14 }}
+              onClick={() => setForm({ ...form, punchAnywhere: !form.punchAnywhere })}
+            >
+              {form.punchAnywhere ? "Allowed" : "Off"}
+            </button>
+          </label>
+          {!form.punchAnywhere && <div>
             <span style={{ display: "block", fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Assigned branches</span>
             <small style={{ display: "block", color: "#9ca3af", fontWeight: 400, marginBottom: 8 }}>Employee can only punch from selected branches. Leave empty for any branch.</small>
             {branches.filter((b) => b.active).length > 0 ? (
@@ -173,7 +189,7 @@ export default function EditEmployeeModal({
             ) : (
               <div style={{ fontSize: 15, color: "#9ca3af", padding: "8px 0" }}>No branches configured</div>
             )}
-          </div>
+          </div>}
           <label style={{ display: "flex", alignItems: "center", gap: 10, flexDirection: "row" }}>
             <span style={{ flex: 1 }}>
               Flexible hours

@@ -134,7 +134,8 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
 
   // Recompute geo-fence status whenever location or branches change
   useEffect(() => {
-    if (!location || activeBranches.length === 0) {
+    // Punch-anywhere staff are never blocked by the geo-fence
+    if (!location || activeBranches.length === 0 || todayStatus?.punchAnywhere) {
       setWithinGeoFence(null);
       setGeoFenceInfo(null);
       return;
@@ -157,7 +158,7 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
     }
     setWithinGeoFence(isWithin);
     setGeoFenceInfo(closest);
-  }, [location, activeBranches]);
+  }, [location, activeBranches, todayStatus?.punchAnywhere]);
 
   const fetchStatus = useCallback(async () => {
     if (!enabled) return;

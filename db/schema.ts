@@ -19,6 +19,8 @@ export const employees = sqliteTable("employees", {
   profilePhotoKey: text("profile_photo_key"),
   flexibleHours: integer("flexible_hours", { mode: "boolean" }).notNull().default(false),
   paidHolidays: integer("paid_holidays", { mode: "boolean" }).notNull().default(true),
+  // Skip the branch geo-fence for this employee (field / remote staff)
+  punchAnywhere: integer("punch_anywhere", { mode: "boolean" }).notNull().default(false),
   dateOfBirth: text("date_of_birth").notNull().default(""),
   profileEditCount: integer("profile_edit_count").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),

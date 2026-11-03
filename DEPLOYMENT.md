@@ -306,6 +306,32 @@ pm2 restart attendly
 
 Turn it off again: delete that line from `.env` (or set it to `false`) and run `pm2 restart attendly`.
 
+### Attendance feed for an outside website (off by default)
+
+Read-only endpoint that shares day-by-day attendance of selected employees. It answers 404 until a key is set.
+
+```bash
+# generate a key and add both lines to .env
+echo "EXTERNAL_API_KEY=$(openssl rand -hex 32)" >> /var/www/mark_attendance/.env
+echo "EXTERNAL_API_EMPLOYEES=EMP-1001,EMP-1002" >> /var/www/mark_attendance/.env
+pm2 restart attendly
+grep EXTERNAL_API_KEY /var/www/mark_attendance/.env   # copy the key to the website
+```
+
+Request (call it from the website's **server**, never from browser JavaScript, or the key is exposed):
+
+```bash
+curl -H "Authorization: Bearer <key>" \
+  "https://asmvikas.abseducationalsolution.com/api/external/attendance?from=2026-11-01&to=2026-11-30"
+```
+
+- `from` / `to`: `YYYY-MM-DD`; default is this month up to today; max 93 days per call.
+- `employeeId` (optional): one employee from the list.
+- Times are IST (`+05:30`). Day `status`: `present`, `late`, `in_progress`, `missed_punch_out`, `absent`, `week_off`, `leave`, `paid_holiday`, `unpaid_holiday`.
+- No selfies or GPS coordinates are shared.
+
+To change who is shared, edit `EXTERNAL_API_EMPLOYEES` and `pm2 restart attendly`. To revoke access, change or delete `EXTERNAL_API_KEY` and restart.
+
 ---
 
 ## Troubleshooting

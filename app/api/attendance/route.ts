@@ -66,7 +66,7 @@ export async function POST(request: Request) {
   const db = getDb();
 
   const employee = db
-    .select({ id: employees.id, flexibleHours: employees.flexibleHours })
+    .select({ id: employees.id, flexibleHours: employees.flexibleHours, punchAnywhere: employees.punchAnywhere })
     .from(employees)
     .where(and(eq(employees.id, employeeId), eq(employees.active, true)))
     .get();
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
   // positions with 150-200m accuracy that are still positionally valid.
   // The geo-fence check itself will still reject genuinely wrong positions.
   const accuracy = parseFloat(form.get("accuracy") as string || "0");
-  if (accuracy > 200) {
+  if (accuracy > 200 && !employee.punchAnywhere) {
     logRejected(employeeId, punchType, `GPS accuracy ±${Math.round(accuracy)}m`);
     return Response.json(
       { error: `GPS accuracy is too low (±${Math.round(accuracy)}m). Please move to an open area or wait for a better GPS signal and try again.` },
@@ -121,7 +121,7 @@ export async function POST(request: Request) {
   const gpsAgeMs = parseFloat(form.get("gpsAgeMs") as string || "");
   const gpsTimestamp = parseFloat(form.get("gpsTimestamp") as string || "0");
   const gpsAge = !isNaN(gpsAgeMs) ? gpsAgeMs : gpsTimestamp > 0 ? Date.now() - gpsTimestamp : 0;
-  if (gpsAge > 60_000) {
+  if (gpsAge > 60_000 && !employee.punchAnywhere) {
     logRejected(employeeId, punchType, `GPS expired (${Math.round(gpsAge / 1000)}s old)`);
     return Response.json(
       { error: "GPS location has expired. Please wait for a fresh GPS reading and try again." },
@@ -146,7 +146,13 @@ export async function POST(request: Request) {
     ? allActiveBranches.filter((b) => assignedIds.has(b.id))
     : allActiveBranches;
 
-  if (activeBranches.length === 0) {
+  // Punch-anywhere staff: no geo-fence. The location is still saved with the
+  // punch; office is the branch they happen to be at, otherwise "Remote".
+  const remoteBranch = employee.punchAnywhere
+    ? findNearestBranch(empLat, empLon, activeBranches, accuracy)
+    : null;
+
+  if (activeBranches.length === 0 && !employee.punchAnywhere) {
     const assignedNames = assignedIds.size > 0
       ? allActiveBranches.filter((b) => assignedIds.has(b.id)).map((b) => b.name)
       : [];
@@ -158,7 +164,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const matchedBranch = findNearestBranch(empLat, empLon, activeBranches, accuracy);
+  const matchedBranch = employee.punchAnywhere
+    ? remoteBranch ?? { name: "Remote" }
+    : findNearestBranch(empLat, empLon, activeBranches, accuracy);
   if (!matchedBranch) {
     const closest = findClosestBranch(empLat, empLon, activeBranches);
     logRejected(employeeId, punchType, closest ? `outside geo-fence: ${Math.round(closest.distance)}m from ${closest.name} (allowed ${closest.radius}m, ±${Math.round(accuracy)}m)` : "outside geo-fence");

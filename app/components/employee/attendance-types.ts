@@ -8,6 +8,7 @@ export type TodayStatus = {
   office: string;
   flexibleHours: boolean;
   assignedBranchIds: string[];
+  punchAnywhere?: boolean;
   punchIn: { time: string; office: string; photoKey?: string } | null;
   punchOut: { time: string; office: string; photoKey?: string } | null;
   punches: PunchRecord[];

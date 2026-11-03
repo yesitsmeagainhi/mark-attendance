@@ -6,7 +6,7 @@ import JSZip from "jszip";
 import { createTransport } from "nodemailer";
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const DATA_DIR = resolve(process.cwd(), "data");
+const DATA_DIR = resolve(/* turbopackIgnore: true */ process.cwd(), "data");
 const DB_PATH = resolve(DATA_DIR, "attendance.db");
 const UPLOADS_DIR = resolve(DATA_DIR, "uploads");
 const BACKUP_DIR = resolve(DATA_DIR, "backups", "full");

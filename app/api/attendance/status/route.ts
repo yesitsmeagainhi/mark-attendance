@@ -20,6 +20,7 @@ export async function GET() {
       workEndTime: employees.workEndTime,
       office: employees.office,
       flexibleHours: employees.flexibleHours,
+      punchAnywhere: employees.punchAnywhere,
     })
     .from(employees)
     .where(eq(employees.id, identity.employeeId))
@@ -112,6 +113,7 @@ export async function GET() {
     workEndTime: emp?.workEndTime || "18:00",
     office: emp?.office || "",
     assignedBranchIds,
+    punchAnywhere: emp?.punchAnywhere ?? false,
     punchIn: punchIn
       ? { time: punchIn.serverTimestamp, office: punchIn.office, photoKey: punchIn.photoKey }
       : null,
