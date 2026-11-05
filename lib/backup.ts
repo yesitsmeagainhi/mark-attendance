@@ -4,13 +4,14 @@ import Database from "better-sqlite3";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { createTransport } from "nodemailer";
+import { dataPath } from "./data-dir";
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const DATA_DIR = resolve(/* turbopackIgnore: true */ process.cwd(), "data");
-const DB_PATH = resolve(DATA_DIR, "attendance.db");
-const UPLOADS_DIR = resolve(DATA_DIR, "uploads");
-const BACKUP_DIR = resolve(DATA_DIR, "backups", "full");
-const STATUS_FILE = resolve(DATA_DIR, "backups", "last-full-backup.json");
+const DATA_DIR = dataPath();
+const DB_PATH = dataPath("attendance.db");
+const UPLOADS_DIR = dataPath("uploads");
+const BACKUP_DIR = dataPath("backups", "full");
+const STATUS_FILE = dataPath("backups", "last-full-backup.json");
 const LOCAL_KEEP = 8; // keep the 8 most recent full backups on the server
 const DRIVE_FOLDER_NAME = "Attendly Backups";
 

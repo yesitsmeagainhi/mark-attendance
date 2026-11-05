@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { resolve, dirname } from "node:path";
+import { dataPath } from "./data-dir";
 
-const UPLOADS_ROOT = resolve(/* turbopackIgnore: true */ process.cwd(), "data", "uploads");
+const UPLOADS_ROOT = dataPath("uploads");
 
 export interface StoredObject {
   body: Buffer;

@@ -3,8 +3,9 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
 import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
+import { dataPath } from "../lib/data-dir";
 
-const DB_PATH = resolve(/* turbopackIgnore: true */ process.cwd(), "data", "attendance.db");
+const DB_PATH = dataPath("attendance.db");
 const MIGRATIONS_DIR = resolve(process.cwd(), "drizzle");
 
 let _db: ReturnType<typeof drizzle> | null = null;
