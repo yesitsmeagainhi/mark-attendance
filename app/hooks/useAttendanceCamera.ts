@@ -53,14 +53,26 @@ const STALE_GPS_MS = 30_000;
 
 type GpsFix = { latitude: number; longitude: number; accuracy: number; timestamp: number };
 
-/** One fresh (never cached) GPS reading; falls back to WiFi/cell position, null if both fail. */
-function getFreshPosition(): Promise<GpsFix | null> {
-  const toFix = (p: GeolocationPosition): GpsFix => ({
+/**
+ * Some Android phones stamp positions with the GPS-chip clock (or a stale fix
+ * time) that is minutes or even years away from the phone's own clock, which
+ * made every punch fail as "GPS expired". If the stamp is implausible, use the
+ * time we received the reading instead (the maximumAge options already cap how
+ * old a cached reading can be).
+ */
+function toFix(p: GeolocationPosition): GpsFix {
+  const now = Date.now();
+  const plausible = p.timestamp > 0 && p.timestamp <= now + 5_000 && now - p.timestamp <= 120_000;
+  return {
     latitude: p.coords.latitude,
     longitude: p.coords.longitude,
     accuracy: p.coords.accuracy,
-    timestamp: p.timestamp,
-  });
+    timestamp: plausible ? p.timestamp : now,
+  };
+}
+
+/** A recent GPS reading; falls back to WiFi/cell position, null if both fail. */
+function getFreshPosition(): Promise<GpsFix | null> {
   return new Promise((resolve) => {
     if (!navigator.geolocation) return resolve(null);
     navigator.geolocation.getCurrentPosition(
@@ -68,9 +80,9 @@ function getFreshPosition(): Promise<GpsFix | null> {
       () => navigator.geolocation.getCurrentPosition(
         (p) => resolve(toFix(p)),
         () => resolve(null),
-        { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 },
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 15000 },
       ),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 },
     );
   });
 }
@@ -182,12 +194,7 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
     setLocationError("");
 
     const onSuccess = (position: GeolocationPosition) => {
-      setLocation({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy,
-        timestamp: position.timestamp,
-      });
+      setLocation(toFix(position));
       setLocationLoading(false);
     };
 
@@ -224,6 +231,24 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 20000 },
     );
   }, [enabled]);
+
+  // While the camera is open keep the reading fresh, so the fix sent with the
+  // punch is seconds old instead of from when the camera opened (the server
+  // rejects readings older than 60s, and face detection can take a while).
+  useEffect(() => {
+    if (!enabled || !cameraOpen || !navigator.geolocation) return;
+    const id = navigator.geolocation.watchPosition(
+      (p) => {
+        const fix = toFix(p);
+        // Don't let a coarse WiFi/cell update replace a much better GPS fix
+        setLocation((prev) => (prev && Date.now() - prev.timestamp < 15_000 && fix.accuracy > prev.accuracy * 2 ? prev : fix));
+        setLocationLoading(false);
+      },
+      () => { /* keep the last good reading; acquireLocation reports errors */ },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 },
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, [enabled, cameraOpen]);
 
   // Auto-acquire GPS on mount
   useEffect(() => {

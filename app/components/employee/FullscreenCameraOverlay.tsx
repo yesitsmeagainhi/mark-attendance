@@ -61,6 +61,7 @@ export default function FullscreenCameraOverlay({
   const monitorRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [previewFrame, setPreviewFrame] = useState<string | null>(null);
   const [cameraFacingMode, setCameraFacingMode] = useState<"user" | "environment">("user");
+  const [cameraError, setCameraError] = useState("");
 
   // Lock body scroll, and block iOS Safari pinch-zoom while the camera is open
   // (Safari ignores user-scalable=no; its gesture events are the reliable way)
@@ -80,52 +81,57 @@ export default function FullscreenCameraOverlay({
   // Start/restart the stream whenever the selected camera changes.
   useEffect(() => {
     let cancelled = false;
-    // Ask for a frame in the same orientation as the screen: a landscape 1280x720
-    // feed on an upright iPhone gets cropped to fill the screen and looks zoomed in.
-    const portrait = window.innerHeight > window.innerWidth;
-    navigator.mediaDevices?.getUserMedia({
-      video: {
-        facingMode: { ideal: cameraFacingMode },
-        width: { ideal: portrait ? 720 : 1280 },
-        height: { ideal: portrait ? 1280 : 720 },
-        zoom: 1.0,
-      } as MediaTrackConstraints,
+    // No width/height: asking for a size or shape the sensor doesn't have makes
+    // Chrome (Android) crop the frame and Safari pick a cropped mode — both look
+    // zoomed in. resizeMode "none" tells Chrome to deliver the native frame as-is.
+    // No zoom constraint either: on Android Chrome it triggers an extra
+    // "pan/tilt/zoom" permission prompt and can make the camera fail to open.
+    const preferred: MediaStreamConstraints = {
+      video: { facingMode: { ideal: cameraFacingMode }, resizeMode: "none" } as MediaTrackConstraints,
       audio: false,
-    })
+    };
+    const open = async () => {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("unsupported");
+      try {
+        return await navigator.mediaDevices.getUserMedia(preferred);
+      } catch (err) {
+        // Permission denied won't change on retry; anything else, try the plainest request
+        if (err instanceof DOMException && err.name === "NotAllowedError") throw err;
+        return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+    };
+    open()
       .then((stream) => {
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-
-        // Disable Center Stage auto-framing on iOS/iPadOS
-        const track = stream.getVideoTracks()[0];
-        try {
-          const caps = track?.getCapabilities?.() as Record<string, unknown> | undefined;
-          if (caps?.zoom) {
-            track.applyConstraints({ advanced: [{ zoom: 1.0 } as MediaTrackConstraintSet] }).catch(() => { });
-          }
-        } catch { /* non-Safari browsers ignore this */ }
-
-        // Continuous monitor: detect zoom/resolution changes and auto-correct
-        let lastTrackW = 0, lastTrackH = 0;
-        function pollCameraState() {
-          const trk = stream.getVideoTracks()[0];
-          if (!trk) return;
-          const s = trk.getSettings();
-          const tw = s.width ?? 0, th = s.height ?? 0;
-
-          if (lastTrackW && lastTrackH && (tw !== lastTrackW || th !== lastTrackH)) {
-            try {
-              trk.applyConstraints({ advanced: [{ zoom: 1.0 } as MediaTrackConstraintSet] }).catch(() => { });
-            } catch { /* ignore */ }
-          }
-          lastTrackW = tw;
-          lastTrackH = th;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => { });
         }
-        pollCameraState();
-        monitorRef.current = setInterval(pollCameraState, 500);
+
+        // iPad Center Stage / auto-framing can zoom in on its own. Only touch zoom
+        // on cameras that support it, and only when it actually moved off 1x.
+        const track = stream.getVideoTracks()[0];
+        let caps: Record<string, unknown> | undefined;
+        try { caps = track?.getCapabilities?.() as Record<string, unknown> | undefined; } catch { caps = undefined; }
+        const zoomCaps = caps?.zoom as { min?: number; max?: number } | undefined;
+        if (track && zoomCaps && (zoomCaps.min ?? 1) <= 1 && (zoomCaps.max ?? 1) >= 1) {
+          const resetZoom = () => {
+            const z = (track.getSettings() as { zoom?: number }).zoom;
+            if (z !== undefined && Math.abs(z - 1) > 0.01) {
+              track.applyConstraints({ advanced: [{ zoom: 1 } as MediaTrackConstraintSet] }).catch(() => { });
+            }
+          };
+          resetZoom();
+          monitorRef.current = setInterval(resetZoom, 1000);
+        }
       })
-      .catch(() => { if (!cancelled) onCloseRef.current(); });
+      .catch((err) => {
+        if (cancelled) return;
+        setCameraError(err instanceof DOMException && err.name === "NotAllowedError"
+          ? "Camera permission is blocked. Allow camera access for this site in your browser settings, then try again."
+          : "Could not start the camera. Close other apps using the camera and try again.");
+      });
     return () => {
       cancelled = true;
       if (monitorRef.current) { clearInterval(monitorRef.current); monitorRef.current = null; }
@@ -139,17 +145,31 @@ export default function FullscreenCameraOverlay({
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
+    // The video is letterboxed (object-fit: contain), so place the face-box
+    // canvas exactly over the visible picture, not over the whole element.
     function syncSize() {
       if (!video || !canvas) return;
       const rect = video.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
+      const vw = video.videoWidth, vh = video.videoHeight;
+      let w = rect.width, h = rect.height;
+      if (vw && vh && rect.width && rect.height) {
+        const scale = Math.min(rect.width / vw, rect.height / vh);
+        w = vw * scale;
+        h = vh * scale;
+      }
+      canvas.width = Math.round(w);
+      canvas.height = Math.round(h);
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      canvas.style.left = `${(rect.width - w) / 2}px`;
+      canvas.style.top = `${(rect.height - h) / 2}px`;
     }
     video.addEventListener("loadedmetadata", syncSize);
+    video.addEventListener("resize", syncSize);
     const observer = new ResizeObserver(syncSize);
     observer.observe(video);
     syncSize();
-    return () => { video.removeEventListener("loadedmetadata", syncSize); observer.disconnect(); };
+    return () => { video.removeEventListener("loadedmetadata", syncSize); video.removeEventListener("resize", syncSize); observer.disconnect(); };
   }, []);
 
   // Face detection loop
@@ -286,7 +306,7 @@ export default function FullscreenCameraOverlay({
             </span>
             <button
               type="button"
-              onClick={() => setCameraFacingMode((mode) => mode === "user" ? "environment" : "user")}
+              onClick={() => { setCameraError(""); setCameraFacingMode((mode) => mode === "user" ? "environment" : "user"); }}
               aria-label={cameraFacingMode === "user" ? "Switch to back camera" : "Switch to front camera"}
               title={cameraFacingMode === "user" ? "Switch to back camera" : "Switch to front camera"}
               style={{
@@ -333,6 +353,15 @@ export default function FullscreenCameraOverlay({
             <span className="fco-guidance-dot" />
             {isOutsideGeoFence ? "You are outside the office area" : faceGuidance}
           </div>
+
+          {cameraError && (
+            <div className="fco-model-error" style={{ zIndex: 12, whiteSpace: "normal", width: "86%", maxWidth: 420, textAlign: "center", borderRadius: 14, padding: "12px 16px" }}>
+              {cameraError}
+              <div style={{ marginTop: 10 }}>
+                <button className="fco-gps-retry" onClick={onClose}>Close</button>
+              </div>
+            </div>
+          )}
 
           {!modelsLoaded && !modelError && (
             <div className="fco-model-loading">Loading face detection...</div>

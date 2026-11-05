@@ -328,12 +328,13 @@
 }
 
 /* ─── Fullscreen Camera Overlay ─── */
-.fullscreen-camera-overlay{position:fixed;inset:0;z-index:300;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+.fullscreen-camera-overlay{position:fixed;inset:0;z-index:300;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
 /* Fast double-taps on the capture/confirm buttons must not zoom the page on iOS */
 button{touch-action:manipulation}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
-.fco-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
-.fco-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
+/* contain, not cover: cover crops the camera picture to the screen shape, which looks zoomed in */
+.fco-video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;transform:scaleX(-1)}
+.fco-canvas{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:2}
 
 /* Top bar */
 .fco-top-bar{position:absolute;top:0;left:0;right:0;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top,0px));background:linear-gradient(to bottom,rgba(0,0,0,.5) 0%,transparent 100%)}
