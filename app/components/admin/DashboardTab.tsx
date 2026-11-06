@@ -723,7 +723,12 @@ export default function DashboardTab() {
                         <span style={{ color: "#c9cbd4" }}>{"\u2014"}</span>
                       )}
                     </td>
-                    <td data-label="Status">{statusBadge(emp.status)}</td>
+                    <td data-label="Status">
+                      {statusBadge(emp.status)}
+                      {emp.status === "absent" && emp.punchIn && !emp.punchOut && (
+                        <small style={{ display: "block", color: "#be185d", fontSize: 12, marginTop: 3 }}>Missed punch-out</small>
+                      )}
+                    </td>
                     <td data-label="Actions">
                       <div className="review-actions" style={{ gap: 4 }}>
                         <button className="btn-action btn-present" disabled={!!actionInProgress} onClick={() => confirmMarkOne(emp.id, emp.name, "present")} title="Mark Present">P</button>

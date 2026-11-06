@@ -169,6 +169,8 @@ export async function GET(request: Request) {
     duration: number | null;
     sessions?: SessionInfo[];
     holidayName?: string;
+    /** Punched in but never out: the day isn't counted, but the punch-in is shown */
+    missedPunchOut?: boolean;
   }> = [];
 
   let totalMinutesWorked = 0;
@@ -192,7 +194,10 @@ export async function GET(request: Request) {
     }
 
     if (weekOff.has(dateStr)) {
-      days.push({ date: dateStr, dayOfWeek, status: "week-off", punchIn: null, punchOut: null, duration: null });
+      // A punch-in without punch-out can still become the week-off; show it anyway
+      const wo = byDate[dateStr];
+      const strayIn = wo?.punchIn && !wo.punchOut ? wo.punchIn : null;
+      days.push({ date: dateStr, dayOfWeek, status: "week-off", punchIn: strayIn, punchOut: null, duration: null, ...(strayIn ? { missedPunchOut: true } : {}) });
       continue;
     }
 
@@ -213,7 +218,9 @@ export async function GET(request: Request) {
 
     if (leaveDates.has(dateStr)) {
       leaveDaysCount++;
-      days.push({ date: dateStr, dayOfWeek, status: "leave", punchIn: null, punchOut: null, duration: null });
+      // Still a leave day, but never hide punches made on it
+      const lv = byDate[dateStr];
+      days.push({ date: dateStr, dayOfWeek, status: "leave", punchIn: lv?.punchIn ?? null, punchOut: lv?.punchOut ?? null, duration: null });
       continue;
     }
 
@@ -240,7 +247,7 @@ export async function GET(request: Request) {
     // If punch-out is missing on a past day, treat as absent
     if (!dayData.punchOut && dateStr < today) {
       absentDays++;
-      days.push({ date: dateStr, dayOfWeek, status: "absent", punchIn: dayData.punchIn, punchOut: null, duration: null });
+      days.push({ date: dateStr, dayOfWeek, status: "absent", punchIn: dayData.punchIn, punchOut: null, duration: null, missedPunchOut: true });
       continue;
     }
 

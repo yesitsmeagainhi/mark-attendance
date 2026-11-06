@@ -13,11 +13,14 @@ type MissPunchRequest = {
   createdAt: string;
 };
 
-export default function MissPunchTab() {
+export type MissPunchPrefill = { date: string; punchType: "IN" | "OUT" | "BOTH" };
+
+export default function MissPunchTab({ prefill }: { prefill?: MissPunchPrefill | null } = {}) {
   const [requests, setRequests] = useState<MissPunchRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [date, setDate] = useState("");
-  const [punchType, setPunchType] = useState<"IN" | "OUT" | "BOTH">("IN");
+  // Opened from a missed day in History: start with that day filled in
+  const [date, setDate] = useState(prefill?.date ?? "");
+  const [punchType, setPunchType] = useState<"IN" | "OUT" | "BOTH">(prefill?.punchType ?? "IN");
   const [requestedTime, setRequestedTime] = useState("");
   const [requestedTimeOut, setRequestedTimeOut] = useState("");
   const [reason, setReason] = useState("");

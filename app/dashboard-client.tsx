@@ -7,7 +7,7 @@ import AttendanceTab from "./components/employee/AttendanceTab";
 import FullscreenCameraOverlay from "./components/employee/FullscreenCameraOverlay";
 import PunchResultDialog from "./components/employee/PunchResultDialog";
 import { useAttendanceCamera } from "./hooks/useAttendanceCamera";
-import MissPunchTab from "./components/employee/MissPunchTab";
+import MissPunchTab, { type MissPunchPrefill } from "./components/employee/MissPunchTab";
 import LeaveTab from "./components/employee/LeaveTab";
 import HistoryTab from "./components/employee/HistoryTab";
 import TimesheetTab from "./components/employee/TimesheetTab";
@@ -74,6 +74,7 @@ function Brand() {
 
 export default function DashboardClient({ view, employeeId, displayName, role }: { view: "employee" | "admin"; employeeId: string; displayName: string; role: "employee" | "admin" }) {
   const [activeTab, setActiveTabRaw] = useState("home");
+  const [missPunchPrefill, setMissPunchPrefill] = useState<MissPunchPrefill | null>(null);
   const [adminTab, setAdminTab] = useState("dashboard");
   const camera = useAttendanceCamera({ enabled: view === "employee" });
 
@@ -266,11 +267,11 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
             </div>
           )}
 
-          {activeTab === "home" && <HomeTab displayName={displayName} onNavigate={setActiveTab} onOpenCamera={camera.openCamera} todayStatus={camera.todayStatus} />}
+          {activeTab === "home" && <HomeTab displayName={displayName} onNavigate={(tab) => { setMissPunchPrefill(null); setActiveTab(tab); }} onOpenCamera={camera.openCamera} todayStatus={camera.todayStatus} />}
           {activeTab === "attendance" && <AttendanceTab employeeId={employeeId} displayName={displayName} camera={camera} />}
-          {activeTab === "miss-punch" && <MissPunchTab />}
+          {activeTab === "miss-punch" && <MissPunchTab key={missPunchPrefill ? `${missPunchPrefill.date}-${missPunchPrefill.punchType}` : "blank"} prefill={missPunchPrefill} />}
           {activeTab === "leave" && <LeaveTab />}
-          {activeTab === "history" && <HistoryTab />}
+          {activeTab === "history" && <HistoryTab onRequestMissPunch={(date, punchType) => { setMissPunchPrefill({ date, punchType }); setActiveTab("miss-punch"); }} />}
           {activeTab === "timesheet" && <TimesheetTab />}
           {activeTab === "profile" && <ProfileTab onSignOut={handleSignOut} />}
         </div>

@@ -25,6 +25,7 @@ type HistoryRecord = {
   photoKeyOut: string | null;
   sessions?: SessionInfo[];
   holidayName?: string;
+  missedPunchOut?: boolean;
 };
 
 type HistoryData = {
@@ -50,6 +51,7 @@ type DayData = {
   duration: number | null;
   sessions?: SessionInfo[];
   holidayName?: string;
+  missedPunchOut?: boolean;
 };
 
 type TimesheetData = {
@@ -68,7 +70,7 @@ type TimesheetData = {
 
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-export default function HistoryTab() {
+export default function HistoryTab({ onRequestMissPunch }: { onRequestMissPunch?: (date: string, punchType: "IN" | "OUT" | "BOTH") => void } = {}) {
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
   // Shared month state for both views
@@ -255,7 +257,13 @@ export default function HistoryTab() {
                       </>
                     )}
                     {cell.status === "week-off" && <div className="day-times">Week Off</div>}
+                    {cell.missedPunchOut && cell.punchIn && (
+                      <div className="day-times" style={{ color: "#be185d" }} title="Punched in but no punch-out, so this day is not counted">
+                        In {formatTimeIST(cell.punchIn)}<br />No punch-out
+                      </div>
+                    )}
                     {cell.status === "leave" && <div className="day-times">Leave</div>}
+                    {cell.status === "leave" && cell.punchIn && renderPunchTimes()}
                     {cell.status === "holiday" && <div className="day-times" title={cell.holidayName}>{cell.holidayName || "Holiday"}{!tsData?.isFlexible && <><br />Paid</>}</div>}
                     {cell.status === "uh" && <div className="day-times">UH</div>}
                     {cell.status === "absent" && <div className="day-times">Absent</div>}
@@ -412,6 +420,18 @@ export default function HistoryTab() {
                     </td>
                     <td>
                       <span className={`grace-badge ${statusClass(r.status)}`}>{r.status}</span>
+                      {r.missedPunchOut && (
+                        <small style={{ display: "block", color: "#be185d", fontSize: 13, marginTop: 2 }}>Missed punch-out</small>
+                      )}
+                      {onRequestMissPunch && (r.missedPunchOut || (r.status === "Absent" && !r.punchInTime)) && (
+                        <button
+                          type="button"
+                          onClick={() => onRequestMissPunch(r.date, r.missedPunchOut ? "OUT" : "BOTH")}
+                          style={{ display: "block", marginTop: 6, border: "1px solid #fdba74", background: "#fff7ed", color: "#c2410c", borderRadius: 8, padding: "4px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                        >
+                          Request miss-punch
+                        </button>
+                      )}
                       {r.holidayName && (
                         <small style={{ display: "block", color: "#667085", fontSize: 13, marginTop: 2 }}>{r.holidayName}</small>
                       )}

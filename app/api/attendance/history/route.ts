@@ -189,6 +189,7 @@ export async function GET(request: Request) {
     photoKeyOut: string | null;
     sessions?: SessionInfo[];
     holidayName?: string;
+    missedPunchOut?: boolean;
   }> = [];
 
   function buildSessions(allPunches: { punchType: string; serverTimestamp: string }[]): SessionInfo[] {
@@ -222,7 +223,9 @@ export async function GET(request: Request) {
     const isLeave = leaveDates.has(dateStr);
 
     if (weekOff.has(dateStr)) {
-      result.push({ date: dateStr, punchInTime: null, punchOutTime: null, duration: null, status: "Week Off", lateByMinutes: null, office: null, photoKeyIn: null, photoKeyOut: null });
+      // A punch-in without punch-out can still become the week-off; show it anyway
+      const strayIn = dayData?.punchIn && !dayData.punchOut;
+      result.push({ date: dateStr, punchInTime: strayIn ? dayData.punchIn! : null, punchOutTime: null, duration: null, status: "Week Off", lateByMinutes: null, office: strayIn ? dayData.office || null : null, photoKeyIn: strayIn ? dayData.photoKeyIn || null : null, photoKeyOut: null, ...(strayIn ? { missedPunchOut: true } : {}) });
       continue;
     }
 
@@ -239,7 +242,8 @@ export async function GET(request: Request) {
     }
 
     if (isLeave) {
-      result.push({ date: dateStr, punchInTime: null, punchOutTime: null, duration: null, status: "Leave", lateByMinutes: null, office: null, photoKeyIn: null, photoKeyOut: null });
+      // Still a leave day, but never hide punches made on it
+      result.push({ date: dateStr, punchInTime: dayData?.punchIn ?? null, punchOutTime: dayData?.punchOut ?? null, duration: null, status: "Leave", lateByMinutes: null, office: dayData?.office || null, photoKeyIn: dayData?.photoKeyIn || null, photoKeyOut: dayData?.photoKeyOut || null });
       continue;
     }
 
@@ -267,7 +271,7 @@ export async function GET(request: Request) {
     // If punch-out is missing on a past day, treat as absent (incomplete record)
     // For today, treat as present (still working)
     if (!dayData.punchOut && dateStr < today) {
-      result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: null, duration: null, status: "Absent", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: null });
+      result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: null, duration: null, status: "Absent", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: null, missedPunchOut: true });
       continue;
     }
 
