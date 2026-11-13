@@ -6,6 +6,7 @@ import { getEffectiveRulesBatch } from "../../../../lib/rules";
 import { calculateTotalDuration } from "../../../../lib/time-utils";
 import { getHolidayCalendar } from "../../../../lib/holidays";
 import { dayOfWeek, eachDate, resolveWeekOffs, weekBounds, type DayKind } from "../../../../lib/week-off";
+import { computeMonthlySalary, dailyOvertimeMinutes, leaveUsedBeforeMonth, shiftLengthMinutes, splitLeaveDays, type LeaveType } from "../../../../lib/pay-rules";
 
 export async function GET(request: Request) {
   const auth = await requireApiRole("admin");
@@ -41,6 +42,7 @@ export async function GET(request: Request) {
       monthlySalary: employees.monthlySalary,
       hourlyRate: employees.hourlyRate,
       workStartTime: employees.workStartTime,
+      workEndTime: employees.workEndTime,
       flexibleHours: employees.flexibleHours,
       paidHolidays: employees.paidHolidays,
     })
@@ -95,6 +97,7 @@ export async function GET(request: Request) {
   const leaves = db
     .select({
       employeeId: leaveRequests.employeeId,
+      leaveType: leaveRequests.leaveType,
       fromDate: leaveRequests.fromDate,
       toDate: leaveRequests.toDate,
     })
@@ -107,6 +110,7 @@ export async function GET(request: Request) {
     .all();
 
   const rulesByEmp = getEffectiveRulesBatch(allEmployees.map((e) => e.id));
+  const leaveUsedByEmp = leaveUsedBeforeMonth(allEmployees.map((e) => e.id), firstDay);
 
   const payroll = allEmployees.map((emp) => {
     const dayMap = empDayMap.get(emp.id) || new Map<string, DayEntry>();
@@ -122,15 +126,21 @@ export async function GET(request: Request) {
     let shortDays = 0;
     let halfDays = 0;
     let totalMinutesWorked = 0; // for flex/hourly employees
+    let overtimeMinutes = 0;
+    const shiftMinutes = shiftLengthMinutes(emp.workStartTime, emp.workEndTime);
     const halfDayMinutes = empRules.minimum_hours_for_half_day * 60;
     const fullDayMinutes = empRules.minimum_hours_for_full_day * 60;
 
     const leaveDates = new Set<string>();
+    const leaveTypeByDate = new Map<string, LeaveType>();
     for (const leave of leaves) {
       if (leave.employeeId !== emp.id) continue;
       const from = leave.fromDate > range.start ? leave.fromDate : range.start;
       const to = leave.toDate < range.end ? leave.toDate : range.end;
-      for (const d of eachDate(from, to)) leaveDates.add(d);
+      for (const d of eachDate(from, to)) {
+        leaveDates.add(d);
+        if (!leaveTypeByDate.has(d)) leaveTypeByDate.set(d, leave.leaveType);
+      }
     }
 
     const isUHEntry = (entry: DayEntry) =>
@@ -147,7 +157,8 @@ export async function GET(request: Request) {
 
     // Days this employee was expected to work: whole month minus holidays and their week-offs
     const empWorkingDays = monthDates.filter((d) => !holidayCal.byDate.has(d) && !weekOff.has(d) && !extraPay.has(d)).length;
-    const leaveDays = monthDates.filter((d) => leaveDates.has(d) && !holidayCal.byDate.has(d) && !weekOff.has(d)).length;
+    const leaveDateList = monthDates.filter((d) => leaveDates.has(d) && !holidayCal.byDate.has(d) && !weekOff.has(d));
+    const leaveDays = leaveDateList.length;
 
     // Iterate every day of the month
     for (const dateStr of monthDates) {
@@ -169,9 +180,11 @@ export async function GET(request: Request) {
       // Worked every day of the week — this day earns extra pay
       if (extraPay.has(dateStr)) {
         weekOffWorkedDays++;
-        if (emp.flexibleHours && entry) {
+        if (entry) {
           const sorted = [...entry.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
-          totalMinutesWorked += calculateTotalDuration(sorted);
+          const dur = calculateTotalDuration(sorted);
+          if (emp.flexibleHours) totalMinutesWorked += dur;
+          else if (dateStr < today) overtimeMinutes += dailyOvertimeMinutes(dur, shiftMinutes, empRules);
         }
         continue;
       }
@@ -204,6 +217,7 @@ export async function GET(request: Request) {
           halfDays++;
           continue;
         }
+        overtimeMinutes += dailyOvertimeMinutes(totalDur, shiftMinutes, empRules);
       }
 
       punchDates.add(dateStr);
@@ -252,15 +266,20 @@ export async function GET(request: Request) {
 
     const effectiveWorkDays = empWorkingDays - uhDays - leaveDays;
     const absentDays = Math.max(0, effectiveWorkDays - presentDays - halfDays);
-    // Late-to-absent conversion: every 3 lates = 0.5 day deduction (half-day steps)
-    const lateDeductionDays = Math.floor(lateDays / 3) * 0.5;
-    const halfDayDeduction = halfDays * 0.5;
-    const totalDeductionDays = absentDays + halfDayDeduction + lateDeductionDays + unpaidHolidayDays;
-    // Per-day rate uses total calendar days in month (including week-offs)
-    const perDayRate = Math.round(emp.monthlySalary / lastDay);
-    const deduction = Math.round(perDayRate * totalDeductionDays);
-    const weekOffBonus = Math.round(weekOffWorkedDays * perDayRate);
-    const netPay = emp.monthlySalary - deduction + weekOffBonus;
+    const leaveSplit = splitLeaveDays(leaveDateList, (d) => leaveTypeByDate.get(d) ?? "casual", leaveUsedByEmp.get(emp.id)!, empRules);
+    const pay = computeMonthlySalary({
+      monthlySalary: emp.monthlySalary,
+      daysInMonth: lastDay,
+      shiftMinutes,
+      rules: empRules,
+      absentDays,
+      halfDays,
+      lateDays,
+      unpaidHolidayDays,
+      unpaidLeaveDays: leaveSplit.unpaid,
+      weekOffWorkedDays,
+      overtimeMinutes,
+    });
 
     return {
       id: emp.id,
@@ -274,14 +293,20 @@ export async function GET(request: Request) {
       presentDays,
       absentDays,
       halfDays,
-      lateAbsentDays: lateDeductionDays,
+      lateAbsentDays: pay.lateDeductionDays,
       lateDays,
+      lateFine: pay.lateFine,
       leaveDays,
+      unpaidLeaveDays: leaveSplit.unpaid,
       unpaidHolidayDays,
       weekOffWorkedDays,
-      weekOffBonus,
-      deduction,
-      netPay,
+      weekOffBonus: pay.weekOffBonus,
+      overtimeMinutes: pay.overtimeMinutes,
+      overtimeHours: pay.overtimeHours,
+      overtimePay: pay.overtimePay,
+      perDayRate: pay.perDayRate,
+      deduction: pay.deduction,
+      netPay: pay.netPay,
     };
   });
 

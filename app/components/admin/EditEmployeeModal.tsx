@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { EmployeeRow, BranchRow, DepartmentRow } from "./types";
+import ShiftPicker from "./ShiftPicker";
 
 export default function EditEmployeeModal({
   employee,
@@ -24,6 +25,7 @@ export default function EditEmployeeModal({
     mobileNumber: employee.mobileNumber,
     workStartTime: employee.workStartTime || "09:00",
     workEndTime: employee.workEndTime || "18:00",
+    shiftId: employee.shiftId || "",
     assignedBranchIds: employee.assignedBranchIds || [],
     department: employee.department || "",
     monthlySalary: String(employee.monthlySalary || ""),
@@ -62,6 +64,7 @@ export default function EditEmployeeModal({
         mobileNumber: normalizedMobile,
         workStartTime: form.workStartTime,
         workEndTime: form.workEndTime,
+        shiftId: form.shiftId || null,
         assignedBranchIds: form.assignedBranchIds,
         department: form.department.trim(),
         monthlySalary: form.flexibleHours ? 0 : (parseInt(form.monthlySalary, 10) || 0),
@@ -140,14 +143,18 @@ export default function EditEmployeeModal({
             <span>Mobile number</span>
             <input type="tel" inputMode="numeric" value={form.mobileNumber} onChange={(e) => setForm({ ...form, mobileNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="10-digit mobile number" pattern="[0-9]{10}" required />
           </label>
+          <ShiftPicker
+            value={form.shiftId}
+            onPick={(s) => setForm(s ? { ...form, shiftId: s.id, workStartTime: s.startTime, workEndTime: s.endTime } : { ...form, shiftId: "" })}
+          />
           <div className="modal-row">
             <label>
               <span>IN timing</span>
-              <input type="time" value={form.workStartTime} onChange={(e) => setForm({ ...form, workStartTime: e.target.value })} required />
+              <input type="time" value={form.workStartTime} onChange={(e) => setForm({ ...form, workStartTime: e.target.value, shiftId: "" })} required />
             </label>
             <label>
               <span>OUT timing</span>
-              <input type="time" value={form.workEndTime} onChange={(e) => setForm({ ...form, workEndTime: e.target.value })} required />
+              <input type="time" value={form.workEndTime} onChange={(e) => setForm({ ...form, workEndTime: e.target.value, shiftId: "" })} required />
             </label>
           </div>
           <label style={{ display: "flex", alignItems: "center", gap: 10, flexDirection: "row" }}>

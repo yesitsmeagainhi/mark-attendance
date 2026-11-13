@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { employees, employeeBranches, branches, employeeRuleOverrides, attendance, leaveRequests, missPunchRequests, sessions, dailyJournals, otpRequests } from "../../../db/schema";
+import { employees, employeeBranches, branches, employeeRuleOverrides, attendance, leaveRequests, missPunchRequests, sessions, dailyJournals, otpRequests, shifts } from "../../../db/schema";
 import { requireApiRole, getAppIdentity } from "../../authz";
 
 export async function GET(request: Request) {
@@ -30,6 +30,7 @@ export async function GET(request: Request) {
       flexibleHours: employees.flexibleHours,
       paidHolidays: employees.paidHolidays,
       punchAnywhere: employees.punchAnywhere,
+      shiftId: employees.shiftId,
       createdAt: employees.createdAt,
     })
     .from(employees)
@@ -80,6 +81,8 @@ export async function PATCH(request: Request) {
     paidHolidays?: boolean;
     punchAnywhere?: boolean;
     assignedBranchIds?: string[];
+    /** Assign a shift template (copies its timings); null = custom timings */
+    shiftId?: string | null;
   };
   try {
     body = await request.json();
@@ -149,6 +152,28 @@ export async function PATCH(request: Request) {
     }
   }
 
+  if (body.shiftId !== undefined) {
+    if (body.shiftId === null || body.shiftId === "") {
+      updates.shiftId = null;
+    } else {
+      const shift = db.select().from(shifts).where(eq(shifts.id, body.shiftId)).get();
+      if (!shift) return Response.json({ error: "Shift not found." }, { status: 404 });
+      updates.shiftId = shift.id;
+      updates.workStartTime = shift.startTime;
+      updates.workEndTime = shift.endTime;
+    }
+  } else if (updates.workStartTime !== undefined || updates.workEndTime !== undefined) {
+    // Hand-edited timings that no longer match the assigned shift make the hours custom,
+    // so a later edit of the shift won't overwrite them
+    const current = db.select({ shiftId: employees.shiftId }).from(employees).where(eq(employees.id, body.id)).get();
+    if (current?.shiftId) {
+      const shift = db.select().from(shifts).where(eq(shifts.id, current.shiftId)).get();
+      const start = (updates.workStartTime as string | undefined) ?? shift?.startTime;
+      const end = (updates.workEndTime as string | undefined) ?? shift?.endTime;
+      if (!shift || start !== shift.startTime || end !== shift.endTime) updates.shiftId = null;
+    }
+  }
+
   if (Object.keys(updates).length > 0) {
     db.update(employees).set(updates).where(eq(employees.id, body.id)).run();
   }
@@ -174,6 +199,9 @@ export async function POST(request: Request) {
     flexibleHours?: boolean;
     assignedBranchIds?: string[];
     ruleOverrides?: { ruleId: string; value: string }[];
+    monthlySalary?: number;
+    hourlyRate?: number;
+    shiftId?: string | null;
   };
   try {
     body = await request.json();
@@ -187,8 +215,8 @@ export async function POST(request: Request) {
   const role = body.role === "admin" ? "admin" : "employee";
   const jobRole = body.jobRole?.trim() || "";
   const mobileNumber = body.mobileNumber?.replace(/\D/g, "") || "";
-  const workStartTime = body.workStartTime || "09:00";
-  const workEndTime = body.workEndTime || "18:00";
+  let workStartTime = body.workStartTime || "09:00";
+  let workEndTime = body.workEndTime || "18:00";
   const office = body.office?.trim() || "Bhayandar Office";
   const department = body.department?.trim() || "";
   const flexibleHours = body.flexibleHours === true;
@@ -207,6 +235,16 @@ export async function POST(request: Request) {
   }
 
   const db = getDb();
+
+  // A chosen shift template supplies the timings
+  let shiftId: string | null = null;
+  if (body.shiftId) {
+    const shift = db.select().from(shifts).where(eq(shifts.id, body.shiftId)).get();
+    if (!shift) return Response.json({ error: "Shift not found." }, { status: 404 });
+    shiftId = shift.id;
+    workStartTime = shift.startTime;
+    workEndTime = shift.endTime;
+  }
 
   // Check for duplicate email
   const existing = db
@@ -262,6 +300,9 @@ export async function POST(request: Request) {
       office: resolvedOffice,
       department,
       flexibleHours,
+      shiftId,
+      monthlySalary: flexibleHours ? 0 : Math.max(0, Math.round(Number(body.monthlySalary) || 0)),
+      hourlyRate: flexibleHours ? Math.max(0, Math.round(Number(body.hourlyRate) || 0)) : 0,
     })
     .run();
 

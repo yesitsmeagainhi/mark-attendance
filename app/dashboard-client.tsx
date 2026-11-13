@@ -22,6 +22,7 @@ import PayrollTab from "./components/admin/PayrollTab";
 import AdminHistoryTab from "./components/admin/HistoryTab";
 import SettingsTab from "./components/admin/SettingsTab";
 import HolidaysTab from "./components/admin/HolidaysTab";
+import RulesTab from "./components/admin/RulesTab";
 
 /* ── Action config for notification icon/color (mirrors HistoryTab) ── */
 const NOTIF_CONFIG: Record<string, { icon: string; color: string }> = {
@@ -44,6 +45,11 @@ const NOTIF_CONFIG: Record<string, { icon: string; color: string }> = {
   holiday_updated:    { icon: "\u{1F389}", color: "#0d9488" },
   holiday_removed:    { icon: "\u{1F389}", color: "#ea580c" },
   backup_run:         { icon: "\u{1F4BE}", color: "#2563eb" },
+  rule_updated:       { icon: "\u{1F4D0}", color: "#6d45e5" },
+  shift_created:      { icon: "\u{1F552}", color: "#6d45e5" },
+  shift_updated:      { icon: "\u{1F552}", color: "#6d45e5" },
+  shift_assigned:     { icon: "\u{1F552}", color: "#6d45e5" },
+  shift_deleted:      { icon: "\u{1F552}", color: "#ea580c" },
 };
 
 type Toast = { id: string; actionType: string; icon: string; color: string; description: string; timestamp: string };
@@ -56,6 +62,7 @@ const ACTION_TAB: Record<string, string> = {
   mark_all_present: "dashboard", mark_all_uh: "dashboard", undo_mark: "dashboard", punch_removed: "dashboard",
   holiday_added: "holidays", holiday_updated: "holidays", holiday_removed: "holidays",
   backup_run: "settings",
+  rule_updated: "rules", shift_created: "rules", shift_updated: "rules", shift_assigned: "rules", shift_deleted: "rules",
 };
 
 function timeAgo(ts: string): string {
@@ -318,6 +325,7 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
           {adminTab === "reports" && <ReportsTab />}
           {/* {adminTab === "payroll" && <PayrollTab />} */}
           {adminTab === "history" && <AdminHistoryTab onNavigate={setAdminTab} />}
+          {adminTab === "rules" && <RulesTab />}
           {adminTab === "settings" && <SettingsTab onSignOut={handleSignOut} />}
         </div>
       )}

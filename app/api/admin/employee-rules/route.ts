@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { attendanceRules, employeeRuleOverrides, employees } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
+import { validateRuleValue } from "../../../../lib/rules";
+import { logActivity } from "../../../../lib/activity-logger";
 
 export async function GET(request: Request) {
   const auth = await requireApiRole("admin");
@@ -15,7 +17,7 @@ export async function GET(request: Request) {
   }
 
   const db = getDb();
-  const rules = db.select().from(attendanceRules).all();
+  const rules = db.select().from(attendanceRules).orderBy(asc(attendanceRules.category), asc(attendanceRules.sortOrder)).all();
   const overrides = db
     .select()
     .from(employeeRuleOverrides)
@@ -29,6 +31,7 @@ export async function GET(request: Request) {
     label: r.label,
     description: r.description,
     valueType: r.valueType,
+    category: r.category,
     globalDefault: r.defaultValue,
     override: overrideMap.get(r.id) ?? null,
     effectiveValue: overrideMap.get(r.id) ?? r.defaultValue,
@@ -55,12 +58,16 @@ export async function PUT(request: Request) {
   const db = getDb();
 
   // Validate employee exists
-  const emp = db.select({ id: employees.id }).from(employees).where(eq(employees.id, body.employeeId)).get();
+  const emp = db.select({ id: employees.id, name: employees.name }).from(employees).where(eq(employees.id, body.employeeId)).get();
   if (!emp) return Response.json({ error: "Employee not found." }, { status: 404 });
 
   // Validate rule exists
-  const rule = db.select({ id: attendanceRules.id }).from(attendanceRules).where(eq(attendanceRules.id, body.ruleId)).get();
+  const rule = db.select().from(attendanceRules).where(eq(attendanceRules.id, body.ruleId)).get();
   if (!rule) return Response.json({ error: "Rule not found." }, { status: 404 });
+
+  body.value = String(body.value).trim();
+  const invalid = validateRuleValue(rule.valueType, body.value);
+  if (invalid) return Response.json({ error: invalid }, { status: 400 });
 
   // Upsert: check if override exists
   const existing = db
@@ -84,6 +91,16 @@ export async function PUT(request: Request) {
       })
       .run();
   }
+
+  logActivity({
+    actionType: "rule_updated",
+    performedBy: auth.identity.employeeId,
+    performedByName: auth.identity.displayName,
+    targetId: emp.id,
+    targetName: emp.name,
+    description: `${auth.identity.displayName} set "${rule.label}" to ${body.value} for ${emp.name}`,
+    metadata: { ruleId: rule.id, employeeId: emp.id, value: body.value },
+  });
 
   return Response.json({ ok: true });
 }

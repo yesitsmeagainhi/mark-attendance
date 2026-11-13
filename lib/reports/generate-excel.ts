@@ -41,6 +41,11 @@ export type ReportEmployee = {
   totalWorkedMinutes: number;
   weekOffWorkedDays: number;
   weekOffBonus: number;
+  /** Paid overtime and rule-engine extras; absent on older payloads */
+  overtimeMinutes?: number;
+  overtimePay?: number;
+  lateFine?: number;
+  unpaidLeaveDays?: number;
   perDayRate: number;
   deduction: number;
   netPay: number;
@@ -56,6 +61,7 @@ const statusLabels: Record<string, string> = {
   "half-day": "Half Day",
   "short-day": "Short Day",
   leave: "Leave",
+  "unpaid-leave": "Unpaid Leave",
   uh: "Unpaid Holiday",
   "week-off": "Week Off",
   "weekoff-worked": "WO Worked",
@@ -71,6 +77,7 @@ const statusColors: Record<string, { bg: string; fg: string }> = {
   "half-day": { bg: "FFF4DC", fg: "A86400" },
   "short-day": { bg: "FFEDED", fg: "C73333" },
   leave: { bg: "EFF6FF", fg: "2563EB" },
+  "unpaid-leave": { bg: "FFEDED", fg: "C73333" },
   uh: { bg: "FFF4DC", fg: "A86400" },
   "week-off": { bg: "F3F4F8", fg: "667085" },
   "weekoff-worked": { bg: "DBEAFE", fg: "1D4ED8" },
@@ -166,6 +173,14 @@ function buildEmployeeBlock(
     ["Late", `${emp.lateDays}${emp.lateAbsentDays > 0 ? ` (=${emp.lateAbsentDays}d ded.)` : ""}`, "Leave", String(emp.leaveDays), "WO Worked", `${emp.weekOffWorkedDays}${emp.weekOffBonus > 0 ? ` (+${fmt(emp.weekOffBonus)})` : ""}`],
     ["Salary", fmt(emp.monthlySalary), "Deduction", emp.deduction > 0 ? `-${fmt(emp.deduction)}` : "\u2014", "Net Pay", fmt(emp.netPay)],
   ];
+  // Rule-engine extras only appear when they apply, so default reports keep their layout
+  if (emp.overtimePay || emp.lateFine || emp.unpaidLeaveDays) {
+    infoGrid.splice(infoGrid.length - 1, 0, [
+      "Overtime", emp.overtimePay ? `${fmtDur(emp.overtimeMinutes || 0)} (+${fmt(emp.overtimePay)})` : "\u2014",
+      "Late Fine", emp.lateFine ? `-${fmt(emp.lateFine)}` : "\u2014",
+      "Unpaid Leave", emp.unpaidLeaveDays ? `${emp.unpaidLeaveDays}d` : "\u2014",
+    ]);
+  }
 
   for (let i = 0; i < infoGrid.length; i++) {
     const row = sheet.getRow(r);

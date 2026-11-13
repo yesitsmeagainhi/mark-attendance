@@ -14,6 +14,7 @@ export type EmployeeRow = {
   flexibleHours: boolean;
   paidHolidays?: boolean;
   punchAnywhere?: boolean;
+  shiftId?: string | null;
   assignedBranchIds: string[];
   createdAt: string;
 };
@@ -74,6 +75,14 @@ export type DepartmentRow = {
   name: string;
   active: boolean;
   createdAt: string;
+};
+
+export type ShiftRow = {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  employeeCount?: number;
 };
 
 export type BranchRow = {

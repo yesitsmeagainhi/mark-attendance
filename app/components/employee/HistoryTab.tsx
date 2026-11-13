@@ -60,6 +60,7 @@ type TimesheetData = {
   totalHoursWorked: number;
   presentDays: number;
   halfDays: number;
+  lateDays: number;
   absentDays: number;
   leaveDays: number;
   uhDays: number;
@@ -288,6 +289,10 @@ export default function HistoryTab({ onRequestMissPunch }: { onRequestMissPunch?
                     <div className="emp-status-detail"><strong>{tsData.halfDays}</strong><span className="pending-text">days</span></div>
                   </article>
                 )}
+                <article>
+                  <div><b>Half Days</b></div>
+                  <div><strong>{tsData.halfDays}</strong><span className="pending-text">days</span></div>
+                </article>
                 <article className="emp-status-card">
                   <div className="emp-status-header"><b>Absent</b></div>
                   <div className="emp-status-detail"><strong>{tsData.absentDays}</strong><span className="pending-text">days</span></div>
@@ -374,77 +379,77 @@ export default function HistoryTab({ onRequestMissPunch }: { onRequestMissPunch?
                 {data.records.map((r) => {
                   const isFlex = data.isFlexible && r.sessions && r.sessions.length > 1;
                   return (
-                  <tr key={r.date}>
-                    <td><b>{new Date(r.date).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" })}</b></td>
-                    <td>{r.punchInTime ? formatTimeIST(r.punchInTime) : "\u2014"}</td>
-                    <td>{r.punchOutTime ? formatTimeIST(r.punchOutTime) : (data.isFlexible && r.sessions?.some(s => !s.outTime) ? <span style={{ color: "#2563eb", fontWeight: 600 }}>ongoing</span> : "\u2014")}</td>
-                    <td>
-                      {r.duration !== null ? formatDuration(r.duration) : "\u2014"}
-                      {isFlex && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4 }}>
-                          {r.sessions!.map((s, i) => (
-                            <div key={i} style={{ fontSize: 11, color: "#667085", lineHeight: 1.3, whiteSpace: "nowrap" }}>
-                              <span style={{ color: "#7c3aed", fontWeight: 700 }}>#{i + 1}</span>{" "}
-                              {formatTimeIST(s.inTime)}{"\u2192"}{s.outTime ? formatTimeIST(s.outTime) : <span style={{ color: "#2563eb" }}>now</span>}
-                              {s.durationMinutes !== null && <span style={{ color: "#6d45e5", fontWeight: 600 }}> ({formatDuration(s.durationMinutes)})</span>}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      {isRealPhoto(r.photoKeyIn) ? (
-                        <img
-                          className="table-thumb"
-                          src={`/api/attendance/photo?key=${encodeURIComponent(r.photoKeyIn!)}`}
-                          alt="In"
-                          style={{ cursor: "pointer" }}
-                          onClick={() => setViewPhoto(`/api/attendance/photo?key=${encodeURIComponent(r.photoKeyIn!)}`)}
-                        />
-                      ) : (
-                        <span style={{ color: "#c9cbd4" }}>{"\u2014"}</span>
-                      )}
-                    </td>
-                    <td>
-                      {isRealPhoto(r.photoKeyOut) ? (
-                        <img
-                          className="table-thumb"
-                          src={`/api/attendance/photo?key=${encodeURIComponent(r.photoKeyOut!)}`}
-                          alt="Out"
-                          style={{ cursor: "pointer" }}
-                          onClick={() => setViewPhoto(`/api/attendance/photo?key=${encodeURIComponent(r.photoKeyOut!)}`)}
-                        />
-                      ) : (
-                        <span style={{ color: "#c9cbd4" }}>{"\u2014"}</span>
-                      )}
-                    </td>
-                    <td>
-                      <span className={`grace-badge ${statusClass(r.status)}`}>{r.status}</span>
-                      {r.missedPunchOut && (
-                        <small style={{ display: "block", color: "#be185d", fontSize: 13, marginTop: 2 }}>Missed punch-out</small>
-                      )}
-                      {onRequestMissPunch && (r.missedPunchOut || (r.status === "Absent" && !r.punchInTime)) && (
-                        <button
-                          type="button"
-                          onClick={() => onRequestMissPunch(r.date, r.missedPunchOut ? "OUT" : "BOTH")}
-                          style={{ display: "block", marginTop: 6, border: "1px solid #fdba74", background: "#fff7ed", color: "#c2410c", borderRadius: 8, padding: "4px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-                        >
-                          Request miss-punch
-                        </button>
-                      )}
-                      {r.holidayName && (
-                        <small style={{ display: "block", color: "#667085", fontSize: 13, marginTop: 2 }}>{r.holidayName}</small>
-                      )}
-                      {r.lateByMinutes !== null && r.lateByMinutes > 0 && (
-                        <small style={{ display: "block", color: "#e67e22", fontSize: 13, marginTop: 2 }}>
-                          by {r.lateByMinutes >= 60
-                            ? `${Math.floor(r.lateByMinutes / 60)}h ${r.lateByMinutes % 60}m`
-                            : `${r.lateByMinutes} mins`}
-                        </small>
-                      )}
-                    </td>
-                  </tr>
-                );
+                    <tr key={r.date}>
+                      <td><b>{new Date(r.date).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" })}</b></td>
+                      <td>{r.punchInTime ? formatTimeIST(r.punchInTime) : "\u2014"}</td>
+                      <td>{r.punchOutTime ? formatTimeIST(r.punchOutTime) : (data.isFlexible && r.sessions?.some(s => !s.outTime) ? <span style={{ color: "#2563eb", fontWeight: 600 }}>ongoing</span> : "\u2014")}</td>
+                      <td>
+                        {r.duration !== null ? formatDuration(r.duration) : "\u2014"}
+                        {isFlex && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4 }}>
+                            {r.sessions!.map((s, i) => (
+                              <div key={i} style={{ fontSize: 11, color: "#667085", lineHeight: 1.3, whiteSpace: "nowrap" }}>
+                                <span style={{ color: "#7c3aed", fontWeight: 700 }}>#{i + 1}</span>{" "}
+                                {formatTimeIST(s.inTime)}{"\u2192"}{s.outTime ? formatTimeIST(s.outTime) : <span style={{ color: "#2563eb" }}>now</span>}
+                                {s.durationMinutes !== null && <span style={{ color: "#6d45e5", fontWeight: 600 }}> ({formatDuration(s.durationMinutes)})</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        {isRealPhoto(r.photoKeyIn) ? (
+                          <img
+                            className="table-thumb"
+                            src={`/api/attendance/photo?key=${encodeURIComponent(r.photoKeyIn!)}`}
+                            alt="In"
+                            style={{ cursor: "pointer" }}
+                            onClick={() => setViewPhoto(`/api/attendance/photo?key=${encodeURIComponent(r.photoKeyIn!)}`)}
+                          />
+                        ) : (
+                          <span style={{ color: "#c9cbd4" }}>{"\u2014"}</span>
+                        )}
+                      </td>
+                      <td>
+                        {isRealPhoto(r.photoKeyOut) ? (
+                          <img
+                            className="table-thumb"
+                            src={`/api/attendance/photo?key=${encodeURIComponent(r.photoKeyOut!)}`}
+                            alt="Out"
+                            style={{ cursor: "pointer" }}
+                            onClick={() => setViewPhoto(`/api/attendance/photo?key=${encodeURIComponent(r.photoKeyOut!)}`)}
+                          />
+                        ) : (
+                          <span style={{ color: "#c9cbd4" }}>{"\u2014"}</span>
+                        )}
+                      </td>
+                      <td>
+                        <span className={`grace-badge ${statusClass(r.status)}`}>{r.status}</span>
+                        {r.missedPunchOut && (
+                          <small style={{ display: "block", color: "#be185d", fontSize: 13, marginTop: 2 }}>Missed punch-out</small>
+                        )}
+                        {onRequestMissPunch && (r.missedPunchOut || (r.status === "Absent" && !r.punchInTime)) && (
+                          <button
+                            type="button"
+                            onClick={() => onRequestMissPunch(r.date, r.missedPunchOut ? "OUT" : "BOTH")}
+                            style={{ display: "block", marginTop: 6, border: "1px solid #fdba74", background: "#fff7ed", color: "#c2410c", borderRadius: 8, padding: "4px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                          >
+                            Request miss-punch
+                          </button>
+                        )}
+                        {r.holidayName && (
+                          <small style={{ display: "block", color: "#667085", fontSize: 13, marginTop: 2 }}>{r.holidayName}</small>
+                        )}
+                        {r.lateByMinutes !== null && r.lateByMinutes > 0 && (
+                          <small style={{ display: "block", color: "#e67e22", fontSize: 13, marginTop: 2 }}>
+                            by {r.lateByMinutes >= 60
+                              ? `${Math.floor(r.lateByMinutes / 60)}h ${r.lateByMinutes % 60}m`
+                              : `${r.lateByMinutes} mins`}
+                          </small>
+                        )}
+                      </td>
+                    </tr>
+                  );
                 })}
                 {data.records.length === 0 && (
                   <tr><td colSpan={7} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No attendance records found.</td></tr>

@@ -14,6 +14,7 @@ const moreTabs = [
   { id: "holidays", label: "Holidays", icon: "\u{1F389}" },
   // { id: "payroll", label: "Payroll", icon: "\u{1F4B0}" },
   { id: "history", label: "History", icon: "\u{1F4CB}" },
+  { id: "rules", label: "Rules", icon: "\u{1F4D0}" },
   { id: "settings", label: "Settings", icon: "\u{2699}" },
 ];
 

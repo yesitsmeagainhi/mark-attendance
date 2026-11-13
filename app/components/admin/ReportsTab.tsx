@@ -15,6 +15,7 @@ type DayDetail = {
   durationMinutes: number | null;
   breakMinutes: number | null;
   status: string;
+  overtimeMinutes?: number;
   sessions?: SessionInfo[];
 };
 
@@ -43,6 +44,10 @@ type ReportRow = {
   totalWorkedMinutes: number;
   weekOffWorkedDays: number;
   weekOffBonus: number;
+  overtimeMinutes?: number;
+  overtimePay?: number;
+  lateFine?: number;
+  unpaidLeaveDays?: number;
   perDayRate: number;
   deduction: number;
   netPay: number;
@@ -74,6 +79,7 @@ const statusBadge: Record<string, { bg: string; color: string; label: string }> 
   "half-day": { bg: "#fff4dc", color: "#a86400", label: "Half Day" },
   "short-day": { bg: "#ffeded", color: "#c73333", label: "Short Day" },
   leave: { bg: "#eff6ff", color: "#2563eb", label: "Leave" },
+  "unpaid-leave": { bg: "#ffeded", color: "#c73333", label: "Unpaid Leave" },
   uh: { bg: "#fff4dc", color: "#a86400", label: "UH" },
   "week-off": { bg: "#f3f4f8", color: "#667085", label: "WO" },
   "weekoff-worked": { bg: "#dbeafe", color: "#1d4ed8", label: "WO Worked" },
@@ -255,11 +261,18 @@ export default function ReportsTab() {
               ...(selectedEmp.shortDays > 0 ? [{ label: "Short Day", value: selectedEmp.shortDays, bg: "#ffeded", color: "#c73333" }] : []),
               { label: "Late", value: selectedEmp.lateDays, bg: "#fff4dc", color: "#a86400" },
               { label: "Leave", value: selectedEmp.leaveDays, bg: "#eff6ff", color: "#2563eb" },
+              ...(selectedEmp.unpaidLeaveDays ? [{ label: "Unpaid Leave", value: selectedEmp.unpaidLeaveDays, bg: "#ffeded", color: "#c73333" }] : []),
               { label: "Total Hours", value: fmtDur(selectedEmp.totalWorkedMinutes), bg: "#eee9ff", color: "#6d45e5" },
               { label: "Attendance", value: `${selectedEmp.attendancePct}%`, bg: selectedEmp.attendancePct >= 90 ? "#e8f7ef" : "#fff4dc", color: selectedEmp.attendancePct >= 90 ? "#168052" : "#a86400" },
               ...(selectedEmp.monthlySalary > 0 ? [
                 { label: "Salary", value: `\u20B9${selectedEmp.monthlySalary.toLocaleString("en-IN")}`, bg: "#f9fafb", color: "#172033" },
                 { label: "Deduction", value: selectedEmp.deduction > 0 ? `-\u20B9${selectedEmp.deduction.toLocaleString("en-IN")}` : "\u2014", bg: "#ffeded", color: "#c73333" },
+                ...(selectedEmp.lateFine ? [
+                  { label: "Late Fine", value: `-\u20B9${selectedEmp.lateFine.toLocaleString("en-IN")}`, bg: "#ffeded", color: "#c73333" },
+                ] : []),
+                ...(selectedEmp.overtimePay ? [
+                  { label: `Overtime ${fmtDur(selectedEmp.overtimeMinutes || 0)}`, value: `+\u20B9${selectedEmp.overtimePay.toLocaleString("en-IN")}`, bg: "#e8f7ef", color: "#168052" },
+                ] : []),
                 ...(selectedEmp.weekOffBonus > 0 ? [
                   { label: "WO Extra Pay", value: `+\u20B9${selectedEmp.weekOffBonus.toLocaleString("en-IN")}`, bg: "#dbeafe", color: "#1d4ed8" },
                 ] : []),
@@ -305,6 +318,9 @@ export default function ReportsTab() {
                       </td>
                       <td style={{ padding: "10px 14px", borderTop: "1px solid #eff0f3", fontSize: 15, fontWeight: day.durationMinutes ? 700 : 400 }}>
                         {day.durationMinutes !== null ? fmtDur(day.durationMinutes) : "\u2014"}
+                        {day.overtimeMinutes ? (
+                          <div style={{ fontSize: 12, color: "#168052", fontWeight: 700, marginTop: 2 }}>+{fmtDur(day.overtimeMinutes)} OT</div>
+                        ) : null}
                       </td>
                       <td style={{ padding: "10px 14px", borderTop: "1px solid #eff0f3" }}>
                         <span style={{

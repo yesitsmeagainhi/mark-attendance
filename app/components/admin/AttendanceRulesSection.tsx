@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { groupByCategory, ruleUnit } from "./rule-meta";
 
 type Rule = {
   id: string;
@@ -8,13 +9,16 @@ type Rule = {
   description: string | null;
   valueType: "number" | "boolean";
   defaultValue: string;
+  category?: string;
 };
 
+/** Company-wide rule defaults, grouped by category, with a live salary-formula summary. */
 export default function AttendanceRulesSection() {
   const [rules, setRules] = useState<Rule[]>([]);
-  const [editingRule, setEditingRule] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
   function fetchRules() {
     fetch("/api/admin/rules")
@@ -25,126 +29,176 @@ export default function AttendanceRulesSection() {
 
   useEffect(() => { fetchRules(); }, []);
 
-  async function saveRule(ruleId: string, value: string) {
-    setSaving(true);
+  async function saveRule(rule: Rule, value: string) {
+    if (value === rule.defaultValue) {
+      setDrafts((d) => { const n = { ...d }; delete n[rule.id]; return n; });
+      return;
+    }
+    setSaving(rule.id);
+    setError("");
     try {
-      await fetch("/api/admin/rules", {
+      const res = await fetch("/api/admin/rules", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ruleId, defaultValue: value }),
+        body: JSON.stringify({ ruleId: rule.id, defaultValue: value }),
       });
-      setEditingRule(null);
-      fetchRules();
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(`${rule.label}: ${data.error || "could not save."}`);
+        return;
+      }
+      setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, defaultValue: value } : r)));
+      setDrafts((d) => { const n = { ...d }; delete n[rule.id]; return n; });
+      setSavedId(rule.id);
+      setTimeout(() => setSavedId((s) => (s === rule.id ? null : s)), 1500);
     } catch {
-      // ignore
+      setError("Could not connect to server.");
     } finally {
-      setSaving(false);
+      setSaving(null);
     }
   }
 
-  async function toggleBoolean(rule: Rule) {
-    const newValue = rule.defaultValue === "true" ? "false" : "true";
-    await saveRule(rule.id, newValue);
-  }
+  const val = (id: string) => rules.find((r) => r.id === id)?.defaultValue ?? "";
+  const overtimeOn = val("overtime_enabled") === "true";
 
   return (
-    <section className="table-card" style={{ marginTop: 24 }}>
-      <div className="table-tools">
+    <>
+      <SalaryFormula val={val} loaded={rules.length > 0} />
+
+      {error && <p className="form-message" style={{ marginTop: 16 }}>{error}</p>}
+
+      {groupByCategory(rules).map((group) => (
+        <section key={group.id} className="table-card" style={{ marginTop: 20 }}>
+          <div className="table-tools" style={{ paddingBottom: 6 }}>
+            <div>
+              <h2>{group.title}</h2>
+              <p>{group.hint}</p>
+            </div>
+          </div>
+          <div>
+            {group.items.map((rule) => {
+              const { unit, step } = ruleUnit(rule.id);
+              const dimmed = group.id === "overtime" && rule.id !== "overtime_enabled" && !overtimeOn;
+              const draft = drafts[rule.id];
+              return (
+                <div
+                  key={rule.id}
+                  style={{
+                    display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12,
+                    padding: "14px 22px", borderTop: "1px solid #f0f0f3", opacity: dimmed ? 0.5 : 1,
+                  }}
+                >
+                  <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>{rule.label}</div>
+                    {rule.description && <small style={{ color: "#6b7280", display: "block", marginTop: 2 }}>{rule.description}</small>}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    {rule.valueType === "boolean" ? (
+                      <button
+                        type="button"
+                        className={rule.defaultValue === "true" ? "btn-approve" : "btn-reject"}
+                        style={{ fontSize: 14, minWidth: 92 }}
+                        disabled={saving === rule.id}
+                        onClick={() => saveRule(rule, rule.defaultValue === "true" ? "false" : "true")}
+                        aria-pressed={rule.defaultValue === "true"}
+                      >
+                        {rule.defaultValue === "true" ? "✓ On" : "Off"}
+                      </button>
+                    ) : (
+                      <>
+                        {unit === "₹" && <span style={{ color: "#667085", fontWeight: 700 }}>{unit}</span>}
+                        <input
+                          className="salary-input"
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          step={step}
+                          value={draft ?? rule.defaultValue}
+                          disabled={saving === rule.id}
+                          aria-label={rule.label}
+                          onChange={(e) => setDrafts((d) => ({ ...d, [rule.id]: e.target.value }))}
+                          onBlur={(e) => saveRule(rule, e.target.value.trim())}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                            if (e.key === "Escape") setDrafts((d) => { const n = { ...d }; delete n[rule.id]; return n; });
+                          }}
+                          style={{ width: 90 }}
+                        />
+                        {unit !== "₹" && <span style={{ color: "#667085", fontSize: 13, minWidth: 34 }}>{unit}</span>}
+                      </>
+                    )}
+                    <span style={{ fontSize: 12, color: "#168052", fontWeight: 700, width: 44 }}>
+                      {saving === rule.id ? "…" : savedId === rule.id ? "Saved" : ""}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+
+      {rules.length > 0 && (
+        <p style={{ fontSize: 13, color: "#8990a0", marginTop: 14 }}>
+          These are company-wide defaults. To give one employee different rules, go to Staff &rarr; employee menu &rarr; Rules.
+        </p>
+      )}
+    </>
+  );
+}
+
+/** Plain-language summary of how net pay is worked out with the current rules. */
+function SalaryFormula({ val, loaded }: { val: (id: string) => string; loaded: boolean }) {
+  if (!loaded) {
+    return <section className="table-card" style={{ padding: 24, color: "#8990a0" }}>Loading rules...</section>;
+  }
+  const n = (id: string) => Number(val(id)) || 0;
+  const days = (x: number) => (x === 1 ? "1 day" : `${x} days`);
+
+  const lateCount = n("late_to_absent_count");
+  const lateFine = n("late_fine_amount");
+  const lateLine = lateCount > 0
+    ? `Every ${lateCount} late marks → −${days(n("late_penalty_days"))}${lateFine > 0 ? `, plus ₹${lateFine} fine per late mark` : ""}`
+    : lateFine > 0 ? `₹${lateFine} fine per late mark` : "No late penalty";
+
+  const otLine = val("overtime_enabled") === "true"
+    ? `Time beyond the shift (at least ${n("overtime_min_minutes")} min/day) paid at ${n("overtime_rate_multiplier")}× the hourly rate${n("overtime_max_hours_month") > 0 ? `, up to ${n("overtime_max_hours_month")} h/month` : ""}`
+    : "Overtime is not paid";
+
+  const leaveLine = (["sick", "casual", "earned"] as const).map((t) => {
+    const name = t[0].toUpperCase() + t.slice(1);
+    if (val(`leave_${t}_paid`) !== "true") return `${name}: unpaid`;
+    const q = n(`leave_${t}_quota`);
+    return `${name}: ${q > 0 ? `${q} paid/yr` : "unlimited paid"}`;
+  }).join(" · ");
+
+  const lines: [string, string][] = [
+    ["Per-day rate", "Monthly salary ÷ days in the month"],
+    ["Absent / short day", "−1 day"],
+    ["Half day", `−${days(n("half_day_deduction"))}`],
+    ["Late marks", lateLine],
+    ["Leave", leaveLine],
+    ["Unpaid holiday", "−1 day"],
+    ["Week-off worked", "+1 day"],
+    ["Overtime", otLine],
+  ];
+
+  return (
+    <section className="table-card">
+      <div className="table-tools" style={{ paddingBottom: 8 }}>
         <div>
-          <h2>Attendance Rules</h2>
-          <p>Global defaults for all employees. To customize per employee, go to Staff &rarr; employee menu &rarr; Rules.</p>
+          <h2>How salary is calculated</h2>
+          <p>Net pay = monthly salary &minus; deductions + extra pay. Updates as you change the rules below. Hourly (flexible) staff are paid hours &times; rate.</p>
         </div>
       </div>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Rule</th>
-              <th>Description</th>
-              <th>Default Value</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rules.map((rule) => (
-              <tr key={rule.id}>
-                <td><b>{rule.label}</b></td>
-                <td><small style={{ color: "#6b7280" }}>{rule.description || "\u2014"}</small></td>
-                <td>
-                  {rule.valueType === "boolean" ? (
-                    <span className={`grace-badge ${rule.defaultValue === "true" ? "on-time" : "absent"}`}>
-                      {rule.defaultValue === "true" ? "Enabled" : "Disabled"}
-                    </span>
-                  ) : editingRule === rule.id ? (
-                    <input
-                      className="salary-input"
-                      type="number"
-                      step="0.5"
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") saveRule(rule.id, editValue);
-                        if (e.key === "Escape") setEditingRule(null);
-                      }}
-                      autoFocus
-                      disabled={saving}
-                    />
-                  ) : (
-                    <span
-                      style={{ cursor: "pointer", borderBottom: "1px dashed #c9cbd4", fontWeight: 600 }}
-                      onClick={() => { setEditingRule(rule.id); setEditValue(rule.defaultValue); }}
-                      title="Click to edit"
-                    >
-                      {rule.defaultValue}
-                    </span>
-                  )}
-                </td>
-                <td>
-                  {rule.valueType === "boolean" ? (
-                    <button
-                      className={rule.defaultValue === "true" ? "btn-reject" : "btn-approve"}
-                      style={{ fontSize: 14 }}
-                      onClick={() => toggleBoolean(rule)}
-                    >
-                      {rule.defaultValue === "true" ? "Disable" : "Enable"}
-                    </button>
-                  ) : editingRule === rule.id ? (
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button
-                        className="btn-approve"
-                        style={{ fontSize: 14 }}
-                        onClick={() => saveRule(rule.id, editValue)}
-                        disabled={saving}
-                      >
-                        {saving ? "..." : "Save"}
-                      </button>
-                      <button
-                        className="btn-reject"
-                        style={{ fontSize: 14 }}
-                        onClick={() => setEditingRule(null)}
-                        disabled={saving}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      className="btn-approve"
-                      style={{ fontSize: 14 }}
-                      onClick={() => { setEditingRule(rule.id); setEditValue(rule.defaultValue); }}
-                    >
-                      Edit
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {rules.length === 0 && (
-              <tr><td colSpan={4} style={{ textAlign: "center", color: "#8990a0", padding: 30 }}>No attendance rules configured.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <dl style={{ margin: 0, padding: "0 22px 18px", display: "grid", gridTemplateColumns: "minmax(110px, auto) 1fr", gap: "8px 16px", fontSize: 14 }}>
+        {lines.map(([k, v]) => (
+          <div key={k} style={{ display: "contents" }}>
+            <dt style={{ color: "#667085", fontWeight: 600 }}>{k}</dt>
+            <dd style={{ margin: 0, fontWeight: 600 }}>{v}</dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }

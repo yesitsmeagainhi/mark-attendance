@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import type { BranchRow, DepartmentRow } from "./types";
-import AttendanceRulesSection from "./AttendanceRulesSection";
 import BackupSection from "./BackupSection";
 
 export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
@@ -295,7 +294,6 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
         </div>
       )}
 
-      <AttendanceRulesSection />
 
       <BackupSection />
 

@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import type { BranchRow, DepartmentRow } from "./types";
+import ShiftPicker from "./ShiftPicker";
+import { categoryTitle } from "./rule-meta";
 
 type RuleDefault = {
   id: string;
   label: string;
+  category?: string;
   valueType: "number" | "boolean";
   defaultValue: string;
 };
@@ -18,6 +21,7 @@ const emptyForm = {
   mobileNumber: "",
   workStartTime: "09:00",
   workEndTime: "18:00",
+  shiftId: "",
   assignedBranchIds: [] as string[],
   department: "",
   monthlySalary: "",
@@ -86,6 +90,7 @@ export default function AddEmployeeModal({
           mobileNumber: normalizedMobile,
           workStartTime: form.workStartTime,
           workEndTime: form.workEndTime,
+          shiftId: form.shiftId || null,
           assignedBranchIds: form.assignedBranchIds,
           department: form.department.trim(),
           role: form.role,
@@ -155,14 +160,18 @@ export default function AddEmployeeModal({
             <span>Mobile number</span>
             <input type="tel" inputMode="numeric" value={form.mobileNumber} onChange={(e) => setForm({ ...form, mobileNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="10-digit mobile number" pattern="[0-9]{10}" required autoComplete="off" />
           </label>
+          <ShiftPicker
+            value={form.shiftId}
+            onPick={(s) => setForm(s ? { ...form, shiftId: s.id, workStartTime: s.startTime, workEndTime: s.endTime } : { ...form, shiftId: "" })}
+          />
           <div className="modal-row">
             <label>
               <span>IN timing</span>
-              <input type="time" value={form.workStartTime} onChange={(e) => setForm({ ...form, workStartTime: e.target.value })} required />
+              <input type="time" value={form.workStartTime} onChange={(e) => setForm({ ...form, workStartTime: e.target.value, shiftId: "" })} required />
             </label>
             <label>
               <span>OUT timing</span>
-              <input type="time" value={form.workEndTime} onChange={(e) => setForm({ ...form, workEndTime: e.target.value })} required />
+              <input type="time" value={form.workEndTime} onChange={(e) => setForm({ ...form, workEndTime: e.target.value, shiftId: "" })} required />
             </label>
           </div>
           <div>
@@ -222,8 +231,11 @@ export default function AddEmployeeModal({
             </button>
             {showRules && ruleDefaults.length > 0 && (
               <div style={{ marginTop: 10 }}>
-                {ruleDefaults.map((rule) => (
+                {ruleDefaults.map((rule, idx) => (
                   <div key={rule.id} style={{ marginBottom: 10 }}>
+                    {(idx === 0 || ruleDefaults[idx - 1].category !== rule.category) && (
+                      <div style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".06em", color: "#6d45e5", margin: "12px 0 6px" }}>{categoryTitle(rule.category ?? "attendance")}</div>
+                    )}
                     <small style={{ fontWeight: 600 }}>{rule.label}</small>
                     <small style={{ color: "#9ca3af", marginLeft: 8 }}>Default: {rule.valueType === "boolean" ? (rule.defaultValue === "true" ? "Enabled" : "Disabled") : rule.defaultValue}</small>
                     {rule.valueType === "boolean" ? (

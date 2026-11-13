@@ -35,6 +35,7 @@ const SHEET_NAMES: Record<string, string> = {
   employee_branches: "Employee Branches",
   attendance_rules: "Attendance Rules",
   employee_rule_overrides: "Employee Rule Overrides",
+  shifts: "Shifts",
   activity_log: "Activity Log",
   sessions: "Login Sessions",
   otp_requests: "OTP Requests",

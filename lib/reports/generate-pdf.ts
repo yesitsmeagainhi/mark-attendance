@@ -9,6 +9,7 @@ const statusLabels: Record<string, string> = {
   "half-day": "Half Day",
   "short-day": "Short Day",
   leave: "Leave",
+  "unpaid-leave": "Unpaid Leave",
   uh: "UH",
   "week-off": "Week Off",
   "weekoff-worked": "WO Worked",
@@ -24,13 +25,14 @@ const statusColors: Record<string, { bg: [number, number, number]; fg: [number, 
   "half-day": { bg: [255, 244, 220], fg: [168, 100, 0] },
   "short-day": { bg: [255, 237, 237], fg: [199, 51, 51] },
   leave: { bg: [239, 246, 255], fg: [37, 99, 235] },
+  "unpaid-leave": { bg: [255, 237, 237], fg: [199, 51, 51] },
   uh: { bg: [255, 244, 220], fg: [168, 100, 0] },
   "week-off": { bg: [243, 244, 248], fg: [102, 112, 133] },
   "weekoff-worked": { bg: [219, 234, 254], fg: [29, 78, 216] },
   holiday: { bg: [243, 244, 248], fg: [102, 112, 133] },
 };
 
-const offStatuses = new Set(["week-off", "holiday", "leave", "uh"]);
+const offStatuses = new Set(["week-off", "holiday", "leave", "unpaid-leave", "uh"]);
 
 function fmtDur(mins: number): string {
   const h = Math.floor(mins / 60);
@@ -170,6 +172,9 @@ function buildEmployeePage(
     { label: "Deduction", value: emp.deduction > 0 ? `-${fmt(emp.deduction)}` : "\u2014", color: emp.deduction > 0 ? [199, 51, 51] : undefined },
     { label: "Late Ded.", value: emp.lateAbsentDays > 0 ? `${emp.lateAbsentDays}d` : "\u2014" },
     { label: "WO Extra Pay", value: emp.weekOffBonus > 0 ? `+${fmt(emp.weekOffBonus)}` : "\u2014", color: emp.weekOffBonus > 0 ? [29, 78, 216] : undefined },
+    // Rule-engine extras only appear when they apply
+    ...(emp.overtimePay ? [{ label: "Overtime", value: `+${fmt(emp.overtimePay)}`, color: [22, 128, 82] as [number, number, number] }] : []),
+    ...(emp.unpaidLeaveDays ? [{ label: "Unpaid Leave", value: `${emp.unpaidLeaveDays}d` }] : []),
   ];
   const netPayW = 48;
   const salAreaW = cw - netPayW - 3;

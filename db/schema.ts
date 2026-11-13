@@ -21,6 +21,8 @@ export const employees = sqliteTable("employees", {
   paidHolidays: integer("paid_holidays", { mode: "boolean" }).notNull().default(true),
   // Skip the branch geo-fence for this employee (field / remote staff)
   punchAnywhere: integer("punch_anywhere", { mode: "boolean" }).notNull().default(false),
+  // Shift template the timings above were copied from (null = custom timings)
+  shiftId: text("shift_id"),
   dateOfBirth: text("date_of_birth").notNull().default(""),
   profileEditCount: integer("profile_edit_count").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -140,6 +142,8 @@ export const attendanceRules = sqliteTable("attendance_rules", {
   description: text("description"),
   valueType: text("value_type", { enum: ["number", "boolean"] }).notNull(),
   defaultValue: text("default_value").notNull(),
+  category: text("category").notNull().default("attendance"),
+  sortOrder: integer("sort_order").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -177,4 +181,13 @@ export const pushTokens = sqliteTable("push_tokens", {
   platform: text("platform").notNull().default("android"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+
+export const shifts = sqliteTable("shifts", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
