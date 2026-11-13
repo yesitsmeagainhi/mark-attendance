@@ -164,12 +164,31 @@ export default function FullscreenCameraOverlay({
       canvas.style.left = `${(rect.width - w) / 2}px`;
       canvas.style.top = `${(rect.height - h) / 2}px`;
     }
-    video.addEventListener("loadedmetadata", syncSize);
-    video.addEventListener("resize", syncSize);
+    // iOS Safari: when the camera changes resolution mid-stream (it often starts
+    // small and then upgrades, or reconfigures after a zoom reset), WebKit can keep
+    // painting the new frames at their raw pixel size in a corner of the element
+    // instead of scaling them. Re-attaching the stream rebuilds the video layer.
+    let attachedSize = "";
+    function onFrameSizeChange() {
+      if (!video) return;
+      syncSize();
+      const size = `${video.videoWidth}x${video.videoHeight}`;
+      if (!video.videoWidth || !video.videoHeight) return;
+      if (!attachedSize) { attachedSize = size; return; }
+      if (size === attachedSize) return;
+      attachedSize = size;
+      const stream = video.srcObject;
+      if (!stream) return;
+      video.srcObject = null;
+      video.srcObject = stream;
+      video.play().catch(() => { });
+    }
+    video.addEventListener("loadedmetadata", onFrameSizeChange);
+    video.addEventListener("resize", onFrameSizeChange);
     const observer = new ResizeObserver(syncSize);
     observer.observe(video);
     syncSize();
-    return () => { video.removeEventListener("loadedmetadata", syncSize); video.removeEventListener("resize", syncSize); observer.disconnect(); };
+    return () => { video.removeEventListener("loadedmetadata", onFrameSizeChange); video.removeEventListener("resize", onFrameSizeChange); observer.disconnect(); };
   }, []);
 
   // Face detection loop

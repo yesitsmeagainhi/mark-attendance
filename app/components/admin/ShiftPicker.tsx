@@ -15,7 +15,19 @@ export default function ShiftPicker({
   onPick: (shift: ShiftRow | null) => void;
 }) {
   const [shifts, setShifts] = useState<ShiftRow[]>([]);
+function formatTime12(time: string | null | undefined): string {
+  if (!time) return "";
 
+  const [hours, minutes] = time.split(":");
+  const date = new Date();
+  date.setHours(Number(hours), Number(minutes), 0, 0);
+
+  return date.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
   useEffect(() => {
     fetch("/api/admin/shifts")
       .then((r) => (r.ok ? r.json() : null))
@@ -34,7 +46,7 @@ export default function ShiftPicker({
       >
         <option value="">Custom timings</option>
         {shifts.map((s) => (
-          <option key={s.id} value={s.id}>{s.name} ({s.startTime}–{s.endTime})</option>
+          <option key={s.id} value={s.id}>{s.name} ({formatTime12(s.startTime)}–{formatTime12(s.endTime)})</option>
         ))}
       </select>
     </label>

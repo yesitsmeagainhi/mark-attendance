@@ -102,6 +102,19 @@ export default function StaffTab() {
   function exportEmployees() {
     if (employeeList.length === 0) return;
     const headers = ["ID", "Name", "Email", "Mobile Number", "Job Role", "Department", "Work Start", "Work End", "Office", "Monthly Salary", "Status", "Added On"];
+    function formatTime12(time: string) {
+  if (!time) return "";
+
+  const [hours, minutes] = time.split(":");
+  const date = new Date();
+  date.setHours(Number(hours), Number(minutes), 0, 0);
+
+  return date.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
     const rows = [...employeeList]
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
       .map((emp) => [
@@ -111,8 +124,8 @@ export default function StaffTab() {
         emp.mobileNumber || "",
         emp.jobRole || "",
         emp.department || "",
-        emp.workStartTime || "",
-        emp.workEndTime || "",
+        formatTime12(emp.workStartTime),
+        formatTime12(emp.workEndTime),
         emp.office || "",
         String(emp.monthlySalary || 0),
         emp.active ? "Active" : "Inactive",
