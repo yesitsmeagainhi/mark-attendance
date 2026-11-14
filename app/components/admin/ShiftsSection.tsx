@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ShiftRow } from "./types";
 
 type StaffRow = {
@@ -30,11 +30,10 @@ function lengthLabel(start: string, end: string) {
 const emptyForm = { id: "", name: "", startTime: "09:00", endTime: "18:00" };
 
 /** Shift templates. Assigning one copies its timings to the employee; editing it updates everyone on it. */
-export default function ShiftsSection() {
+export default function ShiftsSection({ onAssign }: { onAssign: (shiftId: string) => void }) {
   const [shifts, setShifts] = useState<ShiftRow[]>([]);
   const [staff, setStaff] = useState<StaffRow[]>([]);
   const [form, setForm] = useState<typeof emptyForm | null>(null);
-  const [assigning, setAssigning] = useState<ShiftRow | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -150,7 +149,7 @@ export default function ShiftsSection() {
               </small>
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <button type="button" className="btn-action btn-present" onClick={() => setAssigning(s)}>Assign staff</button>
+              <button type="button" className="btn-action btn-present" onClick={() => onAssign(s.id)}>Assign staff</button>
               <button type="button" className="btn-action btn-undo" onClick={() => { setError(""); setForm({ id: s.id, name: s.name, startTime: s.startTime, endTime: s.endTime }); }}>Edit</button>
               <button type="button" className="btn-action btn-absent" onClick={() => remove(s)} disabled={busy}>Delete</button>
             </div>
@@ -168,90 +167,7 @@ export default function ShiftsSection() {
         )}
       </div>
 
-      {assigning && (
-        <AssignModal
-          shift={assigning}
-          shifts={shifts}
-          staff={staff}
-          busy={busy}
-          onClose={() => setAssigning(null)}
-          onSave={async (ids) => { if (await call("PUT", { shiftId: assigning.id, employeeIds: ids })) setAssigning(null); }}
-        />
-      )}
     </section>
   );
 }
 
-function AssignModal({
-  shift, shifts, staff, busy, onClose, onSave,
-}: {
-  shift: ShiftRow;
-  shifts: ShiftRow[];
-  staff: StaffRow[];
-  busy: boolean;
-  onClose: () => void;
-  onSave: (ids: string[]) => void;
-}) {
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(staff.filter((e) => e.shiftId === shift.id).map((e) => e.id)));
-  const [search, setSearch] = useState("");
-  const shiftName = useMemo(() => new Map(shifts.map((s) => [s.id, s.name])), [shifts]);
-
-  const visible = staff.filter((e) => {
-    const q = search.trim().toLowerCase();
-    return !q || `${e.name} ${e.id} ${e.department}`.toLowerCase().includes(q);
-  });
-
-  function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  const movingFromOther = staff.filter((e) => selected.has(e.id) && e.shiftId && e.shiftId !== shift.id).length;
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
-        <div className="modal-header">
-          <h2>Assign to {shift.name}</h2>
-          <button className="modal-close" onClick={onClose} aria-label="Close">&times;</button>
-        </div>
-        <p style={{ fontSize: 14, color: "#667085", marginTop: -10 }}>
-          Ticked staff get {to12h(shift.startTime)} &ndash; {to12h(shift.endTime)}. Unticked staff keep their current timings.
-        </p>
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search name, ID or department"
-          aria-label="Search staff"
-          style={{ width: "100%", marginBottom: 10 }}
-        />
-        <div style={{ maxHeight: "45vh", overflowY: "auto", border: "1px solid #eff0f3", borderRadius: 12 }}>
-          {visible.map((e) => (
-            <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderBottom: "1px solid #f3f4f8", cursor: "pointer", background: selected.has(e.id) ? "#f6f3ff" : undefined }}>
-              <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggle(e.id)} />
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <b style={{ fontSize: 15 }}>{e.name}</b>
-                {e.flexibleHours && <span style={{ marginLeft: 6, fontSize: 11, background: "#ede9fe", color: "#7c3aed", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>FLEX</span>}
-                <br />
-                <small style={{ color: "#8990a0" }}>
-                  {e.id} &middot; {e.shiftId ? shiftName.get(e.shiftId) ?? "Shift" : "Custom"} {to12h(e.workStartTime)}&ndash;{to12h(e.workEndTime)}
-                </small>
-              </span>
-            </label>
-          ))}
-          {visible.length === 0 && <p style={{ textAlign: "center", color: "#8990a0", padding: 16, margin: 0 }}>No staff found.</p>}
-        </div>
-        {movingFromOther > 0 && (
-          <p style={{ fontSize: 13, color: "#a86400", margin: "10px 0 0" }}>{movingFromOther} ticked employee(s) will move from another shift.</p>
-        )}
-        <button type="button" className="primary" style={{ marginTop: 16 }} disabled={busy} onClick={() => onSave([...selected])}>
-          {busy ? "Saving…" : `Save (${selected.size} staff)`}
-        </button>
-      </div>
-    </div>
-  );
-}

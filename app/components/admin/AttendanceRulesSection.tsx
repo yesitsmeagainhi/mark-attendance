@@ -162,7 +162,7 @@ function SalaryFormula({ val, loaded }: { val: (id: string) => string; loaded: b
     : lateFine > 0 ? `₹${lateFine} fine per late mark` : "No late penalty";
 
   const otLine = val("overtime_enabled") === "true"
-    ? `Time beyond the shift (at least ${n("overtime_min_minutes")} min/day) paid at ${n("overtime_rate_multiplier")}× the hourly rate${n("overtime_max_hours_month") > 0 ? `, up to ${n("overtime_max_hours_month")} h/month` : ""}`
+    ? `Work beyond the shift${n("shift_break_minutes") > 0 ? ` minus its ${n("shift_break_minutes")}-min break` : ""} (at least ${n("overtime_min_minutes")} min/day), paid at ${n("overtime_rate_multiplier")}× the hourly rate (per-day pay ÷ working hours)${n("overtime_max_hours_month") > 0 ? `, up to ${n("overtime_max_hours_month")} h/month` : ""}`
     : "Overtime is not paid";
 
   const leaveLine = (["sick", "casual", "earned"] as const).map((t) => {

@@ -1,10 +1,88 @@
 import type { ReportEmployee } from "./generate-excel";
+import { categoryTitle } from "../../app/components/admin/rule-meta";
+
+/** The PDF uses a built-in font that can't draw \u20B9 or arrows; spell them out. */
+function pdfText(s: string): string {
+  return s.replace(/\u20B9/g, "Rs ").replace(/\u2192/g, "->").replace(/\u2212/g, "-").replace(/\u2014/g, "-");
+}
+
+/** Extra page for the single-employee PDF: salary breakdown + every rule applied. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildSalaryRulesPage(doc: any, emp: ReportEmployee, month: string, autoTable: any) {
+  doc.addPage();
+  const M = 12;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(23, 32, 51);
+  doc.text(pdfText(`${emp.name} (${emp.id}) - salary & rules, ${month}`), M, 16);
+
+  let y = 22;
+  const lines = emp.salaryLines ?? [];
+  if (lines.length > 0) {
+    autoTable(doc, {
+      startY: y,
+      margin: { left: M, right: M },
+      head: [["Item", "How it was worked out", "Amount"]],
+      body: [
+        ...lines.map((l) => [
+          l.label,
+          pdfText(l.detail),
+          l.kind === "info" ? "-" : l.amount < 0 ? `-${fmt(-l.amount)}` : l.kind === "extra" ? `+${fmt(l.amount)}` : fmt(l.amount),
+        ]),
+        ["Net pay", "Monthly salary - deductions + extra pay", fmt(emp.netPay)],
+      ],
+      styles: { font: "helvetica", fontSize: 8.5, cellPadding: 2 },
+      headStyles: { fillColor: [249, 250, 251], textColor: [102, 112, 133], fontStyle: "bold" },
+      columnStyles: { 0: { cellWidth: 38, fontStyle: "bold" }, 2: { cellWidth: 30, halign: "right", fontStyle: "bold" } },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      didParseCell: (data: any) => {
+        if (data.section !== "body" || data.column.index !== 2) return;
+        const t = String(data.cell.raw);
+        if (t.startsWith("-") && t !== "-") data.cell.styles.textColor = [199, 51, 51];
+        else if (t.startsWith("+")) data.cell.styles.textColor = [22, 128, 82];
+        if (data.row.index === lines.length) data.cell.styles.textColor = [22, 128, 82];
+      },
+    });
+    y = doc.lastAutoTable.finalY + 8;
+  } else {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(emp.isFlexible ? "Hourly (flexible) employee: paid hours worked x hourly rate; day-based salary rules don't apply." : "No monthly salary set for this employee.", M, y + 4);
+    y += 12;
+  }
+
+  const rules = emp.rulesApplied ?? [];
+  if (rules.length > 0) {
+    autoTable(doc, {
+      startY: y,
+      margin: { left: M, right: M },
+      head: [["Section", "Rule", "Value", "Source"]],
+      body: rules.map((r) => [
+        categoryTitle(r.category),
+        pdfText(r.label),
+        r.valueType === "boolean" ? (r.value === "true" ? "On" : "Off") : r.value,
+        r.custom ? "This employee" : "Company default",
+      ]),
+      styles: { font: "helvetica", fontSize: 8.5, cellPadding: 2 },
+      headStyles: { fillColor: [249, 250, 251], textColor: [102, 112, 133], fontStyle: "bold" },
+      columnStyles: { 0: { cellWidth: 36 }, 2: { cellWidth: 22 }, 3: { cellWidth: 30 } },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      didParseCell: (data: any) => {
+        if (data.section === "body" && data.column.index === 3 && data.cell.raw === "This employee") {
+          data.cell.styles.textColor = [109, 69, 229];
+          data.cell.styles.fontStyle = "bold";
+        }
+      },
+    });
+  }
+}
 
 const statusLabels: Record<string, string> = {
   present: "Present",
   late: "Late",
   absent: "Absent",
   "missed-out": "Missed Out",
+  "missed-in": "Missed In",
   "in-progress": "In Progress",
   "half-day": "Half Day",
   "short-day": "Short Day",
@@ -21,6 +99,7 @@ const statusColors: Record<string, { bg: [number, number, number]; fg: [number, 
   late: { bg: [255, 244, 220], fg: [168, 100, 0] },
   absent: { bg: [255, 237, 237], fg: [199, 51, 51] },
   "missed-out": { bg: [252, 231, 243], fg: [190, 24, 93] },
+  "missed-in": { bg: [252, 231, 243], fg: [190, 24, 93] },
   "in-progress": { bg: [239, 246, 255], fg: [37, 99, 235] },
   "half-day": { bg: [255, 244, 220], fg: [168, 100, 0] },
   "short-day": { bg: [255, 237, 237], fg: [199, 51, 51] },
@@ -319,6 +398,7 @@ export async function generateEmployeePDF(
 
   const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
   buildEmployeePage(doc, emp, month, workingDays, autoTable);
+  buildSalaryRulesPage(doc, emp, month, autoTable);
   doc.save(`${emp.name.replace(/\s+/g, "-")}-report-${month}.pdf`);
 }
 

@@ -7,6 +7,7 @@ import { getDb } from "../db";
 import { employees, attendance, leaveRequests, holidays } from "../db/schema";
 import { getEffectiveRulesBatch } from "../lib/rules";
 import { calculateTotalDuration, calculateBreakDuration, formatTimeIST, formatDuration } from "../lib/time-utils";
+import { buildSimpleXlsx } from "../lib/simple-xlsx";
 
 // ── Config ──────────────────────────────────────────────────────────────────
 const DB_PATH = resolve(process.cwd(), "data", "attendance.db");
@@ -45,8 +46,8 @@ async function main() {
   // Step 2: Generate report data
   const reportData = generateReportData(dateStr);
 
-  // Step 3: Save CSV
-  saveCsvReport(label, reportData);
+  // Step 3: Save Excel report
+  await saveXlsxReport(label, reportData);
 
   // Step 4: Send email
   await sendEmailReport(dateStr, label, reportData);
@@ -211,9 +212,9 @@ function generateReportData(todayStr: string): EmployeeReport[] {
   });
 }
 
-// ── Save CSV Report ─────────────────────────────────────────────────────────
-function saveCsvReport(label: string, data: EmployeeReport[]): void {
-  const csvPath = resolve(BACKUP_DIR, `${label}-report.csv`);
+// ── Save Excel Report ───────────────────────────────────────────────────────
+async function saveXlsxReport(label: string, data: EmployeeReport[]): Promise<void> {
+  const xlsxPath = resolve(BACKUP_DIR, `${label}-report.xlsx`);
 
   const headers = ["Employee", "Office", "Shift", "Punch In (IST)", "Punch Out (IST)", "Duration", "Break", "Status"];
   const rows = data.map(emp => [
@@ -227,13 +228,8 @@ function saveCsvReport(label: string, data: EmployeeReport[]): void {
     emp.status,
   ]);
 
-  const csvContent = "\uFEFF" + [
-    headers.join(","),
-    ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")),
-  ].join("\n");
-
-  writeFileSync(csvPath, csvContent, "utf-8");
-  console.log(`  CSV report saved to ${csvPath}`);
+  writeFileSync(xlsxPath, Buffer.from(await buildSimpleXlsx(`Attendance ${label.slice(0, 10)}`, headers, rows)));
+  console.log(`  Excel report saved to ${xlsxPath}`);
 }
 
 // ── Send HTML Email ─────────────────────────────────────────────────────────
@@ -318,18 +314,18 @@ async function sendEmailReport(dateStr: string, label: string, data: EmployeeRep
     </tbody>
   </table>
   <div style="padding:12px 24px;font-size:11px;color:#667085;">
-    Database backup: ${label}.db &nbsp;|&nbsp; CSV: ${label}-report.csv
+    Database backup: ${label}.db &nbsp;|&nbsp; Excel: ${label}-report.xlsx
   </div>
 </div>`;
 
-  const csvPath = resolve(BACKUP_DIR, `${label}-report.csv`);
+  const xlsxPath = resolve(BACKUP_DIR, `${label}-report.xlsx`);
 
   await transporter.sendMail({
     from: SMTP_USER,
     to: REPORT_EMAIL_TO,
     subject: `Attendance Report - ${dateStr} (${timeLabel})`,
     html,
-    attachments: [{ filename: `${label}-report.csv`, path: csvPath }],
+    attachments: [{ filename: `${label}-report.xlsx`, path: xlsxPath }],
   });
 
   console.log(`  Email sent to ${REPORT_EMAIL_TO}`);

@@ -5,6 +5,7 @@ import { putFile, deleteFile } from "../../../lib/storage";
 import { getAppIdentity } from "../../authz";
 import { findNearestBranch, findClosestBranch } from "../../../lib/geo-utils";
 import { getEffectiveRules } from "../../../lib/rules";
+import { pendingMissPunchesForDay, withPendingPunches } from "../../../lib/punch-state";
 
 const allowedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -213,8 +214,12 @@ export async function POST(request: Request) {
     .orderBy(asc(attendance.serverTimestamp))
     .all();
 
-  const lastPunch = todayPunches.length > 0 ? todayPunches[todayPunches.length - 1] : null;
-  const firstIn = todayPunches.find((p) => p.punchType === "IN");
+  // A miss-punch request awaiting approval counts as that punch, so after a
+  // pending "forgot to punch in" request the next punch is a punch-out
+  const effectivePunches = withPendingPunches(todayPunches, pendingMissPunchesForDay(employeeId, today));
+  const lastPunch = effectivePunches.length > 0 ? effectivePunches[effectivePunches.length - 1] : null;
+  const firstIn = effectivePunches.find((p) => p.punchType === "IN");
+  const lastIsPending = !!lastPunch && "pending" in lastPunch;
 
   if (punchType === "IN") {
     if (!lastPunch) {
@@ -247,9 +252,11 @@ export async function POST(request: Request) {
       }
     } else {
       // Last punch was IN — already punched in
-      logRejected(employeeId, punchType, "already punched in");
+      logRejected(employeeId, punchType, lastIsPending ? "pending miss punch-in" : "already punched in");
       return Response.json(
-        { error: "You are already punched in." },
+        { error: lastIsPending
+          ? "Your miss punch-in request is waiting for approval, so it already counts as your punch-in. Punch out when you leave."
+          : "You are already punched in." },
         { status: 409 },
       );
     }

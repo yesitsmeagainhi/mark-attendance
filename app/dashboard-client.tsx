@@ -11,6 +11,7 @@ import MissPunchTab, { type MissPunchPrefill } from "./components/employee/MissP
 import LeaveTab from "./components/employee/LeaveTab";
 import HistoryTab from "./components/employee/HistoryTab";
 import TimesheetTab from "./components/employee/TimesheetTab";
+import PayslipTab from "./components/employee/PayslipTab";
 import ProfileTab from "./components/employee/ProfileTab";
 import AdminTabNavigation from "./components/admin/AdminTabNavigation";
 import DashboardTab from "./components/admin/DashboardTab";
@@ -22,6 +23,7 @@ import PayrollTab from "./components/admin/PayrollTab";
 import AdminHistoryTab from "./components/admin/HistoryTab";
 import SettingsTab from "./components/admin/SettingsTab";
 import HolidaysTab from "./components/admin/HolidaysTab";
+import ForgotPunchInDialog, { looksLikeForgottenPunchIn } from "./components/employee/ForgotPunchInDialog";
 import RulesTab from "./components/admin/RulesTab";
 
 /* ── Action config for notification icon/color (mirrors HistoryTab) ── */
@@ -62,6 +64,7 @@ const ACTION_TAB: Record<string, string> = {
   mark_all_present: "dashboard", mark_all_uh: "dashboard", undo_mark: "dashboard", punch_removed: "dashboard",
   holiday_added: "holidays", holiday_updated: "holidays", holiday_removed: "holidays",
   backup_run: "settings",
+  payslips_published: "reports", payslips_unpublished: "reports",
   rule_updated: "rules", shift_created: "rules", shift_updated: "rules", shift_assigned: "rules", shift_deleted: "rules",
 };
 
@@ -84,6 +87,17 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
   const [missPunchPrefill, setMissPunchPrefill] = useState<MissPunchPrefill | null>(null);
   const [adminTab, setAdminTab] = useState("dashboard");
   const camera = useAttendanceCamera({ enabled: view === "employee" });
+  const [forgotInPrompt, setForgotInPrompt] = useState(false);
+
+  // A first punch late in the shift is usually a punch-out from a day the employee
+  // forgot to punch in. Ask before opening the camera, so they can request the
+  // punch-in first and this punch is saved as the punch-out.
+  const { openCamera, todayStatus, fetchStatus } = camera;
+  const startPunch = useCallback(() => {
+    if (looksLikeForgottenPunchIn(todayStatus)) setForgotInPrompt(true);
+    else openCamera();
+  }, [todayStatus, openCamera]);
+  const punchCamera = { ...camera, openCamera: startPunch };
 
   // Wrap setActiveTab to push browser history so mobile back gesture returns to previous tab
   const setActiveTab = useCallback((tab: string) => {
@@ -274,15 +288,42 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
             </div>
           )}
 
-          {activeTab === "home" && <HomeTab displayName={displayName} onNavigate={(tab) => { setMissPunchPrefill(null); setActiveTab(tab); }} onOpenCamera={camera.openCamera} todayStatus={camera.todayStatus} />}
-          {activeTab === "attendance" && <AttendanceTab employeeId={employeeId} displayName={displayName} camera={camera} />}
-          {activeTab === "miss-punch" && <MissPunchTab key={missPunchPrefill ? `${missPunchPrefill.date}-${missPunchPrefill.punchType}` : "blank"} prefill={missPunchPrefill} />}
+          {activeTab === "home" && <HomeTab displayName={displayName} onNavigate={(tab) => { setMissPunchPrefill(null); setActiveTab(tab); }} onOpenCamera={startPunch} todayStatus={camera.todayStatus} />}
+          {activeTab === "attendance" && <AttendanceTab employeeId={employeeId} displayName={displayName} camera={punchCamera} />}
+          {activeTab === "miss-punch" && <MissPunchTab key={missPunchPrefill ? `${missPunchPrefill.date}-${missPunchPrefill.punchType}` : "blank"} prefill={missPunchPrefill}
+            onSubmitted={missPunchPrefill?.continueToPunch ? async () => {
+              // The pending punch-in now counts, so the next punch is a punch-out
+              await fetchStatus();
+              setMissPunchPrefill(null);
+              setActiveTab("home");
+              openCamera();
+            } : undefined}
+          />}
           {activeTab === "leave" && <LeaveTab />}
           {activeTab === "history" && <HistoryTab onRequestMissPunch={(date, punchType) => { setMissPunchPrefill({ date, punchType }); setActiveTab("miss-punch"); }} />}
           {activeTab === "timesheet" && <TimesheetTab />}
+          {activeTab === "payslip" && <PayslipTab />}
           {activeTab === "profile" && <ProfileTab onSignOut={handleSignOut} />}
         </div>
       ) : null}
+
+      {view === "employee" && forgotInPrompt && camera.todayStatus && (
+        <ForgotPunchInDialog
+          status={camera.todayStatus}
+          onRequestPunchIn={() => {
+            setForgotInPrompt(false);
+            setMissPunchPrefill({
+              date: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }),
+              punchType: "IN",
+              time: camera.todayStatus?.workStartTime,
+              continueToPunch: true,
+            });
+            setActiveTab("miss-punch");
+          }}
+          onPunchInNow={() => { setForgotInPrompt(false); openCamera(); }}
+          onClose={() => setForgotInPrompt(false)}
+        />
+      )}
 
       {view === "employee" && !camera.cameraOpen && (
         <PunchResultDialog saving={camera.saving} result={camera.punchResult} geoAlert={camera.geoAlert} onClose={camera.dismissPunchResult} />

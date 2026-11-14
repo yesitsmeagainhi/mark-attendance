@@ -22,7 +22,7 @@ export type UseAttendanceCameraReturn = {
   photo: string | null;
   message: string;
   todayStatus: TodayStatus | null;
-  fetchStatus: () => void;
+  fetchStatus: () => Promise<void>;
   location: { latitude: number; longitude: number; accuracy: number; timestamp: number } | null;
   locationError: string;
   locationLoading: boolean;

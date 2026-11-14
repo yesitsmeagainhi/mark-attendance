@@ -16,11 +16,12 @@ type RowInput = {
   workEndTime?: string;
   office?: string;
   monthlySalary?: number | string;
+  companyName?: string;
 };
 
 type RowError = { row: number; field: string; message: string };
 
-const EXPECTED_HEADERS = ["name", "email", "password", "jobRole", "department", "mobileNumber", "workStartTime", "workEndTime", "office", "monthlySalary"];
+const EXPECTED_HEADERS = ["name", "email", "password", "jobRole", "department", "mobileNumber", "workStartTime", "workEndTime", "office", "monthlySalary", "companyName"];
 
 function processRows(rows: RowInput[]) {
   const db = getDb();
@@ -64,6 +65,7 @@ function processRows(rows: RowInput[]) {
     workEndTime: string;
     office: string;
     monthlySalary: number;
+    companyName: string;
   }> = [];
 
   const batchEmails = new Set<string>();
@@ -83,6 +85,7 @@ function processRows(rows: RowInput[]) {
     const workEndTime = row.workEndTime?.toString().trim() || "18:00";
     const office = row.office?.toString().trim() || "Bhayandar Office";
     const monthlySalary = Math.max(0, Math.round(Number(row.monthlySalary) || 0));
+    const companyName = (row.companyName?.toString().trim() || "").slice(0, 120);
 
     let hasError = false;
     function addError(field: string, message: string) {
@@ -126,6 +129,7 @@ function processRows(rows: RowInput[]) {
       workEndTime,
       office,
       monthlySalary,
+      companyName,
     });
   }
 
@@ -147,6 +151,7 @@ function processRows(rows: RowInput[]) {
             office: row.office,
             department: row.department,
             monthlySalary: row.monthlySalary,
+            companyName: row.companyName,
           })
           .run();
         created.push({ id: row.id, name: row.name, email: row.email });

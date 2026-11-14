@@ -25,10 +25,23 @@ export function shiftLengthMinutes(start: string, end: string): number {
   return diff;
 }
 
-/** Overtime earned on one completed working day. */
-export function dailyOvertimeMinutes(workedMinutes: number, shiftMinutes: number, rules: RuleValues): number {
+/** Paid working minutes in a shift: shift length minus its unpaid break (never under 1 hour). */
+export function workingMinutesPerShift(shiftMinutes: number, rules: RuleValues): number {
+  return Math.max(60, shiftMinutes - rules.shift_break_minutes);
+}
+
+/**
+ * Overtime earned on one completed working day.
+ *
+ * `workedMinutes` is punched-in time (breaks the employee punched out for are
+ * already excluded). If they punched out for less than the shift's unpaid
+ * break, the rest of the break is assumed taken, so staff who punch out for
+ * lunch and staff who don't are treated the same.
+ */
+export function dailyOvertimeMinutes(workedMinutes: number, punchedBreakMinutes: number, shiftMinutes: number, rules: RuleValues): number {
   if (!rules.overtime_enabled) return 0;
-  const extra = workedMinutes - shiftMinutes;
+  const unpunchedBreak = Math.max(0, rules.shift_break_minutes - punchedBreakMinutes);
+  const extra = workedMinutes - unpunchedBreak - workingMinutesPerShift(shiftMinutes, rules);
   return extra > 0 && extra >= rules.overtime_min_minutes ? extra : 0;
 }
 
@@ -145,6 +158,69 @@ export type SalaryBreakdown = {
   netPay: number;
 };
 
+export type SalaryLine = {
+  label: string;
+  /** How the amount was worked out, e.g. "3 days × ₹1,000" */
+  detail: string;
+  /** Short calculation for payslips, e.g. "17 days × ₹1,035" */
+  note?: string;
+  /** Signed ₹ amount: negative = deduction, positive = extra pay, 0 = info only */
+  amount: number;
+  kind: "base" | "deduction" | "extra" | "info";
+};
+
+const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const hm = (mins: number) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
+
+/**
+ * Line-by-line explanation of a salary, showing every rule that applied.
+ * Lines with nothing to apply are left out. Amounts are rounded per line, so
+ * they can differ from the total deduction by a rupee.
+ */
+export function salaryLines(i: SalaryInput, b: SalaryBreakdown): SalaryLine[] {
+  const r = i.rules;
+  const rate = b.perDayRate;
+  const lines: SalaryLine[] = [
+    { label: "Monthly salary", detail: `Per-day rate ${inr(rate)} (salary ÷ ${i.daysInMonth} days)`, amount: i.monthlySalary, kind: "base" },
+  ];
+  const dayLine = (label: string, days: number, note: string) => {
+    if (days > 0) lines.push({ label, detail: `${note}${note ? " → " : ""}${plural(days, "day")} × ${inr(rate)}`, note: `${plural(days, "day")} × ${inr(rate)}`, amount: -Math.round(days * rate), kind: "deduction" });
+  };
+
+  dayLine("Absent days", i.absentDays, "Includes short days and missed punch-outs");
+  dayLine("Half days", b.halfDayDeductionDays, i.halfDays > 0 ? `${plural(i.halfDays, "half day")} × ${r.half_day_deduction} day` : "");
+  if (i.lateDays > 0) {
+    if (r.late_to_absent_count > 0) {
+      const blocks = Math.floor(i.lateDays / r.late_to_absent_count);
+      if (b.lateDeductionDays > 0) {
+        dayLine("Late marks", b.lateDeductionDays, `${plural(i.lateDays, "late mark")}: every ${r.late_to_absent_count} = ${r.late_penalty_days} day, ${blocks} × ${r.late_penalty_days}`);
+      } else {
+        lines.push({ label: "Late marks", detail: `${plural(i.lateDays, "late mark")}, below the ${r.late_to_absent_count} needed for a deduction`, amount: 0, kind: "info" });
+      }
+    } else if (r.late_fine_amount <= 0) {
+      lines.push({ label: "Late marks", detail: `${plural(i.lateDays, "late mark")}, late penalty is off`, amount: 0, kind: "info" });
+    }
+    if (b.lateFine > 0) lines.push({ label: "Late fine", detail: `${plural(i.lateDays, "late mark")} × ${inr(r.late_fine_amount)}`, note: `${plural(i.lateDays, "late mark")} × ${inr(r.late_fine_amount)}`, amount: -b.lateFine, kind: "deduction" });
+  }
+  dayLine("Unpaid leave", i.unpaidLeaveDays, "Beyond the yearly quota or an unpaid leave type");
+  dayLine("Unpaid holidays", i.unpaidHolidayDays, "");
+  if (b.weekOffBonus > 0) {
+    lines.push({ label: "Week-off worked", detail: `${plural(i.weekOffWorkedDays, "day")} × ${inr(rate)}`, note: `${plural(i.weekOffWorkedDays, "day")} × ${inr(rate)}`, amount: b.weekOffBonus, kind: "extra" });
+  }
+  if (r.overtime_enabled) {
+    if (b.overtimeMinutes > 0) {
+      const capped = b.overtimeMinutes < i.overtimeMinutes ? ` (capped at ${r.overtime_max_hours_month} h; worked ${hm(i.overtimeMinutes)})` : "";
+      const workH = workingMinutesPerShift(i.shiftMinutes, r) / 60;
+      const rateText = `₹${b.overtimeHourlyRate.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/h`;
+      lines.push({ label: "Overtime", detail: `${hm(b.overtimeMinutes)} × ${rateText} (per-day pay ÷ ${workH} working h) × ${r.overtime_rate_multiplier}${capped}`, note: `${hm(b.overtimeMinutes)} at ${r.overtime_rate_multiplier}× of ${rateText}`, amount: b.overtimePay, kind: "extra" });
+    } else {
+      lines.push({ label: "Overtime", detail: `None this month (needs ${r.overtime_min_minutes}+ min beyond ${hm(workingMinutesPerShift(i.shiftMinutes, r))} of work on a day)`, amount: 0, kind: "info" });
+    }
+  }
+  return lines;
+}
+
 export function computeMonthlySalary(i: SalaryInput): SalaryBreakdown {
   const r = i.rules;
   // Per-day rate uses total calendar days in month (including week-offs)
@@ -162,7 +238,10 @@ export function computeMonthlySalary(i: SalaryInput): SalaryBreakdown {
 
   const capMinutes = r.overtime_max_hours_month > 0 ? r.overtime_max_hours_month * 60 : Infinity;
   const overtimeMinutes = r.overtime_enabled ? Math.min(i.overtimeMinutes, capMinutes) : 0;
-  const overtimeHourlyRate = i.shiftMinutes > 0 ? perDayRate / (i.shiftMinutes / 60) : 0;
+  // Hourly rate = exact per-day pay ÷ working hours (not the rounded per-day rate)
+  const overtimeHourlyRate = i.daysInMonth > 0 && i.shiftMinutes > 0
+    ? i.monthlySalary / i.daysInMonth / (workingMinutesPerShift(i.shiftMinutes, r) / 60)
+    : 0;
   const overtimePay = Math.round((overtimeMinutes / 60) * overtimeHourlyRate * r.overtime_rate_multiplier);
 
   const netPay = Math.max(0, i.monthlySalary - deduction + weekOffBonus + overtimePay);
@@ -178,7 +257,7 @@ export function computeMonthlySalary(i: SalaryInput): SalaryBreakdown {
     weekOffBonus,
     overtimeMinutes,
     overtimeHours: Math.round((overtimeMinutes / 60) * 100) / 100,
-    overtimeHourlyRate: Math.round(overtimeHourlyRate * 100) / 100,
+    overtimeHourlyRate,
     overtimePay,
     netPay,
   };

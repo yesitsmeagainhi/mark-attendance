@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import type { EmployeeRow, BranchRow, DepartmentRow } from "./types";
 import AddEmployeeModal from "./AddEmployeeModal";
+import { downloadSimpleXlsx } from "../../../lib/simple-xlsx";
 import EmployeeRulesModal from "./EmployeeRulesModal";
 import StaffDetailModal from "./StaffDetailModal";
 import StaffDatewiseModal from "./StaffDatewiseModal";
@@ -101,7 +102,7 @@ export default function StaffTab() {
 
   function exportEmployees() {
     if (employeeList.length === 0) return;
-    const headers = ["ID", "Name", "Email", "Mobile Number", "Job Role", "Department", "Work Start", "Work End", "Office", "Monthly Salary", "Status", "Added On"];
+    const headers = ["ID", "Name", "Email", "Mobile Number", "Job Role", "Department", "Company", "Work Start", "Work End", "Office", "Monthly Salary", "Status", "Added On"];
     function formatTime12(time: string) {
   if (!time) return "";
 
@@ -124,6 +125,7 @@ export default function StaffTab() {
         emp.mobileNumber || "",
         emp.jobRole || "",
         emp.department || "",
+        emp.companyName || "",
         formatTime12(emp.workStartTime),
         formatTime12(emp.workEndTime),
         emp.office || "",
@@ -131,16 +133,31 @@ export default function StaffTab() {
         emp.active ? "Active" : "Inactive",
         new Date(emp.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
       ]);
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map((v) => `"${v.replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `employees_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void downloadSimpleXlsx(`employees_${new Date().toISOString().slice(0, 10)}.xlsx`, "Employees", headers, rows);
+  }
+
+  // Add / edit open as full pages in place of the employee list
+  if (showAddModal) {
+    return (
+      <AddEmployeeModal
+        open
+        onClose={() => setShowAddModal(false)}
+        onCreated={fetchEmployees}
+        branches={branches}
+        departments={departments}
+      />
+    );
+  }
+  if (editEmployee) {
+    return (
+      <EditEmployeeModal
+        employee={editEmployee}
+        branches={branches}
+        departments={departments}
+        onClose={() => setEditEmployee(null)}
+        onUpdated={fetchEmployees}
+      />
+    );
   }
 
   return (
@@ -169,7 +186,7 @@ export default function StaffTab() {
               {employeeList.filter((emp) => {
                 if (!search.trim()) return true;
                 const q = search.trim().toLowerCase();
-                return `${emp.name} ${emp.id} ${emp.email} ${emp.mobileNumber || ""}`.toLowerCase().includes(q);
+                return `${emp.name} ${emp.id} ${emp.email} ${emp.mobileNumber || ""} ${emp.companyName || ""}`.toLowerCase().includes(q);
               }).map((emp) => {
                 const initials = emp.name.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
                 const color = ["#7c3aed", "#2563eb", "#059669", "#db2777", "#ea580c"][emp.id.charCodeAt(emp.id.length - 1) % 5];
@@ -178,7 +195,7 @@ export default function StaffTab() {
                     <td className="cell-flex"><span className="person" style={{ background: color }}>{initials}</span><span><b>{emp.name}</b>{emp.flexibleHours && <span style={{ fontSize: 12, background: "#ede9fe", color: "#7c3aed", padding: "1px 6px", borderRadius: 6, marginLeft: 6, fontWeight: 600 }}>Flex</span>}<small>{emp.id}</small></span></td>
                     <td className="cell-flex"><span><b>{emp.email}</b><small>{emp.mobileNumber || "\u2014"}</small></span></td>
                     <td>{emp.jobRole || "\u2014"}</td>
-                    <td>{emp.department || "\u2014"}</td>
+                    <td>{emp.department || "\u2014"}{emp.companyName && <small style={{ display: "block", color: "var(--muted)" }}>{emp.companyName}</small>}</td>
                     <td>{emp.workStartTime && emp.workEndTime ? `${emp.workStartTime} \u2013 ${emp.workEndTime}` : "\u2014"}</td>
                     <td>{emp.office}</td>
                     <td>
@@ -233,14 +250,6 @@ export default function StaffTab() {
           </table>
         </div>
       </section>
-
-      <AddEmployeeModal
-        open={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onCreated={fetchEmployees}
-        branches={branches}
-        departments={departments}
-      />
 
       {rulesEmployee && (
         <EmployeeRulesModal
@@ -355,17 +364,6 @@ export default function StaffTab() {
         />
       )}
 
-      {/* Edit employee modal */}
-      {editEmployee && (
-        <EditEmployeeModal
-          employee={editEmployee}
-          branches={branches}
-          departments={departments}
-          onClose={() => setEditEmployee(null)}
-          onUpdated={fetchEmployees}
-        />
-      )}
-
       {/* Bulk import modal */}
       {showBulkModal && (
         <BulkImportModal
@@ -379,7 +377,7 @@ export default function StaffTab() {
 
 /* ── Bulk Import Modal (CSV + XLSX) ────────────────────────── */
 
-const CSV_HEADERS = ["name", "email", "password", "jobRole", "department", "mobileNumber", "workStartTime", "workEndTime", "office", "monthlySalary"] as const;
+const CSV_HEADERS = ["name", "email", "password", "jobRole", "department", "mobileNumber", "workStartTime", "workEndTime", "office", "monthlySalary", "companyName"] as const;
 
 type ParsedRow = Record<string, string>;
 
@@ -420,15 +418,8 @@ function splitCSVLine(line: string): string[] {
 }
 
 function downloadTemplate() {
-  const header = CSV_HEADERS.join(",");
-  const example = "John Doe,john@company.com,pass1234,Counsellor,HR,9876543210,09:00,18:00,Bhayandar Office,25000";
-  const blob = new Blob([header + "\n" + example + "\n"], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "employee_template.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+  const example = ["John Doe", "john@company.com", "pass1234", "Counsellor", "HR", "9876543210", "09:00", "18:00", "Bhayandar Office", 25000, "ASM Vikas Pvt Ltd"];
+  void downloadSimpleXlsx("employee_template.xlsx", "Employees", [...CSV_HEADERS], [example]);
 }
 
 type ImportError = { row: number; field: string; message: string };
@@ -500,6 +491,7 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
           workEndTime: r.workEndTime || "",
           office: r.office || "",
           monthlySalary: r.monthlySalary ? Number(r.monthlySalary) : 0,
+          companyName: r.companyName || "",
         }));
         res = await fetch("/api/employees/bulk", {
           method: "POST",
@@ -534,10 +526,10 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
           {!result && (
             <>
               <p style={{ margin: 0, fontSize: 15, color: "#6b7280" }}>
-                Upload a <b>.csv</b> or <b>.xlsx</b> file with employee details. Required columns: <b>name</b>, <b>email</b>, <b>password</b>. Optional: jobRole, department, mobileNumber, workStartTime, workEndTime, office, monthlySalary.
+                Upload a <b>.csv</b> or <b>.xlsx</b> file with employee details. Required columns: <b>name</b>, <b>email</b>, <b>password</b>. Optional: jobRole, department, mobileNumber, workStartTime, workEndTime, office, monthlySalary, companyName.
               </p>
               <button type="button" className="secondary" onClick={downloadTemplate} style={{ alignSelf: "flex-start", fontSize: 15 }}>
-                Download CSV template
+                Download Excel template
               </button>
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <span style={{ fontSize: 15, fontWeight: 600 }}>Choose file (.csv or .xlsx)</span>

@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, asc } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { missPunchRequests, attendance, employees } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
@@ -60,66 +60,7 @@ export async function PATCH(request: Request) {
     const timestamp = istToUTC(existing.date, existing.requestedTime);
     const punchType = existing.punchType as "IN" | "OUT";
 
-    // Check if a record with the same punchType already exists for this date
-    const duplicate = db
-      .select({ id: attendance.id })
-      .from(attendance)
-      .where(
-        and(
-          eq(attendance.employeeId, existing.employeeId),
-          eq(attendance.punchType, punchType),
-          sql`date(${attendance.serverTimestamp}) = ${existing.date}`,
-        ),
-      )
-      .limit(1)
-      .get();
-
-    if (duplicate) {
-      // A record with the same punchType exists — check if the other type also exists
-      const otherType = punchType === "IN" ? "OUT" : "IN";
-      const otherExists = db
-        .select({ id: attendance.id })
-        .from(attendance)
-        .where(
-          and(
-            eq(attendance.employeeId, existing.employeeId),
-            eq(attendance.punchType, otherType),
-            sql`date(${attendance.serverTimestamp}) = ${existing.date}`,
-          ),
-        )
-        .limit(1)
-        .get();
-
-      if (otherExists) {
-        // Both IN and OUT exist — update the existing record's timestamp
-        db.update(attendance)
-          .set({ serverTimestamp: timestamp, photoKey: `miss-punch/approved/${requestId}`, source: "miss-punch" })
-          .where(eq(attendance.id, duplicate.id))
-          .run();
-      } else {
-        // Only one record exists with same type, no other type
-        // e.g. employee punched IN at wrong time (was actually OUT) then submitted miss-punch for correct IN
-        // → convert existing record to the other type, insert the miss-punch as correct type
-        db.update(attendance)
-          .set({ punchType: otherType })
-          .where(eq(attendance.id, duplicate.id))
-          .run();
-
-        db.insert(attendance)
-          .values({
-            id: crypto.randomUUID(),
-            employeeId: existing.employeeId,
-            punchType,
-            serverTimestamp: timestamp,
-            photoKey: `miss-punch/approved/${requestId}`,
-            contentType: "text/plain",
-            office: emp?.office || "Bhayandar Office",
-            source: "miss-punch",
-          })
-          .run();
-      }
-    } else {
-      // No duplicate — simple insert
+    const insertPunch = () => {
       db.insert(attendance)
         .values({
           id: crypto.randomUUID(),
@@ -132,6 +73,53 @@ export async function PATCH(request: Request) {
           source: "miss-punch",
         })
         .run();
+    };
+
+    // The day's punches, keyed the same way as the punch screen (UTC date of the punch)
+    const dayPunches = db
+      .select({ id: attendance.id, punchType: attendance.punchType, serverTimestamp: attendance.serverTimestamp })
+      .from(attendance)
+      .where(
+        and(
+          eq(attendance.employeeId, existing.employeeId),
+          sql`date(${attendance.serverTimestamp}) = ${timestamp.slice(0, 10)}`,
+        ),
+      )
+      .orderBy(asc(attendance.serverTimestamp))
+      .all();
+    const before = [...dayPunches].reverse().find((p) => p.serverTimestamp <= timestamp);
+    const after = dayPunches.find((p) => p.serverTimestamp > timestamp);
+
+    if ((!before || before.punchType !== punchType) && (!after || after.punchType !== punchType)) {
+      // The missed punch fits the IN/OUT order (e.g. forgot to punch in and later
+      // punched out, or a missing lecture punch for a flexible employee): just add it
+      insertPunch();
+    } else {
+      // A neighbouring punch already has this type, so the request corrects that punch.
+      // Pick the closer same-type neighbour.
+      const sameBefore = before?.punchType === punchType ? before : undefined;
+      const sameAfter = after?.punchType === punchType ? after : undefined;
+      const toMs = (ts: string) => new Date(ts.replace(" ", "T") + "Z").getTime();
+      const target = sameBefore && sameAfter
+        ? (toMs(timestamp) - toMs(sameBefore.serverTimestamp) <= toMs(sameAfter.serverTimestamp) - toMs(timestamp) ? sameBefore : sameAfter)
+        : (sameBefore ?? sameAfter)!;
+      const otherType = punchType === "IN" ? "OUT" : "IN";
+
+      if (dayPunches.some((p) => p.punchType === otherType)) {
+        // Wrong time on an existing punch — move it to the requested time
+        db.update(attendance)
+          .set({ serverTimestamp: timestamp, photoKey: `miss-punch/approved/${requestId}`, source: "miss-punch" })
+          .where(eq(attendance.id, target.id))
+          .run();
+      } else {
+        // Only punches of this type exist: e.g. forgot to punch in, so the later
+        // punch was saved as a punch-in — make it the punch-out and add the punch-in
+        db.update(attendance)
+          .set({ punchType: otherType })
+          .where(eq(attendance.id, target.id))
+          .run();
+        insertPunch();
+      }
     }
   }
 

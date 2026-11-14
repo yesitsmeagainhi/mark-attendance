@@ -34,6 +34,8 @@ const ACTION_CONFIG: Record<string, { label: string; color: string; icon: string
   holiday_updated:    { label: "Holiday Updated",   color: "#0d9488", icon: "\u{1F389}" },
   holiday_removed:    { label: "Holiday Removed",   color: "#ea580c", icon: "\u{1F389}" },
   backup_run:         { label: "Backup",            color: "#2563eb", icon: "\u{1F4BE}" },
+  payslips_published: { label: "Payslips Published", color: "#168052", icon: "\u{1F4B0}" },
+  payslips_unpublished: { label: "Payslips Withdrawn", color: "#ea580c", icon: "\u{1F4B0}" },
   rule_updated:       { label: "Rule Changed",      color: "#6d45e5", icon: "\u{1F4D0}" },
   shift_created:      { label: "Shift Created",     color: "#6d45e5", icon: "\u{1F552}" },
   shift_updated:      { label: "Shift Updated",     color: "#6d45e5", icon: "\u{1F552}" },
@@ -49,6 +51,7 @@ const ACTION_TAB: Record<string, string> = {
   mark_all_present: "dashboard", mark_all_uh: "dashboard", undo_mark: "dashboard", punch_removed: "dashboard",
   holiday_added: "holidays", holiday_updated: "holidays", holiday_removed: "holidays",
   backup_run: "settings",
+  payslips_published: "reports", payslips_unpublished: "reports",
   rule_updated: "rules", shift_created: "rules", shift_updated: "rules", shift_assigned: "rules", shift_deleted: "rules",
 };
 

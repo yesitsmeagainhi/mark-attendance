@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import { getIST, getGreeting, formatTimeIST, getGraceStatus, formatDuration } from "../../../lib/time-utils";
 import type { TodayStatus } from "./attendance-types";
+import PendingPunchNotice, { PendingTag } from "./PendingPunchNotice";
 
 const menuItems = [
   { id: "miss-punch", icon: "\u{1F514}", label: "Miss Punch", desc: "Request correction for missed punches", color: "#ea580c", bg: "#fff7ed" },
   { id: "leave", icon: "\u{1F4C5}", label: "Leave", desc: "Apply for casual, sick, or earned leave", color: "#2563eb", bg: "#eff6ff" },
   { id: "history", icon: "\u{1F4CB}", label: "History", desc: "View your attendance records", color: "#059669", bg: "#ecfdf5" },
+  { id: "payslip", icon: "\u{1F4B0}", label: "Payslip", desc: "Your monthly salary slip", color: "#168052", bg: "#e8f7ef" },
   { id: "timesheet", icon: "\u{1F552}", label: "Journal", desc: "Log daily tasks and to-do list", color: "#7c3aed", bg: "#f5f3ff" },
   { id: "profile", icon: "\u{1F464}", label: "Profile", desc: "Your profile & account info", color: "#64748b", bg: "#f8fafc" },
 ];
@@ -100,6 +102,8 @@ export default function HomeTab({ displayName, onNavigate, onOpenCamera, todaySt
         <div style={{ fontSize: 28, fontWeight: 700, color: "var(--purple)", marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{timeStr}</div>
       </div>
 
+      <PendingPunchNotice todayStatus={todayStatus} />
+
       {/* Today's Status Card */}
       <div style={{
         background: "#fff",
@@ -159,12 +163,14 @@ export default function HomeTab({ displayName, onNavigate, onOpenCamera, todaySt
               <div style={{ fontSize: 13, fontWeight: 700, color: "var(--muted)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Punch In</div>
               <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 4 }}>
                 {todayStatus?.punchIn ? formatTimeIST(todayStatus.punchIn.time) : "\u2014"}
+                {todayStatus?.punchIn?.pending && <div><PendingTag /></div>}
               </div>
             </div>
             <div style={{ flex: 1, background: "#f6f7fb", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "var(--muted)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Punch Out</div>
               <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 4 }}>
                 {todayStatus?.punchOut ? formatTimeIST(todayStatus.punchOut.time) : "\u2014"}
+                {todayStatus?.punchOut?.pending && <div><PendingTag /></div>}
               </div>
             </div>
           </div>

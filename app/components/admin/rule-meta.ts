@@ -19,6 +19,7 @@ const UNITS: Record<string, { unit: string; step: number }> = {
   overtime_min_minutes: { unit: "min", step: 5 },
   overtime_rate_multiplier: { unit: "×", step: 0.25 },
   overtime_max_hours_month: { unit: "hrs", step: 1 },
+  shift_break_minutes: { unit: "min", step: 5 },
   leave_sick_quota: { unit: "days", step: 1 },
   leave_casual_quota: { unit: "days", step: 1 },
   leave_earned_quota: { unit: "days", step: 1 },

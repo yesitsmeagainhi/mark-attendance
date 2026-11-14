@@ -18,6 +18,7 @@ export type RuleValues = {
   overtime_min_minutes: number;
   overtime_rate_multiplier: number;
   overtime_max_hours_month: number;
+  shift_break_minutes: number;
   // Leave policy (quota 0 = unlimited)
   leave_sick_quota: number;
   leave_sick_paid: boolean;
@@ -42,6 +43,7 @@ export const DEFAULT_RULES: RuleValues = {
   overtime_min_minutes: 30,
   overtime_rate_multiplier: 1.5,
   overtime_max_hours_month: 0,
+  shift_break_minutes: 0,
   leave_sick_quota: 0,
   leave_sick_paid: true,
   leave_casual_quota: 0,
@@ -65,6 +67,7 @@ const ZERO_OK_NUMBERS = [
   "overtime_min_minutes",
   "overtime_rate_multiplier",
   "overtime_max_hours_month",
+  "shift_break_minutes",
   "leave_sick_quota",
   "leave_casual_quota",
   "leave_earned_quota",
@@ -152,6 +155,38 @@ export function getEffectiveRulesBatch(employeeIds: string[]): Map<string, RuleV
         })),
       ),
     );
+  }
+  return result;
+}
+
+export type AppliedRule = {
+  id: string;
+  label: string;
+  category: string;
+  valueType: string;
+  value: string;
+  /** true when this employee has their own value instead of the company default */
+  custom: boolean;
+};
+
+/** Every rule with the value actually used for each employee, in display order. */
+export function getAppliedRulesBatch(employeeIds: string[]): Map<string, AppliedRule[]> {
+  const db = getDb();
+  const rules = db.select().from(attendanceRules).all()
+    .sort((a, b) => a.category.localeCompare(b.category) || a.sortOrder - b.sortOrder);
+  const overrides = db.select().from(employeeRuleOverrides).all();
+  const byEmp = new Map<string, Map<string, string>>();
+  for (const o of overrides) {
+    if (!byEmp.has(o.employeeId)) byEmp.set(o.employeeId, new Map());
+    byEmp.get(o.employeeId)!.set(o.ruleId, o.value);
+  }
+  const result = new Map<string, AppliedRule[]>();
+  for (const empId of employeeIds) {
+    const own = byEmp.get(empId);
+    result.set(empId, rules.map((r) => {
+      const v = own?.get(r.id);
+      return { id: r.id, label: r.label, category: r.category, valueType: r.valueType, value: v ?? r.defaultValue, custom: v !== undefined && v !== r.defaultValue };
+    }));
   }
   return result;
 }

@@ -171,6 +171,7 @@ export async function GET(request: Request) {
     holidayName?: string;
     /** Punched in but never out: the day isn't counted, but the punch-in is shown */
     missedPunchOut?: boolean;
+    missedPunchIn?: boolean;
   }> = [];
 
   let totalMinutesWorked = 0;
@@ -197,7 +198,8 @@ export async function GET(request: Request) {
       // A punch-in without punch-out can still become the week-off; show it anyway
       const wo = byDate[dateStr];
       const strayIn = wo?.punchIn && !wo.punchOut ? wo.punchIn : null;
-      days.push({ date: dateStr, dayOfWeek, status: "week-off", punchIn: strayIn, punchOut: null, duration: null, ...(strayIn ? { missedPunchOut: true } : {}) });
+      const strayOut = !wo?.punchIn && wo?.punchOut ? wo.punchOut : null;
+      days.push({ date: dateStr, dayOfWeek, status: "week-off", punchIn: strayIn, punchOut: strayOut, duration: null, ...(strayIn ? { missedPunchOut: true } : {}), ...(strayOut ? { missedPunchIn: true } : {}) });
       continue;
     }
 
@@ -240,7 +242,8 @@ export async function GET(request: Request) {
         continue;
       }
       absentDays++;
-      days.push({ date: dateStr, dayOfWeek, status: "absent", punchIn: null, punchOut: null, duration: null });
+      // Punch-out without punch-in stays visible, tagged as a missed punch-in
+      days.push({ date: dateStr, dayOfWeek, status: "absent", punchIn: null, punchOut: dayData?.punchOut ?? null, duration: null, ...(dayData?.punchOut ? { missedPunchIn: true } : {}) });
       continue;
     }
 

@@ -702,23 +702,33 @@ export default function DashboardTab() {
                         </div>
                       )}
                     </td>
-                    <td data-label="Location" style={{ fontSize: 14, maxWidth: 160 }}>
-                      {emp.punchIn?.office ? (
-                        <>
-                          <div>{emp.punchIn.office}</div>
-                          {emp.punchIn.latitude && emp.punchIn.longitude && (
-                            <a
-                              href={`https://www.google.com/maps?q=${emp.punchIn.latitude},${emp.punchIn.longitude}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ fontSize: 12, color: "#2563eb", textDecoration: "none" }}
-                              onClick={(e) => e.stopPropagation()}
-                              title={`${emp.punchIn.latitude}, ${emp.punchIn.longitude}`}
-                            >
-                              View on Map
-                            </a>
-                          )}
-                        </>
+                    <td data-label="Location" style={{ fontSize: 14, maxWidth: 180 }}>
+                      {emp.punchIn?.office || emp.punchOut?.office ? (
+                        // Punch-in and punch-out places, each with a map link (field staff can be anywhere)
+                        [["In", emp.punchIn], ["Out", emp.punchOut]].map(([tag, p]) => {
+                          const punch = p as typeof emp.punchIn;
+                          if (!punch?.office) return null;
+                          return (
+                            <div key={tag as string} style={{ marginBottom: 4 }}>
+                              <div>
+                                {emp.punchOut?.office && <span style={{ color: "#667085", fontSize: 12, fontWeight: 600 }}>{tag as string}: </span>}
+                                {punch.office}
+                              </div>
+                              {punch.latitude && punch.longitude && (
+                                <a
+                                  href={`https://www.google.com/maps?q=${punch.latitude},${punch.longitude}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ fontSize: 12, color: "#2563eb", textDecoration: "none" }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  title={`${punch.latitude}, ${punch.longitude}`}
+                                >
+                                  View on Map
+                                </a>
+                              )}
+                            </div>
+                          );
+                        })
                       ) : (
                         <span style={{ color: "#c9cbd4" }}>{"\u2014"}</span>
                       )}

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import type { BranchRow, DepartmentRow } from "./types";
 import ShiftPicker from "./ShiftPicker";
+import AdminPage from "./AdminPage";
+import CompanyNameField from "./CompanyNameField";
 import { categoryTitle } from "./rule-meta";
 
 type RuleDefault = {
@@ -24,6 +26,7 @@ const emptyForm = {
   shiftId: "",
   assignedBranchIds: [] as string[],
   department: "",
+  companyName: "",
   monthlySalary: "",
   hourlyRate: "",
   flexibleHours: false,
@@ -93,6 +96,7 @@ export default function AddEmployeeModal({
           shiftId: form.shiftId || null,
           assignedBranchIds: form.assignedBranchIds,
           department: form.department.trim(),
+          companyName: form.companyName.trim(),
           role: form.role,
           monthlySalary: form.flexibleHours ? 0 : (parseInt(form.monthlySalary, 10) || 0),
           hourlyRate: form.flexibleHours ? (parseInt(form.hourlyRate, 10) || 0) : 0,
@@ -124,12 +128,7 @@ export default function AddEmployeeModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Add new employee</h2>
-          <button className="modal-close" onClick={onClose}>&times;</button>
-        </div>
+    <AdminPage title="Add new employee" subtitle="Fill in the details below. Fields can be changed later from Staff." backLabel="Back to Staff" onBack={onClose}>
         <form className="modal-form" onSubmit={handleSubmit} autoComplete="off">
           <label>
             <span>Full name</span>
@@ -148,6 +147,7 @@ export default function AddEmployeeModal({
               ))}
             </select>
           </label>
+          <CompanyNameField value={form.companyName} onChange={(v) => setForm({ ...form, companyName: v })} />
           <label>
             <span>Email address</span>
             <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="priya@company.com" required autoComplete="new-email" />
@@ -269,9 +269,10 @@ export default function AddEmployeeModal({
           </div>
           {error && <p className="form-message">{error}</p>}
           {success && <p className="form-message success-text">{success}</p>}
-          <button className="primary" type="submit" disabled={saving}>{saving ? "Creating..." : "Create employee"}</button>
+          <div className="sticky-save-bar">
+            <button className="primary" type="submit" disabled={saving} style={{ margin: 0 }}>{saving ? "Creating..." : "Create employee"}</button>
+          </div>
         </form>
-      </div>
-    </div>
+    </AdminPage>
   );
 }

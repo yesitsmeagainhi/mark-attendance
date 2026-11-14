@@ -3,7 +3,7 @@ import { getDb } from "../../../../db";
 import { attendance, employees, leaveRequests } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
 import { getEffectiveRulesBatch } from "../../../../lib/rules";
-import { calculateTotalDuration } from "../../../../lib/time-utils";
+import { calculateBreakDuration, calculateTotalDuration } from "../../../../lib/time-utils";
 import { getHolidayCalendar } from "../../../../lib/holidays";
 import { dayOfWeek, eachDate, resolveWeekOffs, weekBounds, type DayKind } from "../../../../lib/week-off";
 import { computeMonthlySalary, dailyOvertimeMinutes, leaveUsedBeforeMonth, shiftLengthMinutes, splitLeaveDays, type LeaveType } from "../../../../lib/pay-rules";
@@ -184,7 +184,7 @@ export async function GET(request: Request) {
           const sorted = [...entry.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
           const dur = calculateTotalDuration(sorted);
           if (emp.flexibleHours) totalMinutesWorked += dur;
-          else if (dateStr < today) overtimeMinutes += dailyOvertimeMinutes(dur, shiftMinutes, empRules);
+          else if (dateStr < today) overtimeMinutes += dailyOvertimeMinutes(dur, calculateBreakDuration(sorted), shiftMinutes, empRules);
         }
         continue;
       }
@@ -197,6 +197,9 @@ export async function GET(request: Request) {
 
       // If punch-out is missing, treat as absent/incomplete (no hours counted)
       if (!entry.punchOut) continue;
+
+      // Punched out but never in (miss punch-in not approved yet): absent, like the reports
+      if (!entry.punchIn) continue;
 
       // Accumulate hours for flex/hourly employees
       if (emp.flexibleHours && entry.allPunches.length > 0) {
@@ -217,7 +220,7 @@ export async function GET(request: Request) {
           halfDays++;
           continue;
         }
-        overtimeMinutes += dailyOvertimeMinutes(totalDur, shiftMinutes, empRules);
+        overtimeMinutes += dailyOvertimeMinutes(totalDur, calculateBreakDuration(sorted), shiftMinutes, empRules);
       }
 
       punchDates.add(dateStr);

@@ -190,6 +190,8 @@ export async function GET(request: Request) {
     sessions?: SessionInfo[];
     holidayName?: string;
     missedPunchOut?: boolean;
+    /** Punch-out with no punch-in (forgot to punch in; miss-punch not approved yet) */
+    missedPunchIn?: boolean;
   }> = [];
 
   function buildSessions(allPunches: { punchType: string; serverTimestamp: string }[]): SessionInfo[] {
@@ -225,7 +227,9 @@ export async function GET(request: Request) {
     if (weekOff.has(dateStr)) {
       // A punch-in without punch-out can still become the week-off; show it anyway
       const strayIn = dayData?.punchIn && !dayData.punchOut;
-      result.push({ date: dateStr, punchInTime: strayIn ? dayData.punchIn! : null, punchOutTime: null, duration: null, status: "Week Off", lateByMinutes: null, office: strayIn ? dayData.office || null : null, photoKeyIn: strayIn ? dayData.photoKeyIn || null : null, photoKeyOut: null, ...(strayIn ? { missedPunchOut: true } : {}) });
+      // ...and so can a punch-out without punch-in
+      const strayOut = !dayData?.punchIn && dayData?.punchOut;
+      result.push({ date: dateStr, punchInTime: strayIn ? dayData.punchIn! : null, punchOutTime: strayOut ? dayData.punchOut! : null, duration: null, status: "Week Off", lateByMinutes: null, office: strayIn || strayOut ? dayData.office || null : null, photoKeyIn: strayIn ? dayData.photoKeyIn || null : null, photoKeyOut: strayOut ? dayData.photoKeyOut || null : null, ...(strayIn ? { missedPunchOut: true } : {}), ...(strayOut ? { missedPunchIn: true } : {}) });
       continue;
     }
 
@@ -259,6 +263,12 @@ export async function GET(request: Request) {
       if (holiday || dayData?.isAdminUH) {
         uhDays++;
         result.push({ date: dateStr, punchInTime: null, punchOutTime: null, duration: null, status: "UH", lateByMinutes: null, office: null, photoKeyIn: null, photoKeyOut: null, holidayName: holiday?.name });
+        continue;
+      }
+      // Punched out but never in (forgot to punch in): keep the punch-out visible and
+      // tag it, so the employee can request the missing punch-in
+      if (dayData?.punchOut) {
+        result.push({ date: dateStr, punchInTime: null, punchOutTime: dayData.punchOut, duration: null, status: "Absent", lateByMinutes: null, office: dayData.office || null, photoKeyIn: null, photoKeyOut: dayData.photoKeyOut || null, missedPunchIn: true });
         continue;
       }
       // Only mark absent for past days, not today

@@ -3,6 +3,7 @@ import { getDb } from "../../../../db";
 import { attendance, employees, employeeBranches } from "../../../../db/schema";
 import { getAppIdentity } from "../../../authz";
 import { getEffectiveRules } from "../../../../lib/rules";
+import { pendingMissPunchesForDay } from "../../../../lib/punch-state";
 
 export async function GET() {
   const identity = await getAppIdentity();
@@ -46,22 +47,29 @@ export async function GET() {
     .orderBy(desc(attendance.serverTimestamp))
     .all();
 
+  // Miss-punch requests still waiting for approval count as punches, so an
+  // employee who forgot to punch in can punch out normally
+  const pending = pendingMissPunchesForDay(identity.employeeId, today);
+
   // Prefer selfie-based records over admin-marked ones (admin records have
   // non-file photoKeys like "admin-marked" or "admin/unpaid-holiday")
-  const punchIn = records.find((r) => r.punchType === "IN" && r.source !== "admin")
+  const recordedIn = records.find((r) => r.punchType === "IN" && r.source !== "admin")
     || records.find((r) => r.punchType === "IN");
-  const punchOut = records.find((r) => r.punchType === "OUT" && r.source !== "admin")
+  const recordedOut = records.find((r) => r.punchType === "OUT" && r.source !== "admin")
     || records.find((r) => r.punchType === "OUT");
+  const pendingIn = pending.find((p) => p.punchType === "IN");
+  const pendingOut = [...pending].reverse().find((p) => p.punchType === "OUT");
 
-  // Build ordered punches array for multi-cycle support
-  const orderedPunches = [...records]
-    .sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp))
-    .map((r) => ({
+  // Build ordered punches array for multi-cycle support (pending ones flagged)
+  const orderedPunches = [
+    ...records.map((r) => ({
       type: r.punchType as "IN" | "OUT",
       time: r.serverTimestamp,
       office: r.office,
       photoKey: r.photoKey,
-    }));
+    })),
+    ...pending.map((p) => ({ type: p.punchType, time: p.serverTimestamp, office: "", pending: true as const })),
+  ].sort((a, b) => a.time.localeCompare(b.time));
 
   const lastPunch = orderedPunches.length > 0 ? orderedPunches[orderedPunches.length - 1] : null;
   const empRules = getEffectiveRules(identity.employeeId);
@@ -114,12 +122,13 @@ export async function GET() {
     office: emp?.office || "",
     assignedBranchIds,
     punchAnywhere: emp?.punchAnywhere ?? false,
-    punchIn: punchIn
-      ? { time: punchIn.serverTimestamp, office: punchIn.office, photoKey: punchIn.photoKey }
-      : null,
-    punchOut: punchOut
-      ? { time: punchOut.serverTimestamp, office: punchOut.office, photoKey: punchOut.photoKey }
-      : null,
+    punchIn: recordedIn
+      ? { time: recordedIn.serverTimestamp, office: recordedIn.office, photoKey: recordedIn.photoKey }
+      : pendingIn ? { time: pendingIn.serverTimestamp, office: "", pending: true } : null,
+    punchOut: recordedOut
+      ? { time: recordedOut.serverTimestamp, office: recordedOut.office, photoKey: recordedOut.photoKey }
+      : pendingOut ? { time: pendingOut.serverTimestamp, office: "", pending: true } : null,
+    pendingPunches: pending.map((p) => ({ type: p.punchType, time: p.serverTimestamp })),
     punches: orderedPunches,
     flexibleHours: emp?.flexibleHours ?? false,
     rules: {

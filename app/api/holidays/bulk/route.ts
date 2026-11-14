@@ -165,22 +165,11 @@ function processRows(rows: SheetRow[], overwrite: boolean) {
   return { valid, errors, existing, salariedCount: salaried.length };
 }
 
-export async function GET(request: Request) {
+export async function GET() {
   const auth = await requireApiRole("admin");
   if ("error" in auth) return auth.error;
 
-  const format = new URL(request.url).searchParams.get("format") === "xlsx" ? "xlsx" : "csv";
-
-  if (format === "csv") {
-    const quote = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-    const csv = [COLUMNS.join(","), ...exampleRows().map((r) => r.map(quote).join(","))].join("\r\n") + "\r\n";
-    return new Response("﻿" + csv, {
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": 'attachment; filename="holiday_template.csv"',
-      },
-    });
-  }
+  // Template is always Excel (CSV templates were retired; any ?format= is ignored)
 
   const wb = new ExcelJS.Workbook();
   const sheet = wb.addWorksheet("Holidays");

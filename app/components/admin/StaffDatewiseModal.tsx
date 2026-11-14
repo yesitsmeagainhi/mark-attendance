@@ -29,6 +29,7 @@ const statusBadge: Record<string, { bg: string; color: string; label: string; sh
   late: { bg: "#fff4dc", color: "#a86400", label: "Late", short: "LC" },
   absent: { bg: "#ffeded", color: "#c73333", label: "Absent", short: "A" },
   "missed-out": { bg: "#fce7f3", color: "#be185d", label: "Missed Punch-Out", short: "MO" },
+  "missed-in": { bg: "#fce7f3", color: "#be185d", label: "Missed Punch-In", short: "MI" },
   "in-progress": { bg: "#eff6ff", color: "#2563eb", label: "In Progress", short: "IN" },
   leave: { bg: "#eff6ff", color: "#2563eb", label: "Leave", short: "L" },
   "unpaid-leave": { bg: "#ffeded", color: "#c73333", label: "Unpaid Leave", short: "UL" },

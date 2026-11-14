@@ -9,6 +9,7 @@ export type EmployeeRow = {
   workEndTime: string;
   office: string;
   department: string;
+  companyName?: string;
   active: boolean;
   monthlySalary: number;
   flexibleHours: boolean;

@@ -1,3 +1,6 @@
+import type { AppliedRule } from "../rules";
+import type { SalaryLine } from "../pay-rules";
+import { categoryTitle } from "../../app/components/admin/rule-meta";
 import type ExcelJS from "exceljs";
 
 export type ReportSessionInfo = {
@@ -50,6 +53,10 @@ export type ReportEmployee = {
   deduction: number;
   netPay: number;
   dailyDetails: ReportDayDetail[];
+  /** Line-by-line salary explanation (rules engine) */
+  salaryLines?: SalaryLine[];
+  /** Every rule with the value used for this employee */
+  rulesApplied?: AppliedRule[];
 };
 
 const statusLabels: Record<string, string> = {
@@ -57,6 +64,7 @@ const statusLabels: Record<string, string> = {
   late: "Late",
   absent: "Absent",
   "missed-out": "Missed Punch-Out",
+  "missed-in": "Missed Punch-In",
   "in-progress": "In Progress",
   "half-day": "Half Day",
   "short-day": "Short Day",
@@ -73,6 +81,7 @@ const statusColors: Record<string, { bg: string; fg: string }> = {
   late: { bg: "FFF4DC", fg: "A86400" },
   absent: { bg: "FFEDED", fg: "C73333" },
   "missed-out": { bg: "FCE7F3", fg: "BE185D" },
+  "missed-in": { bg: "FCE7F3", fg: "BE185D" },
   "in-progress": { bg: "EFF6FF", fg: "2563EB" },
   "half-day": { bg: "FFF4DC", fg: "A86400" },
   "short-day": { bg: "FFEDED", fg: "C73333" },
@@ -326,6 +335,54 @@ function buildEmployeeSheet(
   sheet.pageSetup.printArea = `A1:F${endRow - 1}`;
 }
 
+/** Second sheet of the single-employee report: salary breakdown + every rule applied. */
+function buildSalaryRulesSheet(sheet: ExcelJS.Worksheet, emp: ReportEmployee, month: string) {
+  sheet.columns = [{ width: 26 }, { width: 70 }, { width: 18 }, { width: 14 }];
+  const header = (row: ExcelJS.Row) => {
+    row.font = { bold: true, size: 10, color: { argb: GRAY } };
+    row.eachCell((c) => {
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_GRAY } };
+      c.border = borderAll();
+    });
+  };
+
+  const title = sheet.addRow([`${emp.name} (${emp.id}) \u2014 salary & rules, ${month}`]);
+  title.font = { bold: true, size: 13, color: { argb: DARK } };
+  sheet.addRow([]);
+
+  const lines = emp.salaryLines ?? [];
+  if (lines.length > 0) {
+    sheet.addRow(["Salary breakdown"]).font = { bold: true, size: 11, color: { argb: DARK } };
+    header(sheet.addRow(["Item", "How it was worked out", "Amount"]));
+    for (const l of lines) {
+      const amount = l.kind === "info" ? "\u2014" : l.amount < 0 ? `-${fmt(-l.amount)}` : l.kind === "extra" ? `+${fmt(l.amount)}` : fmt(l.amount);
+      const row = sheet.addRow([l.label, l.detail, amount]);
+      row.getCell(2).alignment = { wrapText: true, vertical: "top" };
+      row.getCell(3).font = { bold: true, color: { argb: l.amount < 0 ? RED_FG : l.kind === "extra" ? GREEN_FG : DARK } };
+      row.eachCell((c) => { c.border = borderAll(); });
+    }
+    const net = sheet.addRow(["Net pay", "Monthly salary \u2212 deductions + extra pay", fmt(emp.netPay)]);
+    net.font = { bold: true, color: { argb: GREEN_FG } };
+    net.eachCell((c) => { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_BG } }; c.border = borderAll(); });
+    sheet.addRow([]);
+  } else {
+    sheet.addRow([emp.isFlexible ? "Hourly (flexible) employee: paid hours worked \u00D7 hourly rate; day-based salary rules don't apply." : "No monthly salary set for this employee."]);
+    sheet.addRow([]);
+  }
+
+  const rules = emp.rulesApplied ?? [];
+  if (rules.length > 0) {
+    sheet.addRow(["Rules applied"]).font = { bold: true, size: 11, color: { argb: DARK } };
+    header(sheet.addRow(["Section", "Rule", "Value", "Source"]));
+    for (const r of rules) {
+      const value = r.valueType === "boolean" ? (r.value === "true" ? "On" : "Off") : r.value;
+      const row = sheet.addRow([categoryTitle(r.category), r.label, value, r.custom ? "This employee" : "Company default"]);
+      if (r.custom) row.getCell(4).font = { bold: true, color: { argb: "FF6D45E5" } };
+      row.eachCell((c) => { c.border = borderAll(); });
+    }
+  }
+}
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -344,6 +401,7 @@ export async function generateEmployeeExcel(
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet(emp.name);
   buildEmployeeSheet(sheet, emp, month, workingDays);
+  buildSalaryRulesSheet(workbook.addWorksheet("Salary & Rules"), emp, month);
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });

@@ -1,0 +1,199 @@
+/* Employee payslip: plain black-and-white document.
+   Loaded with the component, and it resets the site-wide table/list styles
+   (880px min table width, grey uppercase headers, muted labels). */
+
+.doc {
+  background: #fff;
+  color: #000;
+  border: 1px solid #000;
+  padding: 28px 28px 24px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.head {
+  text-align: center;
+  margin-bottom: 22px;
+}
+.head h2 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: #000;
+}
+.company {
+  font-size: 15px;
+}
+.address {
+  white-space: pre-line;
+}
+
+/* Details: two columns of "Label : value" */
+.details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 32px;
+  padding: 12px 0;
+  border-top: 1px solid #000;
+  border-bottom: 1px solid #000;
+  margin-bottom: 22px;
+}
+.details dl {
+  margin: 0;
+}
+.details .pair {
+  display: grid;
+  grid-template-columns: 124px 1fr;
+  gap: 8px;
+  padding: 3px 0;
+}
+.details dt,
+.details dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+  color: #000;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.details dd {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* Earnings and deductions, side by side (stacked on phones) */
+.columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 22px;
+}
+.table {
+  width: 100%;
+  min-width: 0;
+  border-collapse: collapse;
+  margin: 0;
+  color: #000;
+  border: 1px solid #000;
+}
+.table th,
+.table td {
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #000;
+  background: #fff;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  border: 0;
+  border-top: 1px solid #d0d0d0;
+  vertical-align: top;
+}
+.table th {
+  border-bottom: 1px solid #000;
+  font-size: 15px;
+  font-weight: 700;
+}
+.table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+.note {
+  display: block;
+  font-size: 12px;
+  margin-top: 2px;
+}
+.none {
+  font-style: italic;
+}
+.table .total td {
+  border-top: 1px solid #000;
+  font-weight: 700;
+}
+
+/* Net pay: shown once */
+.netBox {
+  border: 2px solid #000;
+  padding: 14px 16px;
+  text-align: center;
+  margin-bottom: 30px;
+}
+.netLabel {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.netAmount {
+  font-size: 26px;
+  font-weight: 800;
+  margin: 2px 0 4px;
+}
+.netCalc {
+  font-size: 13px;
+}
+.netWords {
+  font-size: 13px;
+  font-style: italic;
+  margin-top: 2px;
+}
+
+.signs {
+  display: flex;
+  justify-content: space-between;
+  gap: 32px;
+  margin-bottom: 26px;
+}
+.signs > div {
+  flex: 1;
+  max-width: 260px;
+  text-align: center;
+}
+.signs i {
+  display: block;
+  border-bottom: 1px solid #000;
+  height: 52px;
+}
+
+.foot {
+  text-align: center;
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .doc {
+    padding: 20px 14px 18px;
+    font-size: 13px;
+  }
+  .head h2 {
+    font-size: 18px;
+  }
+  .company {
+    font-size: 14px;
+  }
+  .details,
+  .columns {
+    grid-template-columns: 1fr;
+  }
+  .details .pair {
+    grid-template-columns: 112px 1fr;
+  }
+  .details dt,
+  .details dd,
+  .table th,
+  .table td {
+    font-size: 13px;
+  }
+  .columns {
+    gap: 14px;
+  }
+  .netAmount {
+    font-size: 22px;
+  }
+  .signs {
+    gap: 16px;
+  }
+}

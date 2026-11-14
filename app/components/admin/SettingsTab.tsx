@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { BranchRow, DepartmentRow } from "./types";
 import BackupSection from "./BackupSection";
+import CompanyDetailsSection from "./CompanyDetailsSection";
 
 export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
   const [branchList, setBranchList] = useState<BranchRow[]>([]);
@@ -119,6 +120,8 @@ export default function SettingsTab({ onSignOut }: { onSignOut: () => void }) {
 
   return (
     <>
+      <CompanyDetailsSection />
+
       <section className="table-card">
         <div className="table-tools">
           <div><h2>Branch locations</h2><p>{branchList.length} total</p></div>

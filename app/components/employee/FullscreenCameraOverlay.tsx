@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
 import type { FaceEvalStatus } from "./attendance-types";
+import LocationHelp from "./LocationHelp";
 
 type FullscreenCameraOverlayProps = {
   modelsLoaded: boolean;
@@ -62,6 +63,8 @@ export default function FullscreenCameraOverlay({
   const [previewFrame, setPreviewFrame] = useState<string | null>(null);
   const [cameraFacingMode, setCameraFacingMode] = useState<"user" | "environment">("user");
   const [cameraError, setCameraError] = useState("");
+  // Location help panel: shown when GPS fails, closable, reopened by "Enable GPS"
+  const [locHelpClosed, setLocHelpClosed] = useState(false);
 
   // Lock body scroll, and block iOS Safari pinch-zoom while the camera is open
   // (Safari ignores user-scalable=no; its gesture events are the reliable way)
@@ -351,13 +354,19 @@ export default function FullscreenCameraOverlay({
                 </span>
               )}
               {locationError && !locationLoading && (
-                <button className="fco-gps-retry" onClick={onRetryGPS}>Enable GPS</button>
+                <button className="fco-gps-retry" onClick={() => { setLocHelpClosed(false); onRetryGPS(); }}>Enable GPS</button>
               )}
               {!location && !locationLoading && !locationError && (
                 <button className="fco-gps-retry" onClick={onRetryGPS}>Enable GPS</button>
               )}
             </div>
           </div>
+
+          {locationError && !locationLoading && !location && !locHelpClosed && (
+            <div style={{ position: "absolute", left: 16, right: 16, top: "calc(76px + env(safe-area-inset-top, 0px))", zIndex: 12, maxWidth: 440, margin: "0 auto" }}>
+              <LocationHelp dark error={locationError} onRetry={onRetryGPS} onClose={() => setLocHelpClosed(true)} />
+            </div>
+          )}
 
           {isOutsideGeoFence && geoFenceInfo && (
             <div className="fco-geofence-alert">

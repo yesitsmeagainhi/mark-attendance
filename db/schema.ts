@@ -13,6 +13,8 @@ export const employees = sqliteTable("employees", {
   workEndTime: text("work_end_time").notNull().default("18:00"),
   office: text("office").notNull().default("Bhayandar Office"),
   department: text("department").notNull().default(""),
+  // Company this employee works for; empty = default company (Settings → Company details)
+  companyName: text("company_name").notNull().default(""),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   monthlySalary: integer("monthly_salary").notNull().default(0),
   hourlyRate: integer("hourly_rate").notNull().default(0),
@@ -190,4 +192,16 @@ export const shifts = sqliteTable("shifts", {
   startTime: text("start_time").notNull(),
   endTime: text("end_time").notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+/** Published monthly payslips: a frozen copy of each employee's salary for the month. */
+export const payslips = sqliteTable("payslips", {
+  id: text("id").primaryKey(),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  month: text("month").notNull(),
+  /** JSON PayslipData (see lib/payslips.ts) */
+  data: text("data").notNull(),
+  netPay: integer("net_pay").notNull().default(0),
+  publishedAt: text("published_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  publishedBy: text("published_by").notNull(),
 });

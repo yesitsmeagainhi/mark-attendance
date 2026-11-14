@@ -3,6 +3,8 @@
 import { useState } from "react";
 import type { EmployeeRow, BranchRow, DepartmentRow } from "./types";
 import ShiftPicker from "./ShiftPicker";
+import AdminPage from "./AdminPage";
+import CompanyNameField from "./CompanyNameField";
 
 export default function EditEmployeeModal({
   employee,
@@ -28,6 +30,7 @@ export default function EditEmployeeModal({
     shiftId: employee.shiftId || "",
     assignedBranchIds: employee.assignedBranchIds || [],
     department: employee.department || "",
+    companyName: employee.companyName || "",
     monthlySalary: String(employee.monthlySalary || ""),
     hourlyRate: String((employee as { hourlyRate?: number }).hourlyRate || ""),
     flexibleHours: employee.flexibleHours ?? false,
@@ -67,6 +70,7 @@ export default function EditEmployeeModal({
         shiftId: form.shiftId || null,
         assignedBranchIds: form.assignedBranchIds,
         department: form.department.trim(),
+        companyName: form.companyName.trim(),
         monthlySalary: form.flexibleHours ? 0 : (parseInt(form.monthlySalary, 10) || 0),
         hourlyRate: form.flexibleHours ? (parseInt(form.hourlyRate, 10) || 0) : 0,
         flexibleHours: form.flexibleHours,
@@ -104,12 +108,7 @@ export default function EditEmployeeModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Edit employee</h2>
-          <button className="modal-close" onClick={onClose}>&times;</button>
-        </div>
+    <AdminPage title={`Edit ${employee.name}`} subtitle={employee.id} backLabel="Back to Staff" onBack={onClose}>
         <form className="modal-form" onSubmit={handleSubmit}>
           <div style={{ background: "#f8f9fb", borderRadius: 10, padding: "10px 14px", marginBottom: 4, fontSize: 15, color: "#666" }}>
             Employee ID: <b style={{ color: "#333" }}>{employee.id}</b>
@@ -131,6 +130,7 @@ export default function EditEmployeeModal({
               ))}
             </select>
           </label>
+          <CompanyNameField value={form.companyName} onChange={(v) => setForm({ ...form, companyName: v })} />
           <label>
             <span>Email address</span>
             <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="priya@company.com" required />
@@ -251,9 +251,10 @@ export default function EditEmployeeModal({
           </label>
           {error && <p className="form-message">{error}</p>}
           {success && <p className="form-message success-text">{success}</p>}
-          <button className="primary" type="submit" disabled={saving}>{saving ? "Saving..." : "Update employee"}</button>
+          <div className="sticky-save-bar">
+            <button className="primary" type="submit" disabled={saving} style={{ margin: 0 }}>{saving ? "Saving..." : "Update employee"}</button>
+          </div>
         </form>
-      </div>
-    </div>
+    </AdminPage>
   );
 }

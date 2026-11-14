@@ -13,15 +13,22 @@ type MissPunchRequest = {
   createdAt: string;
 };
 
-export type MissPunchPrefill = { date: string; punchType: "IN" | "OUT" | "BOTH" };
+export type MissPunchPrefill = {
+  date: string;
+  punchType: "IN" | "OUT" | "BOTH";
+  /** HH:MM to start the time field with */
+  time?: string;
+  /** Opened from the "forgot to punch in?" reminder: carry on to punch out after submitting */
+  continueToPunch?: boolean;
+};
 
-export default function MissPunchTab({ prefill }: { prefill?: MissPunchPrefill | null } = {}) {
+export default function MissPunchTab({ prefill, onSubmitted }: { prefill?: MissPunchPrefill | null; onSubmitted?: () => void } = {}) {
   const [requests, setRequests] = useState<MissPunchRequest[]>([]);
   const [loading, setLoading] = useState(true);
   // Opened from a missed day in History: start with that day filled in
   const [date, setDate] = useState(prefill?.date ?? "");
   const [punchType, setPunchType] = useState<"IN" | "OUT" | "BOTH">(prefill?.punchType ?? "IN");
-  const [requestedTime, setRequestedTime] = useState("");
+  const [requestedTime, setRequestedTime] = useState(prefill?.time ?? "");
   const [requestedTimeOut, setRequestedTimeOut] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -73,6 +80,7 @@ export default function MissPunchTab({ prefill }: { prefill?: MissPunchPrefill |
       setRequestedTimeOut("");
       setReason("");
       fetchRequests();
+      onSubmitted?.();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not connect to server.");
       setMessageType("error");
@@ -108,6 +116,11 @@ export default function MissPunchTab({ prefill }: { prefill?: MissPunchPrefill |
     <>
       <div className="request-form-card">
         <h3>Submit Miss Punch Request</h3>
+        {prefill?.continueToPunch && (
+          <p style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", borderRadius: 10, padding: "10px 12px", fontSize: 14, lineHeight: 1.5, margin: "0 0 14px" }}>
+            Check the time you actually started and add a reason. After you submit, the camera opens so you can <b>punch out</b>.
+          </p>
+        )}
         <form onSubmit={handleSubmit}>
           <div className="form-grid">
             <label>

@@ -372,9 +372,7 @@ function HolidayImportModal({ onClose, onImported }: { onClose: () => void; onIm
                 <span style={{ display: "block", marginTop: 6 }}>List employees by ID, email or name, separated by <b>;</b>. The Excel template has an Employees sheet with everyone&apos;s ID.</span>
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <a className="secondary" href="/api/holidays/bulk?format=xlsx" download style={{ fontSize: 15, padding: "6px 14px", textDecoration: "none" }}>Download Excel template</a>
-                <a className="secondary" href="/api/holidays/bulk?format=csv" download style={{ fontSize: 15, padding: "6px 14px", textDecoration: "none" }}>Download CSV template</a>
-              </div>
+                <a className="secondary" href="/api/holidays/bulk?format=xlsx" download style={{ fontSize: 15, padding: "6px 14px", textDecoration: "none" }}>Download Excel template</a>              </div>
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <span style={{ fontSize: 15, fontWeight: 600 }}>Choose file (.csv or .xlsx)</span>
                 <input type="file" accept=".csv,.xlsx" onChange={handleFile} />

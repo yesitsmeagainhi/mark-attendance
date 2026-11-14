@@ -26,6 +26,7 @@ type HistoryRecord = {
   sessions?: SessionInfo[];
   holidayName?: string;
   missedPunchOut?: boolean;
+  missedPunchIn?: boolean;
 };
 
 type HistoryData = {
@@ -52,6 +53,7 @@ type DayData = {
   sessions?: SessionInfo[];
   holidayName?: string;
   missedPunchOut?: boolean;
+  missedPunchIn?: boolean;
 };
 
 type TimesheetData = {
@@ -263,11 +265,16 @@ export default function HistoryTab({ onRequestMissPunch }: { onRequestMissPunch?
                         In {formatTimeIST(cell.punchIn)}<br />No punch-out
                       </div>
                     )}
+                    {cell.missedPunchIn && cell.punchOut && (
+                      <div className="day-times" style={{ color: "#be185d" }} title="Punched out but no punch-in, so this day is not counted until a miss punch-in is approved">
+                        No punch-in<br />Out {formatTimeIST(cell.punchOut)}
+                      </div>
+                    )}
                     {cell.status === "leave" && <div className="day-times">Leave</div>}
                     {cell.status === "leave" && cell.punchIn && renderPunchTimes()}
                     {cell.status === "holiday" && <div className="day-times" title={cell.holidayName}>{cell.holidayName || "Holiday"}{!tsData?.isFlexible && <><br />Paid</>}</div>}
                     {cell.status === "uh" && <div className="day-times">UH</div>}
-                    {cell.status === "absent" && <div className="day-times">Absent</div>}
+                    {cell.status === "absent" && !cell.missedPunchIn && <div className="day-times">Absent</div>}
                   </div>
                 );
               })}
@@ -428,10 +435,13 @@ export default function HistoryTab({ onRequestMissPunch }: { onRequestMissPunch?
                         {r.missedPunchOut && (
                           <small style={{ display: "block", color: "#be185d", fontSize: 13, marginTop: 2 }}>Missed punch-out</small>
                         )}
-                        {onRequestMissPunch && (r.missedPunchOut || (r.status === "Absent" && !r.punchInTime)) && (
+                        {r.missedPunchIn && (
+                          <small style={{ display: "block", color: "#be185d", fontSize: 13, marginTop: 2 }}>Missed punch-in</small>
+                        )}
+                        {onRequestMissPunch && (r.missedPunchOut || r.missedPunchIn || (r.status === "Absent" && !r.punchInTime)) && (
                           <button
                             type="button"
-                            onClick={() => onRequestMissPunch(r.date, r.missedPunchOut ? "OUT" : "BOTH")}
+                            onClick={() => onRequestMissPunch(r.date, r.missedPunchOut ? "OUT" : r.missedPunchIn ? "IN" : "BOTH")}
                             style={{ display: "block", marginTop: 6, border: "1px solid #fdba74", background: "#fff7ed", color: "#c2410c", borderRadius: 8, padding: "4px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
                           >
                             Request miss-punch

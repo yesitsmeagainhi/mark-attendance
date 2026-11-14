@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { timeToMinutes, formatTimeIST, formatDuration, getIST, getGreeting, getGraceStatus } from "../../../lib/time-utils";
 import type { UseAttendanceCameraReturn } from "../../hooks/useAttendanceCamera";
+import PendingPunchNotice, { PendingTag } from "./PendingPunchNotice";
+import LocationHelp from "./LocationHelp";
 
 export default function AttendanceTab({ employeeId, displayName, camera }: { employeeId: string; displayName: string; camera: UseAttendanceCameraReturn }) {
   const {
@@ -79,6 +81,8 @@ export default function AttendanceTab({ employeeId, displayName, camera }: { emp
         </div>
       </section>
 
+      <div style={{ padding: "0 16px" }}><PendingPunchNotice todayStatus={todayStatus} /></div>
+
       {isFlexible ? (
         <section style={{ padding: "0 16px 12px" }}>
           {sessions.length === 0 ? (
@@ -117,7 +121,7 @@ export default function AttendanceTab({ employeeId, displayName, camera }: { emp
             <div className="chip-info">
               <small>Punch In</small>
               {hasPunchedIn && todayStatus?.punchIn ? (
-                <b>{formatTimeIST(todayStatus.punchIn.time)}</b>
+                <b>{formatTimeIST(todayStatus.punchIn.time)}{todayStatus.punchIn.pending && <PendingTag />}</b>
               ) : (
                 <b className="chip-pending">Pending</b>
               )}
@@ -201,8 +205,8 @@ export default function AttendanceTab({ employeeId, displayName, camera }: { emp
                 : nextPunchType === "IN" ? "Open Camera to Punch In" : "Open Camera to Punch Out"}
             </button>
 
-            {locationError && !locationLoading && (
-              <button className="secondary" onClick={acquireLocation} style={{ marginTop: 4, width: "100%", fontSize: 14 }}>Retry GPS</button>
+            {locationError && !locationLoading && !location && (
+              <div style={{ marginTop: 8 }}><LocationHelp error={locationError} onRetry={acquireLocation} /></div>
             )}
             {message && <p className={`form-message ${!message.includes("Could not") && !message.includes("Waiting") && !message.includes("not within") ? "success-text" : ""}`} style={{ margin: "6px 0 0", fontSize: 15 }}>{message}</p>}
           </article>
