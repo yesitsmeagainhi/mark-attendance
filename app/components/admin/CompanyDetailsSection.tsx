@@ -39,7 +39,7 @@ export default function CompanyDetailsSection() {
       <form onSubmit={save} className="modal-form" style={{ padding: "0 22px 18px", maxWidth: 560 }}>
         <label>
           <span>Company name</span>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. ASM Educational Solutions" required maxLength={120} />
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. ABS Educational Solutions" required maxLength={120} />
         </label>
         <label>
           <span>Address</span>

@@ -25,6 +25,7 @@ export async function GET(request: Request) {
       office: employees.office,
       department: employees.department,
       companyName: employees.companyName,
+      employeeAddress: employees.employeeAddress,
       active: employees.active,
       monthlySalary: employees.monthlySalary,
       hourlyRate: employees.hourlyRate,
@@ -76,6 +77,7 @@ export async function PATCH(request: Request) {
     office?: string;
     department?: string;
     companyName?: string;
+    employeeAddress?: string;
     monthlySalary?: number;
     hourlyRate?: number;
     active?: boolean;
@@ -133,6 +135,7 @@ export async function PATCH(request: Request) {
   if (body.office !== undefined) updates.office = body.office.trim();
   if (body.department !== undefined) updates.department = body.department.trim();
   if (body.companyName !== undefined) updates.companyName = body.companyName.trim().slice(0, 120);
+  if (body.employeeAddress !== undefined) updates.employeeAddress = body.employeeAddress.trim().slice(0, 400);
   if (body.monthlySalary !== undefined) updates.monthlySalary = Math.max(0, Math.round(Number(body.monthlySalary) || 0));
   if (body.hourlyRate !== undefined) updates.hourlyRate = Math.max(0, Math.round(Number(body.hourlyRate) || 0));
   if (body.active !== undefined) updates.active = body.active;
@@ -200,6 +203,7 @@ export async function POST(request: Request) {
     office?: string;
     department?: string;
     companyName?: string;
+    employeeAddress?: string;
     flexibleHours?: boolean;
     assignedBranchIds?: string[];
     ruleOverrides?: { ruleId: string; value: string }[];
@@ -225,7 +229,7 @@ export async function POST(request: Request) {
   const department = body.department?.trim() || "";
   const companyName = (body.companyName?.trim() || "").slice(0, 120);
   const flexibleHours = body.flexibleHours === true;
-
+  const employeeAddress = (body.employeeAddress?.trim() || "").slice(0, 400);
   if (!name) {
     return Response.json({ error: "Name is required." }, { status: 400 });
   }
@@ -305,6 +309,7 @@ export async function POST(request: Request) {
       office: resolvedOffice,
       department,
       companyName,
+      employeeAddress,
       flexibleHours,
       shiftId,
       monthlySalary: flexibleHours ? 0 : Math.max(0, Math.round(Number(body.monthlySalary) || 0)),

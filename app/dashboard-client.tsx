@@ -326,7 +326,7 @@ export default function DashboardClient({ view, employeeId, displayName, role }:
       )}
 
       {view === "employee" && !camera.cameraOpen && (
-        <PunchResultDialog saving={camera.saving} result={camera.punchResult} geoAlert={camera.geoAlert} onClose={camera.dismissPunchResult} />
+        <PunchResultDialog saving={camera.saving} step={camera.savingStep} result={camera.punchResult} geoAlert={camera.geoAlert} onClose={camera.dismissPunchResult} />
       )}
 
       {view === "employee" && camera.cameraOpen && (

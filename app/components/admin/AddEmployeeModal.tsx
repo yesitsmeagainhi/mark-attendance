@@ -27,6 +27,7 @@ const emptyForm = {
   assignedBranchIds: [] as string[],
   department: "",
   companyName: "",
+  employeeAddress: "",
   monthlySalary: "",
   hourlyRate: "",
   flexibleHours: false,
@@ -97,6 +98,7 @@ export default function AddEmployeeModal({
           assignedBranchIds: form.assignedBranchIds,
           department: form.department.trim(),
           companyName: form.companyName.trim(),
+          employeeAddress: form.employeeAddress.trim(),
           role: form.role,
           monthlySalary: form.flexibleHours ? 0 : (parseInt(form.monthlySalary, 10) || 0),
           hourlyRate: form.flexibleHours ? (parseInt(form.hourlyRate, 10) || 0) : 0,
@@ -148,6 +150,10 @@ export default function AddEmployeeModal({
             </select>
           </label>
           <CompanyNameField value={form.companyName} onChange={(v) => setForm({ ...form, companyName: v })} />
+          <label>
+            <span>Employee Address</span>
+            <textarea value={form.employeeAddress} onChange={(e) => setForm({ ...form, employeeAddress: e.target.value })} placeholder="Enter employee's address" maxLength={400} />
+          </label>
           <label>
             <span>Email address</span>
             <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="priya@company.com" required autoComplete="new-email" />

@@ -19,6 +19,8 @@ export type UseAttendanceCameraReturn = {
   openCamera: () => void;
   closeCamera: () => void;
   saving: boolean;
+  /** What the "saving" box is waiting on: a GPS reading, or the upload itself */
+  savingStep: "location" | "upload";
   photo: string | null;
   message: string;
   todayStatus: TodayStatus | null;
@@ -49,7 +51,9 @@ export type UseAttendanceCameraReturn = {
   geoFenceInfo: { branchName: string; distance: number; allowedRadius: number } | null;
 };
 
-const STALE_GPS_MS = 30_000;
+// The server rejects readings older than 60s. Up to 45s is still safe to send
+// (the upload takes a second or two); only older readings are refreshed first.
+const STALE_GPS_MS = 45_000;
 
 type GpsFix = { latitude: number; longitude: number; accuracy: number; timestamp: number };
 
@@ -71,18 +75,39 @@ function toFix(p: GeolocationPosition): GpsFix {
   };
 }
 
-/** A recent GPS reading; falls back to WiFi/cell position, null if both fail. */
+/**
+ * A recent position, quickly. GPS and WiFi/cell are asked at the same time
+ * (they used to be asked one after the other, 8s + 8s): a GPS reading wins as
+ * soon as it arrives; if only WiFi/cell has answered after 2.5s, that's used.
+ * Gives up after 5s (null), and the caller sends the reading it already has.
+ */
 function getFreshPosition(): Promise<GpsFix | null> {
   return new Promise((resolve) => {
     if (!navigator.geolocation) return resolve(null);
+    const started = Date.now();
+    let done = false;
+    let coarse: GpsFix | null = null;
+    const finish = (fix: GpsFix | null) => {
+      if (done) return;
+      done = true;
+      clearTimeout(coarseTimer);
+      clearTimeout(giveUp);
+      resolve(fix);
+    };
+    const coarseTimer = setTimeout(() => { if (coarse) finish(coarse); }, 2500);
+    const giveUp = setTimeout(() => finish(coarse), 5000);
     navigator.geolocation.getCurrentPosition(
-      (p) => resolve(toFix(p)),
-      () => navigator.geolocation.getCurrentPosition(
-        (p) => resolve(toFix(p)),
-        () => resolve(null),
-        { enableHighAccuracy: false, timeout: 8000, maximumAge: 15000 },
-      ),
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 },
+      (p) => finish(toFix(p)),
+      () => { if (coarse) finish(coarse); },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 },
+    );
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        coarse = toFix(p);
+        if (Date.now() - started >= 2500) finish(coarse);
+      },
+      () => undefined,
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 15000 },
     );
   });
 }
@@ -91,6 +116,7 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [photo, setPhoto] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [savingStep, setSavingStep] = useState<"location" | "upload">("upload");
   const [message, setMessage] = useState("");
   const [todayStatus, setTodayStatus] = useState<TodayStatus | null>(null);
   const [elapsed, setElapsed] = useState("");
@@ -99,6 +125,9 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
   const [location, setLocation] = useState<{ latitude: number; longitude: number; accuracy: number; timestamp: number } | null>(null);
   const [locationError, setLocationError] = useState("");
   const [locationLoading, setLocationLoading] = useState(false);
+  // Latest reading, readable inside an in-flight save (the state value there is a stale closure)
+  const locationRef = useRef(location);
+  useEffect(() => { locationRef.current = location; }, [location]);
 
   // Face detection
   const [modelsLoaded, setModelsLoaded] = useState(false);
@@ -232,11 +261,13 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
     );
   }, [enabled]);
 
-  // While the camera is open keep the reading fresh, so the fix sent with the
-  // punch is seconds old instead of from when the camera opened (the server
-  // rejects readings older than 60s, and face detection can take a while).
+  // While the camera is open, and while the punch is being saved, keep the
+  // reading fresh, so the fix sent with the punch is seconds old instead of from
+  // when the camera opened (the server rejects readings older than 60s, and
+  // face detection can take a while).
+  const keepGpsFresh = cameraOpen || saving;
   useEffect(() => {
-    if (!enabled || !cameraOpen || !navigator.geolocation) return;
+    if (!enabled || !keepGpsFresh || !navigator.geolocation) return;
     const id = navigator.geolocation.watchPosition(
       (p) => {
         const fix = toFix(p);
@@ -248,7 +279,7 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 },
     );
     return () => navigator.geolocation.clearWatch(id);
-  }, [enabled, cameraOpen]);
+  }, [enabled, keepGpsFresh]);
 
   // Auto-acquire GPS on mount
   useEffect(() => {
@@ -350,16 +381,22 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
       // The reading taken when the camera opened can be a minute old by the time
       // the selfie is confirmed (and the browser may have handed back a cached one),
       // which the server rejects as expired. Take a fresh reading if it's stale.
-      let fix = location;
+      let fix = locationRef.current ?? location;
       if (Date.now() - fix.timestamp > STALE_GPS_MS) {
+        setSavingStep("location");
         setMessage("Updating GPS location...");
         const fresh = await getFreshPosition();
-        if (fresh) {
+        // The live watch may have delivered a newer reading meanwhile
+        const latest = locationRef.current;
+        if (fresh && (!latest || fresh.timestamp >= latest.timestamp)) {
           fix = fresh;
           setLocation(fresh);
+        } else if (latest && latest.timestamp > fix.timestamp) {
+          fix = latest;
         }
         setMessage("");
       }
+      setSavingStep("upload");
       const blob = await (await fetch(frame)).blob();
       const form = new FormData();
       form.append("photo", blob, "selfie.jpg");
@@ -432,7 +469,7 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
 
   return {
     cameraOpen, openCamera, closeCamera,
-    saving, photo, message, setPhoto, setMessage,
+    saving, savingStep, photo, message, setPhoto, setMessage,
     todayStatus, fetchStatus,
     location, locationError, locationLoading, acquireLocation,
     modelsLoaded, modelError,

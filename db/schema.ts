@@ -15,6 +15,7 @@ export const employees = sqliteTable("employees", {
   department: text("department").notNull().default(""),
   // Company this employee works for; empty = default company (Settings → Company details)
   companyName: text("company_name").notNull().default(""),
+  employeeAddress: text("employee_addr").notNull().default(""),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   monthlySalary: integer("monthly_salary").notNull().default(0),
   hourlyRate: integer("hourly_rate").notNull().default(0),

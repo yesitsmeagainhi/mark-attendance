@@ -290,15 +290,15 @@ export default function HistoryTab({ onRequestMissPunch }: { onRequestMissPunch?
                   <div className="emp-status-header"><b>Present</b></div>
                   <div className="emp-status-detail"><strong>{tsData.presentDays}</strong><span className="pending-text">days</span></div>
                 </article>
-                {(tsData.halfDays ?? 0) > 0 && (
+                {/* {(tsData.halfDays ?? 0) > 0 && (
                   <article className="emp-status-card">
                     <div className="emp-status-header"><b>Half Day</b></div>
                     <div className="emp-status-detail"><strong>{tsData.halfDays}</strong><span className="pending-text">days</span></div>
                   </article>
-                )}
-                <article>
-                  <div><b>Half Days</b></div>
-                  <div><strong>{tsData.halfDays}</strong><span className="pending-text">days</span></div>
+                )} */}
+                <article className="emp-status-card">
+                  <div className="emp-status-header"><b>Half Days</b></div>
+                  <div className="emp-status-detail"><strong>{tsData.halfDays}</strong><span className="pending-text">days</span></div>
                 </article>
                 <article className="emp-status-card">
                   <div className="emp-status-header"><b>Absent</b></div>

@@ -7,8 +7,10 @@ import type { GeoAlert, PunchResult } from "../../hooks/useAttendanceCamera";
  * Shown on whichever tab the employee punched from (Home or Attendance), so a
  * rejected punch can't go unnoticed: while saving, then success or failure.
  */
-export default function PunchResultDialog({ saving, result, geoAlert, onClose }: {
+export default function PunchResultDialog({ saving, step = "upload", result, geoAlert, onClose }: {
   saving: boolean;
+  /** "location" while a fresh GPS reading is fetched first, "upload" while the punch is sent */
+  step?: "location" | "upload";
   result: PunchResult | null;
   geoAlert: GeoAlert | null;
   onClose: () => void;
@@ -18,7 +20,7 @@ export default function PunchResultDialog({ saving, result, geoAlert, onClose }:
       <div className="geo-alert-overlay">
         <div className="geo-alert-card">
           <div className="geo-alert-icon" style={{ color: "#6d45e5" }}>&#8987;</div>
-          <h3>Saving your attendance...</h3>
+          <h3>{step === "location" ? "Checking your location..." : "Saving your attendance..."}</h3>
           <p className="geo-alert-sub">Please don&apos;t close the app until this finishes.</p>
         </div>
       </div>
