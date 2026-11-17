@@ -18,8 +18,12 @@ type DayDetail = {
   breakMinutes: number | null;
   status: string;
   overtimeMinutes?: number;
+  /** Approved leave days: sick / casual / earned */
+  leaveType?: string;
   sessions?: SessionInfo[];
 };
+
+const LEAVE_TYPE_LABEL: Record<string, string> = { sick: "Sick", casual: "Casual", earned: "Earned" };
 
 type ReportRow = {
   id: string;
@@ -51,6 +55,9 @@ type ReportRow = {
   overtimePay?: number;
   lateFine?: number;
   unpaidLeaveDays?: number;
+  paidLeaveDays?: number;
+  /** Every approved leave day this month, paid or not */
+  leaveList?: { date: string; type: string; paid: boolean }[];
   perDayRate: number;
   deduction: number;
   netPay: number;
@@ -398,6 +405,31 @@ export default function ReportsTab() {
             ))}
           </div>
 
+          {(selectedEmp.leaveList?.length ?? 0) > 0 && (
+            <div style={{ border: "1px solid var(--line)", borderRadius: 12, padding: "12px 14px", marginBottom: 16 }}>
+              <b style={{ fontSize: 15 }}>
+                Approved leave &middot; {selectedEmp.leaveList!.length} day{selectedEmp.leaveList!.length === 1 ? "" : "s"}
+              </b>
+              <span style={{ color: "#667085", fontSize: 14 }}>
+                {" "}({selectedEmp.leaveList!.filter((l) => l.paid).length} paid, {selectedEmp.leaveList!.filter((l) => !l.paid).length} unpaid)
+              </span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                {selectedEmp.leaveList!.map((l) => (
+                  <span
+                    key={l.date}
+                    title={l.paid ? "Paid leave" : "Unpaid: deducted from salary"}
+                    style={{
+                      fontSize: 13, fontWeight: 600, borderRadius: 99, padding: "3px 10px",
+                      background: l.paid ? "#eff6ff" : "#ffeded", color: l.paid ? "#2563eb" : "#c73333",
+                    }}
+                  >
+                    {fmtDate(l.date)} &middot; {LEAVE_TYPE_LABEL[l.type] ?? l.type} &middot; {l.paid ? "Paid" : "Unpaid"}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           <SalaryAndRules emp={selectedEmp} />
 
           {/* Daily breakdown table */}
@@ -438,7 +470,7 @@ export default function ReportsTab() {
                         <span style={{
                           fontSize: 12, padding: "4px 10px", borderRadius: 99, fontWeight: 600,
                           background: badge.bg, color: badge.color,
-                        }}>{badge.label}</span>
+                        }}>{badge.label}{day.leaveType ? ` \u00B7 ${LEAVE_TYPE_LABEL[day.leaveType] ?? day.leaveType}` : ""}</span>
                       </td>
                     </tr>
                   );
@@ -498,7 +530,12 @@ export default function ReportsTab() {
                       <div style={{ fontSize: 12, color: "#c73333", marginTop: 2 }}>= {r.lateAbsentDays}d ded.</div>
                     )}
                   </td>
-                  <td>{r.leaveDays}</td>
+                  <td>
+                    {r.leaveDays}
+                    {r.unpaidLeaveDays ? (
+                      <div style={{ fontSize: 12, color: "#c73333", marginTop: 2 }}>{r.unpaidLeaveDays} unpaid</div>
+                    ) : null}
+                  </td>
                   <td>{r.uhDays}</td>
                   <td style={{ fontWeight: 600, color: "#6d45e5" }}>{fmtDur(r.totalWorkedMinutes)}</td>
                   <td>

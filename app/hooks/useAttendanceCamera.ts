@@ -51,9 +51,10 @@ export type UseAttendanceCameraReturn = {
   geoFenceInfo: { branchName: string; distance: number; allowedRadius: number } | null;
 };
 
-// The server rejects readings older than 60s. Up to 45s is still safe to send
-// (the upload takes a second or two); only older readings are refreshed first.
-const STALE_GPS_MS = 45_000;
+// The server rejects readings older than 60s. The age is measured on the phone
+// just before the upload starts, so up to 50s is still safe to send; only older
+// readings are refreshed first (rare now: see the background top-up below).
+const STALE_GPS_MS = 50_000;
 
 type GpsFix = { latitude: number; longitude: number; accuracy: number; timestamp: number };
 
@@ -278,7 +279,26 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
       () => { /* keep the last good reading; acquireLocation reports errors */ },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 },
     );
-    return () => navigator.geolocation.clearWatch(id);
+    // A phone that isn't moving often stops sending watch updates, so the
+    // reading went stale and saving had to wait for a new one. Top it up in
+    // the background instead, so it's always recent when the selfie is taken.
+    const topUp = setInterval(() => {
+      const cur = locationRef.current;
+      if (cur && Date.now() - cur.timestamp < 20_000) return;
+      navigator.geolocation.getCurrentPosition(
+        (p) => {
+          const fix = toFix(p);
+          setLocation((prev) => (prev && prev.timestamp >= fix.timestamp ? prev : fix));
+          setLocationLoading(false);
+        },
+        () => undefined,
+        { enableHighAccuracy: true, maximumAge: 10_000, timeout: 15_000 },
+      );
+    }, 10_000);
+    return () => {
+      navigator.geolocation.clearWatch(id);
+      clearInterval(topUp);
+    };
   }, [enabled, keepGpsFresh]);
 
   // Auto-acquire GPS on mount
@@ -454,8 +474,9 @@ export function useAttendanceCamera({ enabled = true }: { enabled?: boolean } = 
       // the 10-30s face-detection window is plenty for GPS to arrive.
       setLocation(null);
       acquireLocation();
-      // Await the authoritative status refresh before re-enabling the button
-      await fetchStatus();
+      // The optimistic update above already flipped the button, so refresh the
+      // real status in the background instead of keeping "Saving..." open for it
+      void fetchStatus();
     } catch (error) {
       const text = error instanceof TypeError
         ? "No internet connection, so your punch was not saved. Check your connection and try again."

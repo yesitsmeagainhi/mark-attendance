@@ -2,7 +2,8 @@
  * Automatic payslip schedule.
  *
  *  - On the 1st of each month, last month's payslips are published.
- *  - On the 15th, those payslips are withdrawn again.
+ *  - On the withdrawal day (15th unless the admin changes it), those payslips
+ *    are withdrawn again. Withdrawal day 0 = never withdraw automatically.
  *
  * Each step runs once per month (remembered in app_settings), so an admin's
  * manual Publish / Re-publish / Withdraw is never undone by the schedule.
@@ -18,7 +19,16 @@ import { monthLabel, payslipMonthStatus, publishPayslips, unpublishPayslips } fr
 const AUTO_KEY = "payslip_auto_enabled";
 const PUBLISHED = "payslip_auto_published:"; // + YYYY-MM → ISO time
 const WITHDRAWN = "payslip_auto_withdrawn:"; // + YYYY-MM → ISO time
-export const WITHDRAW_DAY = 15;
+const WITHDRAW_DAY_KEY = "payslip_withdraw_day";
+/** Default day of the month payslips are withdrawn on */
+export const DEFAULT_WITHDRAW_DAY = 15;
+/** Allowed withdrawal days: 2nd–28th (every month has a 28th), or 0 = never */
+export const MIN_WITHDRAW_DAY = 2;
+export const MAX_WITHDRAW_DAY = 28;
+
+export function isValidWithdrawDay(n: unknown): n is number {
+  return typeof n === "number" && Number.isInteger(n) && (n === 0 || (n >= MIN_WITHDRAW_DAY && n <= MAX_WITHDRAW_DAY));
+}
 
 function setSetting(key: string, value: string) {
   const now = new Date().toISOString();
@@ -33,6 +43,25 @@ export function isAutoPayslipsEnabled(): boolean {
 
 export function setAutoPayslipsEnabled(enabled: boolean) {
   setSetting(AUTO_KEY, enabled ? "true" : "false");
+}
+
+/** Day of the month the automatic withdrawal happens; 0 = never withdraw automatically. */
+export function getWithdrawDay(): number {
+  const row = getDb().select().from(appSettings).where(inArray(appSettings.key, [WITHDRAW_DAY_KEY])).get();
+  const n = row ? Number(row.value) : DEFAULT_WITHDRAW_DAY;
+  return isValidWithdrawDay(n) ? n : DEFAULT_WITHDRAW_DAY;
+}
+
+export function setWithdrawDay(day: number) {
+  if (!isValidWithdrawDay(day)) throw new Error("Invalid withdrawal day");
+  setSetting(WITHDRAW_DAY_KEY, String(day));
+}
+
+/** "15th", "2nd", "23rd" */
+export function ordinal(n: number): string {
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? "th" : n % 10 === 1 ? "st" : n % 10 === 2 ? "nd" : n % 10 === 3 ? "rd" : "th";
+  return `${n}${suffix}`;
 }
 
 /** Today's date in India as { month: "YYYY-MM", day } */
@@ -51,10 +80,14 @@ function nextMonth(month: string): string {
   return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
 }
 
-/** When a month's payslips are (or were) shown automatically. */
-export function autoWindow(month: string) {
+/** When a month's payslips are (or were) shown automatically. withdrawOn is null when they are never withdrawn. */
+export function autoWindow(month: string, withdrawDay = getWithdrawDay()) {
   const after = nextMonth(month);
-  return { publishOn: `${after}-01`, withdrawOn: `${after}-${String(WITHDRAW_DAY).padStart(2, "0")}` };
+  return {
+    withdrawDay,
+    publishOn: `${after}-01`,
+    withdrawOn: withdrawDay ? `${after}-${String(withdrawDay).padStart(2, "0")}` : null,
+  };
 }
 
 /** What the schedule has already done for a month. */
@@ -73,10 +106,12 @@ export function runPayslipSchedule(now = new Date()): { published?: string; with
   const { month: current, day } = todayIST(now);
   const last = previousMonth(current);
   const stamp = now.toISOString();
+  const withdrawDay = getWithdrawDay();
+  const until = withdrawDay ? ` (shown until the ${ordinal(withdrawDay)})` : "";
 
-  // 1st–14th: publish last month (once)
-  if (day < WITHDRAW_DAY && !autoMonthState(last).autoPublishedAt) {
-    // An admin may already have published it by hand; it still gets withdrawn on the 15th
+  // From the 1st until the day before the withdrawal day: publish last month (once)
+  if ((withdrawDay === 0 || day < withdrawDay) && !autoMonthState(last).autoPublishedAt) {
+    // An admin may already have published it by hand; it still gets withdrawn on the withdrawal day
     const already = payslipMonthStatus(last).published;
     const count = already ? payslipMonthStatus(last).count : publishPayslips(last, "system");
     setSetting(PUBLISHED + last, stamp);
@@ -88,17 +123,20 @@ export function runPayslipSchedule(now = new Date()): { published?: string; with
         performedByName: "Automatic",
         targetId: last,
         targetName: monthLabel(last),
-        description: `${monthLabel(last)} payslips published automatically for ${count} employees (shown until the ${WITHDRAW_DAY}th)`,
+        description: `${monthLabel(last)} payslips published automatically for ${count} employees${until}`,
         metadata: { month: last, count, auto: true },
       });
     }
   }
 
-  // From the 15th: withdraw every auto-published month that is due and not yet withdrawn (once)
+  // Never withdrawn automatically
+  if (withdrawDay === 0) return result;
+
+  // From the withdrawal day: withdraw every auto-published month that is due and not yet withdrawn (once)
   const marked = getDb().select().from(appSettings).where(like(appSettings.key, `${PUBLISHED}%`)).all();
   for (const row of marked) {
     const month = row.key.slice(PUBLISHED.length);
-    const due = month < last || (month === last && day >= WITHDRAW_DAY);
+    const due = month < last || (month === last && day >= withdrawDay);
     if (!due || autoMonthState(month).autoWithdrawnAt) continue;
     const removed = unpublishPayslips(month);
     setSetting(WITHDRAWN + month, stamp);
@@ -109,7 +147,7 @@ export function runPayslipSchedule(now = new Date()): { published?: string; with
       performedByName: "Automatic",
       targetId: month,
       targetName: monthLabel(month),
-      description: `${monthLabel(month)} payslips withdrawn automatically on the ${WITHDRAW_DAY}th (${removed} employees)`,
+      description: `${monthLabel(month)} payslips withdrawn automatically on the ${ordinal(withdrawDay)} (${removed} employees)`,
       metadata: { month, removed, auto: true },
     });
   }

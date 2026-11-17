@@ -75,6 +75,30 @@ export default function LeaveTab() {
     }
   }
 
+  async function withdraw(id: string) {
+    if (!confirm("Withdraw this leave request?")) return;
+    setMessage("");
+    try {
+      const res = await fetch("/api/leave", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json().catch(() => ({})) as { error?: string };
+      if (!res.ok) {
+        setMessage(data.error || "Could not withdraw the request.");
+        setMessageType("error");
+        return;
+      }
+      setMessage("Leave request withdrawn.");
+      setMessageType("success");
+      fetchRequests();
+    } catch {
+      setMessage("Could not connect to server.");
+      setMessageType("error");
+    }
+  }
+
   // Calculate days between dates
   function dayCount(from: string, to: string): number {
     if (!from || !to) return 0;
@@ -157,7 +181,12 @@ export default function LeaveTab() {
                   <td>{new Date(r.toDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</td>
                   <td>{dayCount(r.fromDate, r.toDate)}</td>
                   <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.reason}</td>
-                  <td><span className={`badge-${r.status}`}>{r.status.charAt(0).toUpperCase() + r.status.slice(1)}</span></td>
+                  <td>
+                    <span className={`badge-${r.status}`}>{r.status.charAt(0).toUpperCase() + r.status.slice(1)}</span>
+                    {r.status === "pending" && (
+                      <button type="button" className="btn-reject" style={{ display: "block", marginTop: 6, fontSize: 12, padding: "3px 8px" }} onClick={() => withdraw(r.id)}>Withdraw</button>
+                    )}
+                  </td>
                   <td>{r.adminNote || "\u2014"}</td>
                   <td><small>{new Date(r.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</small></td>
                 </tr>

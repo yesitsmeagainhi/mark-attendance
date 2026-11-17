@@ -11,7 +11,7 @@ import { getAppliedRulesBatch, getEffectiveRulesBatch } from "./rules";
 import { calculateTotalDuration, calculateBreakDuration } from "./time-utils";
 import { getHolidayCalendar } from "./holidays";
 import { dayOfWeek, eachDate, resolveWeekOffs, weekBounds, type DayKind } from "./week-off";
-import { computeMonthlySalary, salaryLines, dailyOvertimeMinutes, leaveUsedBeforeMonth, shiftLengthMinutes, splitLeaveDays, type LeaveType } from "./pay-rules";
+import { computeMonthlySalary, salaryLines, dailyOvertimeMinutes, isLateHalfDay, leaveUsedBeforeMonth, shiftLengthMinutes, splitLeaveDays, type LeaveType } from "./pay-rules";
 
 type SessionInfo = { inTime: string; outTime: string | null; durationMinutes: number | null };
 
@@ -154,6 +154,7 @@ export function buildMonthlyReport(month: string) {
     let weekOffWorkedDays = 0;
     let shortDays = 0;
     let halfDays = 0;
+    let lateHalfDays = 0;
     let missedPunchOutDays = 0;
     let missedPunchInDays = 0;
     let overtimeMinutes = 0;
@@ -170,6 +171,10 @@ export function buildMonthlyReport(month: string) {
       breakMinutes: number | null;
       status: string;
       overtimeMinutes?: number;
+      /** Half day because of coming in late (late_half_day_minutes rule) */
+      lateHalfDay?: boolean;
+      /** Approved leave days: sick / casual / earned */
+      leaveType?: LeaveType;
       sessions?: SessionInfo[];
     };
     const dailyDetails: DayDetail[] = [];
@@ -250,7 +255,7 @@ export function buildMonthlyReport(month: string) {
         continue;
       }
       if (empLeaveDates.has(dateStr)) {
-        dailyDetails.push({ date: dateStr, punchIn: null, punchOut: null, durationMinutes: null, breakMinutes: null, status: "leave" });
+        dailyDetails.push({ date: dateStr, punchIn: null, punchOut: null, durationMinutes: null, breakMinutes: null, status: "leave", leaveType: leaveTypeByDate.get(dateStr) ?? "casual" });
         continue;
       }
 
@@ -301,6 +306,13 @@ export function buildMonthlyReport(month: string) {
           dailyDetails.push({ date: dateStr, punchIn: entry.punchIn, punchOut: entry.punchOut, durationMinutes, breakMinutes, status: "short-day", sessions: buildSessions(entry.allPunches) });
           continue;
         }
+        // Came in too late: a half day (instead of a late mark)
+        if (isLateHalfDay(entry.punchIn, emp.workStartTime, empRules)) {
+          halfDays++;
+          lateHalfDays++;
+          dailyDetails.push({ date: dateStr, punchIn: entry.punchIn, punchOut: entry.punchOut, durationMinutes, breakMinutes, status: "half-day", lateHalfDay: true, sessions: buildSessions(entry.allPunches) });
+          continue;
+        }
         if (totalDur < fullDayMinutes) {
           halfDays++;
           dailyDetails.push({ date: dateStr, punchIn: entry.punchIn, punchOut: entry.punchOut, durationMinutes, breakMinutes, status: "half-day", sessions: buildSessions(entry.allPunches) });
@@ -343,6 +355,12 @@ export function buildMonthlyReport(month: string) {
     for (const day of dailyDetails) {
       if (day.status === "leave" && leaveSplit.unpaidDates.has(day.date)) day.status = "unpaid-leave";
     }
+    // Every approved leave day in the month (week-offs and holidays excluded), paid or not
+    const leaveList = [...empLeaveDates].sort().map((date) => ({
+      date,
+      type: leaveTypeByDate.get(date) ?? ("casual" as LeaveType),
+      paid: !leaveSplit.unpaidDates.has(date),
+    }));
     const salaryInput = {
       monthlySalary: emp.monthlySalary,
       daysInMonth: lastDay,
@@ -350,6 +368,7 @@ export function buildMonthlyReport(month: string) {
       rules: empRules,
       absentDays,
       halfDays,
+      lateHalfDays,
       lateDays,
       unpaidHolidayDays,
       unpaidLeaveDays: leaveSplit.unpaid,
@@ -379,6 +398,8 @@ export function buildMonthlyReport(month: string) {
       lateFine: pay.lateFine,
       leaveDays,
       unpaidLeaveDays: leaveSplit.unpaid,
+      paidLeaveDays: leaveDays - leaveSplit.unpaid,
+      leaveList,
       uhDays: uhDays + unpaidHolidayDays,
       unpaidHolidayDays,
       weeklyOffs,

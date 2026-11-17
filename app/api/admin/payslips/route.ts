@@ -1,7 +1,7 @@
 import { requireApiRole } from "../../../authz";
 import { logActivity } from "../../../../lib/activity-logger";
 import { currentMonthIST, isValidMonth, monthLabel, payslipMonthStatus, publishPayslips, unpublishPayslips } from "../../../../lib/payslips";
-import { autoMonthState, autoWindow, isAutoPayslipsEnabled, runPayslipScheduleSafely, setAutoPayslipsEnabled } from "../../../../lib/payslip-schedule";
+import { autoMonthState, autoWindow, isAutoPayslipsEnabled, isValidWithdrawDay, MAX_WITHDRAW_DAY, MIN_WITHDRAW_DAY, ordinal, runPayslipScheduleSafely, setAutoPayslipsEnabled, setWithdrawDay } from "../../../../lib/payslip-schedule";
 
 /** Publish status for a month: ?month=YYYY-MM */
 export async function GET(request: Request) {
@@ -18,27 +18,54 @@ export async function GET(request: Request) {
   });
 }
 
-/** Switch the automatic schedule on/off: { autoEnabled } */
+/**
+ * Change the automatic schedule: { autoEnabled?, withdrawDay? }
+ * withdrawDay: day of the month payslips are withdrawn (2–28), or 0 = never.
+ */
 export async function PATCH(request: Request) {
   const auth = await requireApiRole("admin");
   if ("error" in auth) return auth.error;
-  let body: { autoEnabled?: boolean };
+  let body: { autoEnabled?: boolean; withdrawDay?: number };
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
-  if (typeof body.autoEnabled !== "boolean") return Response.json({ error: "autoEnabled must be true or false." }, { status: 400 });
-  setAutoPayslipsEnabled(body.autoEnabled);
-  logActivity({
-    actionType: "rule_updated",
-    performedBy: auth.identity.employeeId,
-    performedByName: auth.identity.displayName,
-    description: `${auth.identity.displayName} turned automatic payslips ${body.autoEnabled ? "on" : "off"}`,
-    metadata: { autoEnabled: body.autoEnabled },
-  });
-  if (body.autoEnabled) runPayslipScheduleSafely();
-  return Response.json({ ok: true, autoEnabled: body.autoEnabled });
+  if (body.autoEnabled === undefined && body.withdrawDay === undefined) {
+    return Response.json({ error: "Nothing to change." }, { status: 400 });
+  }
+  if (body.autoEnabled !== undefined && typeof body.autoEnabled !== "boolean") {
+    return Response.json({ error: "autoEnabled must be true or false." }, { status: 400 });
+  }
+  if (body.withdrawDay !== undefined && !isValidWithdrawDay(body.withdrawDay)) {
+    return Response.json({ error: `Withdrawal day must be between ${MIN_WITHDRAW_DAY} and ${MAX_WITHDRAW_DAY}, or 0 for never.` }, { status: 400 });
+  }
+
+  if (body.autoEnabled !== undefined) {
+    setAutoPayslipsEnabled(body.autoEnabled);
+    logActivity({
+      actionType: "rule_updated",
+      performedBy: auth.identity.employeeId,
+      performedByName: auth.identity.displayName,
+      description: `${auth.identity.displayName} turned automatic payslips ${body.autoEnabled ? "on" : "off"}`,
+      metadata: { autoEnabled: body.autoEnabled },
+    });
+  }
+  if (body.withdrawDay !== undefined) {
+    setWithdrawDay(body.withdrawDay);
+    logActivity({
+      actionType: "rule_updated",
+      performedBy: auth.identity.employeeId,
+      performedByName: auth.identity.displayName,
+      description: body.withdrawDay
+        ? `${auth.identity.displayName} set payslips to be withdrawn automatically on the ${ordinal(body.withdrawDay)} of the month`
+        : `${auth.identity.displayName} set payslips to stay visible (no automatic withdrawal)`,
+      metadata: { withdrawDay: body.withdrawDay },
+    });
+  }
+  // A new withdrawal day may make a step due right away
+  runPayslipScheduleSafely();
+  return Response.json({ ok: true, autoEnabled: isAutoPayslipsEnabled(), withdrawDay: body.withdrawDay });
 }
 
 async function readMonth(request: Request): Promise<string | null> {

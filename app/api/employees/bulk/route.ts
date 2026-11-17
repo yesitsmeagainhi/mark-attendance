@@ -3,7 +3,7 @@ import { sql, desc } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { employees } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
-import { parseCSVRows, parseXlsxRows } from "../../../../lib/spreadsheet-import";
+import { parseXlsxRows } from "../../../../lib/spreadsheet-import";
 
 type RowInput = {
   name?: string;
@@ -170,7 +170,7 @@ export async function POST(request: Request) {
   let rows: RowInput[];
 
   if (contentType.includes("multipart/form-data")) {
-    // File upload (XLSX or CSV)
+    // File upload (Excel only)
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     if (!file) {
@@ -181,14 +181,11 @@ export async function POST(request: Request) {
     if (fileName.endsWith(".xlsx")) {
       const buffer = await file.arrayBuffer();
       rows = (await parseXlsxRows(buffer)) as RowInput[];
-    } else if (fileName.endsWith(".csv")) {
-      const text = await file.text();
-      rows = parseCSVRows(text) as RowInput[];
     } else {
-      return Response.json({ error: "Unsupported file format. Please upload a .csv or .xlsx file." }, { status: 400 });
+      return Response.json({ error: "Please upload an Excel (.xlsx) file." }, { status: 400 });
     }
   } else {
-    // JSON body (from CSV parsed client-side)
+    // JSON body (rows sent directly, e.g. by scripts)
     let body: { employees?: RowInput[] };
     try {
       body = await request.json();

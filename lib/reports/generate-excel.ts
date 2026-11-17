@@ -16,8 +16,16 @@ export type ReportDayDetail = {
   durationMinutes: number | null;
   breakMinutes: number | null;
   status: string;
+  /** Approved leave days: sick / casual / earned */
+  leaveType?: string;
   sessions?: ReportSessionInfo[];
 };
+
+/** One approved leave day */
+export type ReportLeaveDay = { date: string; type: string; paid: boolean };
+
+const LEAVE_TYPE_LABELS: Record<string, string> = { sick: "Sick", casual: "Casual", earned: "Earned" };
+export const leaveTypeLabel = (t?: string) => (t ? LEAVE_TYPE_LABELS[t] ?? t : "");
 
 export type ReportEmployee = {
   id: string;
@@ -49,6 +57,9 @@ export type ReportEmployee = {
   overtimePay?: number;
   lateFine?: number;
   unpaidLeaveDays?: number;
+  paidLeaveDays?: number;
+  /** Every approved leave day this month, paid or not */
+  leaveList?: ReportLeaveDay[];
   perDayRate: number;
   deduction: number;
   netPay: number;
@@ -92,6 +103,12 @@ const statusColors: Record<string, { bg: string; fg: string }> = {
   "weekoff-worked": { bg: "DBEAFE", fg: "1D4ED8" },
   holiday: { bg: "F3F4F8", fg: "667085" },
 };
+
+/** Day status for exports; leave days include the leave type */
+function dayStatusLabel(day: ReportDayDetail): string {
+  const base = statusLabels[day.status] || day.status;
+  return day.leaveType ? `${base} (${leaveTypeLabel(day.leaveType)})` : base;
+}
 
 function fmtDur(mins: number): string {
   const h = Math.floor(mins / 60);
@@ -261,7 +278,7 @@ function buildEmployeeBlock(
     row.getCell(5).value = day.durationMinutes ? fmtDur(day.durationMinutes) : "\u2014";
     if (day.durationMinutes) row.getCell(5).font = { bold: true, size: 9, color: { argb: PURPLE } };
 
-    row.getCell(6).value = statusLabels[day.status] || day.status;
+    row.getCell(6).value = dayStatusLabel(day);
     const sc = statusColors[day.status];
     if (sc) {
       row.getCell(6).font = { bold: true, size: 9, color: { argb: `FF${sc.fg}` } };
@@ -370,6 +387,18 @@ function buildSalaryRulesSheet(sheet: ExcelJS.Worksheet, emp: ReportEmployee, mo
     sheet.addRow([]);
   }
 
+  const leave = emp.leaveList ?? [];
+  if (leave.length > 0) {
+    sheet.addRow([`Approved leave (${leave.length} day${leave.length === 1 ? "" : "s"}: ${leave.filter((l) => l.paid).length} paid, ${leave.filter((l) => !l.paid).length} unpaid)`]).font = { bold: true, size: 11, color: { argb: DARK } };
+    header(sheet.addRow(["Date", "Leave type", "Paid?"]));
+    for (const l of leave) {
+      const row = sheet.addRow([fmtDate(l.date), leaveTypeLabel(l.type), l.paid ? "Paid" : "Unpaid (deducted)"]);
+      row.getCell(3).font = { bold: true, color: { argb: l.paid ? GREEN_FG : RED_FG } };
+      row.eachCell((c) => { c.border = borderAll(); });
+    }
+    sheet.addRow([]);
+  }
+
   const rules = emp.rulesApplied ?? [];
   if (rules.length > 0) {
     sheet.addRow(["Rules applied"]).font = { bold: true, size: 11, color: { argb: DARK } };
@@ -458,14 +487,14 @@ export async function generateAllEmployeesExcel(
 
   // ── Summary sheet ──
   const summary = workbook.addWorksheet("Summary");
-  const sCols = 10;
+  const sCols = 11;
   summary.columns = [
     { width: 26 }, { width: 14 }, { width: 10 }, { width: 10 },
-    { width: 10 }, { width: 10 }, { width: 10 }, { width: 16 }, { width: 16 }, { width: 16 },
+    { width: 10 }, { width: 10 }, { width: 10 }, { width: 13 }, { width: 16 }, { width: 16 }, { width: 16 },
   ];
 
   // Title bar
-  summary.mergeCells("A1:J1");
+  summary.mergeCells("A1:K1");
   const sTitle = summary.getCell("A1");
   sTitle.value = `ATTENDANCE & SALARY REPORT \u2014 ${month}`;
   sTitle.font = { bold: true, size: 14, color: { argb: WHITE } };
@@ -474,7 +503,7 @@ export async function generateAllEmployeesExcel(
   summary.getRow(1).height = 34;
 
   // Subtitle
-  summary.mergeCells("A2:J2");
+  summary.mergeCells("A2:K2");
   const sSub = summary.getCell("A2");
   sSub.value = `${employees.length} Employees  \u00B7  ${workingDays} Working Days`;
   sSub.font = { size: 10, color: { argb: GRAY } };
@@ -487,7 +516,7 @@ export async function generateAllEmployeesExcel(
   summary.getRow(3).height = 6;
 
   // Header row
-  const sHeaders = ["Employee", "ID", "Present", "Half Day", "Absent", "Late", "Leave", "Salary", "Deduction", "Net Pay"];
+  const sHeaders = ["Employee", "ID", "Present", "Half Day", "Absent", "Late", "Leave", "Unpaid Leave", "Salary", "Deduction", "Net Pay"];
   const sHeaderRow = summary.getRow(4);
   sHeaderRow.height = 22;
   sHeaders.forEach((h, idx) => {
@@ -519,11 +548,13 @@ export async function generateAllEmployeesExcel(
     row.getCell(5).font = { size: 9, color: { argb: emp.absentDays > 0 ? RED_FG : GRAY } };
     row.getCell(6).value = emp.lateDays;
     row.getCell(7).value = emp.leaveDays;
-    row.getCell(8).value = fmt(emp.monthlySalary);
-    row.getCell(9).value = emp.deduction > 0 ? `-${fmt(emp.deduction)}` : "\u2014";
-    if (emp.deduction > 0) row.getCell(9).font = { size: 9, color: { argb: RED_FG } };
-    row.getCell(10).value = fmt(emp.netPay);
-    row.getCell(10).font = { bold: true, size: 9, color: { argb: GREEN_FG } };
+    row.getCell(8).value = emp.unpaidLeaveDays || 0;
+    if (emp.unpaidLeaveDays) row.getCell(8).font = { bold: true, size: 9, color: { argb: RED_FG } };
+    row.getCell(9).value = fmt(emp.monthlySalary);
+    row.getCell(10).value = emp.deduction > 0 ? `-${fmt(emp.deduction)}` : "\u2014";
+    if (emp.deduction > 0) row.getCell(10).font = { size: 9, color: { argb: RED_FG } };
+    row.getCell(11).value = fmt(emp.netPay);
+    row.getCell(11).font = { bold: true, size: 9, color: { argb: GREEN_FG } };
 
     for (let c = 1; c <= sCols; c++) {
       row.getCell(c).border = borderAll();
@@ -542,9 +573,11 @@ export async function generateAllEmployeesExcel(
   const sTotalRow = summary.getRow(5 + employees.length);
   sTotalRow.height = 24;
   sTotalRow.getCell(1).value = "TOTALS";
-  sTotalRow.getCell(8).value = fmt(totSalary);
-  sTotalRow.getCell(9).value = totDeduction > 0 ? `-${fmt(totDeduction)}` : "\u2014";
-  sTotalRow.getCell(10).value = fmt(totNet);
+  sTotalRow.getCell(7).value = employees.reduce((n, e) => n + e.leaveDays, 0);
+  sTotalRow.getCell(8).value = employees.reduce((n, e) => n + (e.unpaidLeaveDays || 0), 0);
+  sTotalRow.getCell(9).value = fmt(totSalary);
+  sTotalRow.getCell(10).value = totDeduction > 0 ? `-${fmt(totDeduction)}` : "\u2014";
+  sTotalRow.getCell(11).value = fmt(totNet);
   for (let c = 1; c <= sCols; c++) {
     sTotalRow.getCell(c).font = { bold: true, size: 10, color: { argb: PURPLE } };
     sTotalRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEEE9FF" } };
@@ -555,6 +588,26 @@ export async function generateAllEmployeesExcel(
       left: { style: "thin", color: { argb: "FFE0E2E9" } },
       right: { style: "thin", color: { argb: "FFE0E2E9" } },
     };
+  }
+
+  // ── Approved leave: every leave day of the month, paid or unpaid ──
+  const leaveRows = employees.flatMap((e) => (e.leaveList ?? []).map((l) => ({ e, l })));
+  if (leaveRows.length > 0) {
+    const ls = workbook.addWorksheet("Approved Leave");
+    ls.columns = [{ width: 26 }, { width: 14 }, { width: 16 }, { width: 14 }, { width: 20 }];
+    const lh = ls.addRow(["Employee", "ID", "Date", "Leave type", "Paid?"]);
+    lh.eachCell((c) => {
+      c.font = { bold: true, size: 9, color: { argb: WHITE } };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
+      c.alignment = { horizontal: "center", vertical: "middle" };
+      c.border = borderAll();
+    });
+    for (const { e, l } of leaveRows) {
+      const row = ls.addRow([e.name, e.id, fmtDate(l.date), leaveTypeLabel(l.type), l.paid ? "Paid" : "Unpaid (deducted)"]);
+      row.getCell(5).font = { bold: true, size: 9, color: { argb: l.paid ? GREEN_FG : RED_FG } };
+      row.eachCell((c) => { c.border = borderAll(); });
+    }
+    ls.views = [{ state: "frozen", ySplit: 1 }];
   }
 
   // Per-employee sheets
@@ -672,7 +725,7 @@ export async function generateRawReportExcel(
       row.getCell(4).value = day.durationMinutes ? fmtDur(day.durationMinutes) : "\u2014";
       if (day.durationMinutes) row.getCell(4).font = { bold: true, size: 9, color: { argb: PURPLE } };
 
-      row.getCell(5).value = statusLabels[day.status] || day.status;
+      row.getCell(5).value = dayStatusLabel(day);
       const sc = statusColors[day.status];
       if (sc) {
         row.getCell(5).font = { bold: true, size: 9, color: { argb: `FF${sc.fg}` } };
@@ -1038,7 +1091,7 @@ export async function generateFlexReportExcel(
         row.getCell(3).value = "\u2014";
         row.getCell(4).value = "\u2014";
         row.getCell(5).value = "\u2014";
-        row.getCell(6).value = statusLabels[day.status] || day.status;
+        row.getCell(6).value = dayStatusLabel(day);
         const sc2 = statusColors[day.status];
         if (sc2) {
           row.getCell(6).font = { bold: true, size: 9, color: { argb: `FF${sc2.fg}` } };
@@ -1076,7 +1129,7 @@ export async function generateFlexReportExcel(
 
         // Status on first session row only
         if (si === 0) {
-          row.getCell(6).value = statusLabels[day.status] || day.status;
+          row.getCell(6).value = dayStatusLabel(day);
           const sc2 = statusColors[day.status];
           if (sc2) {
             row.getCell(6).font = { bold: true, size: 9, color: { argb: `FF${sc2.fg}` } };

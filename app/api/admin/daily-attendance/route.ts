@@ -1,6 +1,6 @@
 import { eq, and, sql, desc } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { attendance, employees } from "../../../../db/schema";
+import { attendance, employees, leaveRequests } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
 import { getEffectiveRulesBatch } from "../../../../lib/rules";
 import { getHolidayCalendar } from "../../../../lib/holidays";
@@ -51,6 +51,19 @@ export async function GET(request: Request) {
   // Check if date is a holiday
   const holidayCal = getHolidayCalendar(date, date);
   const holiday = holidayCal.byDate.get(date);
+
+  // Approved leave covering this date (employee → leave type)
+  const leaveByEmp = new Map(
+    db.select({ employeeId: leaveRequests.employeeId, leaveType: leaveRequests.leaveType })
+      .from(leaveRequests)
+      .where(and(
+        eq(leaveRequests.status, "approved"),
+        sql`${leaveRequests.fromDate} <= ${date}`,
+        sql`${leaveRequests.toDate} >= ${date}`,
+      ))
+      .all()
+      .map((l) => [l.employeeId, l.leaveType] as const),
+  );
 
   // Load rules for all employees at once
   const rulesByEmp = getEffectiveRulesBatch(allEmployees.map((e) => e.id));
@@ -107,6 +120,9 @@ export async function GET(request: Request) {
     } else if (holiday) {
       // Only apply holiday status if employee has no punch record
       status = emp.flexibleHours || holidayCal.isPaidFor(holiday, emp) ? "paid_holiday" : "unpaid_holiday";
+    } else if (leaveByEmp.has(emp.id)) {
+      // Approved leave and no punch: on leave, not absent
+      status = "on_leave";
     } else {
       // No punch record — check if it's a past date
       const today = new Date().toISOString().slice(0, 10);
@@ -175,6 +191,7 @@ export async function GET(request: Request) {
         .map((r) => ({ id: r.id, type: r.punchType, time: r.serverTimestamp, source: r.source, photoKey: r.photoKey, office: r.office })),
       status,
       source,
+      leaveType: leaveByEmp.get(emp.id) ?? null,
     };
   });
 
@@ -187,7 +204,7 @@ export async function GET(request: Request) {
     holidayType: holiday ? (holiday.paid ? "paid_holiday" : "unpaid_holiday") : null,
     holidayName: holiday?.name || null,
     employees: result,
-    summary: { total: allEmployees.length, checkedIn, absent },
+    summary: { total: allEmployees.length, checkedIn, absent, onLeave: result.filter((e) => e.status === "on_leave").length },
     punchRemovalEnabled: isPunchRemovalEnabled(),
   });
 }

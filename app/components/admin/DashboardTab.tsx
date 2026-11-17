@@ -453,6 +453,7 @@ export default function DashboardTab() {
       absent: { cls: "status absent", label: "Absent" },
       unpaid_holiday: { cls: "badge-pending", label: "UH" },
       paid_holiday: { cls: "badge-admin", label: "Paid holiday" },
+      on_leave: { cls: "badge-pending", label: "On leave" },
       not_marked: { cls: "badge-admin", label: "Not marked" },
     };
     const s = map[status] || { cls: "badge-admin", label: status };
@@ -468,6 +469,7 @@ export default function DashboardTab() {
   const absent = allEmps.filter((e) => e.status === "absent").length;
   const notMarked = allEmps.filter((e) => e.status === "not_marked").length;
   const uh = allEmps.filter((e) => e.status === "unpaid_holiday").length;
+  const onLeave = allEmps.filter((e) => e.status === "on_leave").length;
   const checkedIn = onTime + late;
   const attendancePct = summary.total > 0 ? Math.round((checkedIn / summary.total) * 100) : 0;
 
@@ -557,11 +559,13 @@ export default function DashboardTab() {
         </div>
 
         {/* Status breakdown cards */}
-        <div className="dash-breakdown" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
+        <div className="dash-breakdown" style={{ display: "grid", gridTemplateColumns: `repeat(${onLeave > 0 ? 6 : 5}, 1fr)`, gap: 10 }}>
           {[
             { label: "On Time", value: onTime, bg: "#e8f7ef", color: "#168052", icon: "\u2713", filter: "present" },
             { label: "Late", value: late, bg: "#fff4dc", color: "#a86400", icon: "\u23F0", filter: "late" },
             { label: "Absent", value: absent, bg: "#ffeded", color: "#c73333", icon: "\u2717", filter: "absent" },
+            // Only shown when someone is on approved leave that day
+            ...(onLeave > 0 ? [{ label: "On Leave", value: onLeave, bg: "#eff6ff", color: "#2563eb", icon: "L", filter: "on_leave" }] : []),
             { label: "Not Marked", value: notMarked, bg: "#f3f4f8", color: "#667085", icon: "\u2014", filter: "not_marked" },
             { label: "Unpaid Hol.", value: uh, bg: "#fff4dc", color: "#a86400", icon: "UH", filter: "unpaid_holiday" },
           ].map((c) => {
@@ -617,6 +621,7 @@ export default function DashboardTab() {
               <option value="present">Present</option>
               <option value="late">Late</option>
               <option value="absent">Absent</option>
+              <option value="on_leave">On leave</option>
               <option value="unpaid_holiday">Unpaid holiday</option>
               <option value="not_marked">Not marked</option>
             </select>

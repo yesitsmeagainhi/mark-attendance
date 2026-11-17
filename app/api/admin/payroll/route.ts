@@ -6,7 +6,7 @@ import { getEffectiveRulesBatch } from "../../../../lib/rules";
 import { calculateBreakDuration, calculateTotalDuration } from "../../../../lib/time-utils";
 import { getHolidayCalendar } from "../../../../lib/holidays";
 import { dayOfWeek, eachDate, resolveWeekOffs, weekBounds, type DayKind } from "../../../../lib/week-off";
-import { computeMonthlySalary, dailyOvertimeMinutes, leaveUsedBeforeMonth, shiftLengthMinutes, splitLeaveDays, type LeaveType } from "../../../../lib/pay-rules";
+import { computeMonthlySalary, dailyOvertimeMinutes, isLateHalfDay, leaveUsedBeforeMonth, shiftLengthMinutes, splitLeaveDays, type LeaveType } from "../../../../lib/pay-rules";
 
 export async function GET(request: Request) {
   const auth = await requireApiRole("admin");
@@ -125,6 +125,7 @@ export async function GET(request: Request) {
     let unpaidHolidayDays = 0;
     let shortDays = 0;
     let halfDays = 0;
+    let lateHalfDays = 0;
     let totalMinutesWorked = 0; // for flex/hourly employees
     let overtimeMinutes = 0;
     const shiftMinutes = shiftLengthMinutes(emp.workStartTime, emp.workEndTime);
@@ -216,6 +217,12 @@ export async function GET(request: Request) {
           shortDays++;
           continue;
         }
+        // Came in too late: a half day (instead of a late mark), same as Reports
+        if (isLateHalfDay(entry.punchIn, emp.workStartTime, empRules)) {
+          halfDays++;
+          lateHalfDays++;
+          continue;
+        }
         if (totalDur < fullDayMinutes) {
           halfDays++;
           continue;
@@ -277,6 +284,7 @@ export async function GET(request: Request) {
       rules: empRules,
       absentDays,
       halfDays,
+      lateHalfDays,
       lateDays,
       unpaidHolidayDays,
       unpaidLeaveDays: leaveSplit.unpaid,

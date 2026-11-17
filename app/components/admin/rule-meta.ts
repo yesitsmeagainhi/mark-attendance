@@ -9,6 +9,7 @@ export const RULE_CATEGORIES: { id: string; title: string; hint: string }[] = [
 
 const UNITS: Record<string, { unit: string; step: number }> = {
   grace_period: { unit: "min", step: 1 },
+  late_half_day_minutes: { unit: "min", step: 5 },
   lunch_break_min_hours: { unit: "hrs", step: 0.5 },
   minimum_hours_for_half_day: { unit: "hrs", step: 0.5 },
   minimum_hours_for_full_day: { unit: "hrs", step: 0.5 },

@@ -6,6 +6,7 @@ import { getEffectiveRules } from "../../../../lib/rules";
 import { calculateTotalDuration } from "../../../../lib/time-utils";
 import { getHolidayCalendar } from "../../../../lib/holidays";
 import { resolveWeekOffs, weekBounds, type DayKind } from "../../../../lib/week-off";
+import { isLateHalfDay, istMinutesOfDay, unpaidLeaveDates } from "../../../../lib/pay-rules";
 
 export async function GET(request: Request) {
   const identity = await getAppIdentity();
@@ -174,6 +175,9 @@ export async function GET(request: Request) {
     if (dayData?.isAdminUH) return "excused";
     return "off";
   }, today);
+  // Leave days the leave policy doesn't pay for (same as the payslip)
+  const unpaidLeave = unpaidLeaveDates(identity.employeeId, firstDay, lastDay, empRules,
+    (d) => (d >= firstDay && d <= lastDay ? weekOff.has(d) : undefined));
   const halfDayMinutes = empRules.minimum_hours_for_half_day * 60;
   const fullDayMinutes = empRules.minimum_hours_for_full_day * 60;
   type SessionInfo = { inTime: string; outTime: string | null; durationMinutes: number | null };
@@ -192,6 +196,10 @@ export async function GET(request: Request) {
     missedPunchOut?: boolean;
     /** Punch-out with no punch-in (forgot to punch in; miss-punch not approved yet) */
     missedPunchIn?: boolean;
+    /** Half day because of coming in late (late_half_day_minutes rule) */
+    lateHalfDay?: boolean;
+    /** Approved leave that the leave policy doesn't pay for */
+    unpaidLeave?: boolean;
   }> = [];
 
   function buildSessions(allPunches: { punchType: string; serverTimestamp: string }[]): SessionInfo[] {
@@ -222,7 +230,8 @@ export async function GET(request: Request) {
 
   for (const dateStr of iterDates) {
     const dayData = byDate[dateStr];
-    const isLeave = leaveDates.has(dateStr);
+    // A holiday inside a leave stays a holiday (it doesn't use up leave), as in the salary
+    const isLeave = leaveDates.has(dateStr) && !holidayCal.byDate.has(dateStr);
 
     if (weekOff.has(dateStr)) {
       // A punch-in without punch-out can still become the week-off; show it anyway
@@ -247,7 +256,8 @@ export async function GET(request: Request) {
 
     if (isLeave) {
       // Still a leave day, but never hide punches made on it
-      result.push({ date: dateStr, punchInTime: dayData?.punchIn ?? null, punchOutTime: dayData?.punchOut ?? null, duration: null, status: "Leave", lateByMinutes: null, office: dayData?.office || null, photoKeyIn: dayData?.photoKeyIn || null, photoKeyOut: dayData?.photoKeyOut || null });
+      const unpaid = unpaidLeave.has(dateStr);
+      result.push({ date: dateStr, punchInTime: dayData?.punchIn ?? null, punchOutTime: dayData?.punchOut ?? null, duration: null, status: unpaid ? "Unpaid Leave" : "Leave", lateByMinutes: null, office: dayData?.office || null, photoKeyIn: dayData?.photoKeyIn || null, photoKeyOut: dayData?.photoKeyOut || null, ...(unpaid ? { unpaidLeave: true } : {}) });
       continue;
     }
 
@@ -297,6 +307,12 @@ export async function GET(request: Request) {
         result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut || null, duration, status: "Short Day", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null, sessions: isFlexible ? buildSessions(dayData.allPunches) : undefined });
         continue;
       }
+      // Came in too late: a half day (instead of a late mark), same as the salary
+      if (isLateHalfDay(dayData.punchIn, workStartTime, empRules)) {
+        halfDays++;
+        result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut || null, duration, status: "Half Day", lateByMinutes: istMinutesOfDay(dayData.punchIn) - startMinutes, lateHalfDay: true, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null, sessions: isFlexible ? buildSessions(dayData.allPunches) : undefined });
+        continue;
+      }
       if (totalDur < fullDayMinutes) {
         halfDays++;
         result.push({ date: dateStr, punchInTime: dayData.punchIn, punchOutTime: dayData.punchOut || null, duration, status: "Half Day", lateByMinutes: null, office: dayData.office || null, photoKeyIn: dayData.photoKeyIn || null, photoKeyOut: dayData.photoKeyOut || null, sessions: isFlexible ? buildSessions(dayData.allPunches) : undefined });
@@ -341,7 +357,8 @@ export async function GET(request: Request) {
     paidHolidayDays,
     weekOffWorkedDays,
     absentDays: result.filter((r) => r.status === "Absent" || r.status === "Short Day").length,
-    leaveDays: result.filter((r) => r.status === "Leave").length,
+    leaveDays: result.filter((r) => r.status === "Leave" || r.status === "Unpaid Leave").length,
+    unpaidLeaveDays: result.filter((r) => r.status === "Unpaid Leave").length,
     isFlexible,
   });
 }

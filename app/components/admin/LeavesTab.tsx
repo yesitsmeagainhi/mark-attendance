@@ -28,7 +28,8 @@ export default function LeavesTab() {
     return () => clearInterval(id);
   }, []);
 
-  async function handleReview(requestId: string, action: "approved" | "rejected") {
+  async function handleReview(requestId: string, action: "approved" | "rejected" | "cancelled") {
+    if (action === "cancelled" && !confirm("Cancel this approved leave? Those days will count as normal working days again (absent if not punched).")) return;
     setReviewingId(requestId);
     try {
       const res = await fetch("/api/leave/review", {
@@ -83,13 +84,18 @@ export default function LeavesTab() {
                 <td>{new Date(r.fromDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</td>
                 <td>{new Date(r.toDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</td>
                 <td style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>{r.reason}</td>
-                <td><span className={`badge-${r.status}`}>{r.status.charAt(0).toUpperCase() + r.status.slice(1)}</span></td>
+                <td>
+                  <span className={`badge-${r.status}`}>{r.status.charAt(0).toUpperCase() + r.status.slice(1)}</span>
+                  {r.adminNote && <small style={{ display: "block", color: "#8990a0", marginTop: 2 }}>{r.adminNote}</small>}
+                </td>
                 <td>
                   {r.status === "pending" ? (
                     <div className="review-actions">
                       <button className="btn-approve" disabled={reviewingId === r.id} onClick={() => handleReview(r.id, "approved")}>Approve</button>
                       <button className="btn-reject" disabled={reviewingId === r.id} onClick={() => handleReview(r.id, "rejected")}>Reject</button>
                     </div>
+                  ) : r.status === "approved" ? (
+                    <button className="btn-reject" style={{ fontSize: 13 }} disabled={reviewingId === r.id} onClick={() => handleReview(r.id, "cancelled")} title="Cancel this approved leave">Cancel leave</button>
                   ) : "\u2014"}
                 </td>
               </tr>

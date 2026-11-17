@@ -271,7 +271,7 @@ export default function HolidaysTab() {
   );
 }
 
-/* ── Bulk Import Modal (CSV + XLSX) ────────────────────────── */
+/* ── Bulk Import Modal (Excel) ────────────────────────── */
 
 type ImportRow = { row: number; date: string; name: string; paid: boolean; paidCount: number; exceptions: string[]; action: "create" | "update" };
 type ImportResponse = { rows?: ImportRow[]; errors?: { row: number; message: string }[]; salariedCount?: number; created?: number; updated?: number; error?: string };
@@ -312,8 +312,8 @@ function HolidayImportModal({ onClose, onImported }: { onClose: () => void; onIm
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (!/\.(csv|xlsx)$/i.test(f.name)) {
-      setError("Unsupported file format. Please upload a .csv or .xlsx file.");
+    if (!/\.xlsx$/i.test(f.name)) {
+      setError("Please upload an Excel (.xlsx) file. Download the Excel template if you need one.");
       setFile(null);
       setPreview(null);
       return;
@@ -361,7 +361,7 @@ function HolidayImportModal({ onClose, onImported }: { onClose: () => void; onIm
           ) : (
             <>
               <div style={{ fontSize: 15, color: "#6b7280", lineHeight: 1.5 }}>
-                Upload a <b>.csv</b> or <b>.xlsx</b> file with one holiday per row. Columns:
+                Upload an Excel (<b>.xlsx</b>) file with one holiday per row. Columns:
                 <ul style={{ margin: "6px 0 0", paddingLeft: 20 }}>
                   <li><b>date</b> (required): 2026-12-25 or 25/12/2026</li>
                   <li><b>name</b> (required): e.g. Diwali</li>
@@ -372,10 +372,11 @@ function HolidayImportModal({ onClose, onImported }: { onClose: () => void; onIm
                 <span style={{ display: "block", marginTop: 6 }}>List employees by ID, email or name, separated by <b>;</b>. The Excel template has an Employees sheet with everyone&apos;s ID.</span>
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <a className="secondary" href="/api/holidays/bulk?format=xlsx" download style={{ fontSize: 15, padding: "6px 14px", textDecoration: "none" }}>Download Excel template</a>              </div>
+                <a className="secondary" href="/api/holidays/bulk?format=xlsx" download style={{ fontSize: 15, padding: "6px 14px", textDecoration: "none" }}>Download Excel template</a>
+              </div>
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 15, fontWeight: 600 }}>Choose file (.csv or .xlsx)</span>
-                <input type="file" accept=".csv,.xlsx" onChange={handleFile} />
+                <span style={{ fontSize: 15, fontWeight: 600 }}>Choose Excel file (.xlsx)</span>
+                <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={handleFile} />
               </label>
               <label style={{ display: "flex", alignItems: "center", gap: 8, flexDirection: "row", fontWeight: 400 }}>
                 <input

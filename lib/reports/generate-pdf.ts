@@ -1,4 +1,4 @@
-import type { ReportEmployee } from "./generate-excel";
+import { leaveTypeLabel, type ReportEmployee } from "./generate-excel";
 import { categoryTitle } from "../../app/components/admin/rule-meta";
 
 /** The PDF uses a built-in font that can't draw \u20B9 or arrows; spell them out. */
@@ -49,6 +49,29 @@ function buildSalaryRulesPage(doc: any, emp: ReportEmployee, month: string, auto
     doc.setFontSize(9);
     doc.text(emp.isFlexible ? "Hourly (flexible) employee: paid hours worked x hourly rate; day-based salary rules don't apply." : "No monthly salary set for this employee.", M, y + 4);
     y += 12;
+  }
+
+  // Approved leave this month, paid or unpaid
+  const leave = emp.leaveList ?? [];
+  if (leave.length > 0) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text(`Approved leave: ${leave.length} day${leave.length === 1 ? "" : "s"} (${leave.filter((l) => l.paid).length} paid, ${leave.filter((l) => !l.paid).length} unpaid)`, M, y + 2);
+    autoTable(doc, {
+      startY: y + 5,
+      margin: { left: M, right: M },
+      head: [["Date", "Leave type", "Paid?"]],
+      body: leave.map((l) => [fmtDate(l.date), leaveTypeLabel(l.type), l.paid ? "Paid" : "Unpaid (deducted)"]),
+      styles: { font: "helvetica", fontSize: 8.5, cellPadding: 2 },
+      headStyles: { fillColor: [249, 250, 251], textColor: [102, 112, 133], fontStyle: "bold" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      didParseCell: (data: any) => {
+        if (data.section !== "body" || data.column.index !== 2) return;
+        data.cell.styles.textColor = String(data.cell.raw).startsWith("Unpaid") ? [199, 51, 51] : [22, 128, 82];
+        data.cell.styles.fontStyle = "bold";
+      },
+    });
+    y = doc.lastAutoTable.finalY + 8;
   }
 
   const rules = emp.rulesApplied ?? [];
@@ -305,13 +328,16 @@ function buildEmployeePage(
   let totalBreakMins = 0;
   const bodyData = emp.dailyDetails.map((day) => {
     if (day.breakMinutes) totalBreakMins += day.breakMinutes;
+    // Leave, holidays and week-offs aren't absences: show a dash instead of "A"
+    const none = offStatuses.has(day.status) ? "\u2014" : "A";
+    const label = statusLabels[day.status] || day.status;
     return [
       fmtDate(day.date),
-      day.punchIn ? fmtTimeIST(day.punchIn) : "A",
-      day.punchOut ? fmtTimeIST(day.punchOut) : day.status === "missed-out" ? "Missed" : day.status === "in-progress" ? "—" : "A",
+      day.punchIn ? fmtTimeIST(day.punchIn) : none,
+      day.punchOut ? fmtTimeIST(day.punchOut) : day.status === "missed-out" ? "Missed" : day.status === "in-progress" ? "—" : none,
       day.breakMinutes ? fmtDur(day.breakMinutes) : "\u2014",
-      day.durationMinutes ? fmtDur(day.durationMinutes) : "A",
-      statusLabels[day.status] || day.status,
+      day.durationMinutes ? fmtDur(day.durationMinutes) : none,
+      day.leaveType ? `${label} (${leaveTypeLabel(day.leaveType)})` : label,
     ];
   });
 

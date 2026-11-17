@@ -5,7 +5,7 @@ import { holidays } from "../../../../db/schema";
 import { requireApiRole } from "../../../authz";
 import { logActivity } from "../../../../lib/activity-logger";
 import { getPayrollEmployees, saveHolidayOverrides } from "../../../../lib/holidays";
-import { parseCSVRows, parseXlsxRows, type SheetRow } from "../../../../lib/spreadsheet-import";
+import { parseXlsxRows, type SheetRow } from "../../../../lib/spreadsheet-import";
 
 const COLUMNS = ["date", "name", "paid", "notPaidFor", "paidFor"] as const;
 const MAX_ROWS = 366;
@@ -217,7 +217,7 @@ export async function GET() {
 }
 
 /**
- * multipart/form-data: file (.csv/.xlsx), dryRun ("true" = validate only), overwrite ("true" = update existing dates).
+ * multipart/form-data: file (.xlsx), dryRun ("true" = validate only), overwrite ("true" = update existing dates).
  */
 export async function POST(request: Request) {
   const auth = await requireApiRole("admin");
@@ -238,10 +238,9 @@ export async function POST(request: Request) {
   let rows: SheetRow[];
   try {
     if (fileName.endsWith(".xlsx")) rows = await parseXlsxRows(await file.arrayBuffer());
-    else if (fileName.endsWith(".csv")) rows = parseCSVRows(await file.text());
-    else return Response.json({ error: "Unsupported file format. Please upload a .csv or .xlsx file." }, { status: 400 });
+    else return Response.json({ error: "Please upload an Excel (.xlsx) file." }, { status: 400 });
   } catch {
-    return Response.json({ error: "Could not read the file. Make sure it is a valid .csv or .xlsx file." }, { status: 400 });
+    return Response.json({ error: "Could not read the file. Make sure it is a valid Excel (.xlsx) file." }, { status: 400 });
   }
 
   if (rows.length === 0) return Response.json({ error: "No holiday rows found. The file needs a header row and at least one data row." }, { status: 400 });

@@ -25,6 +25,22 @@ export function shiftLengthMinutes(start: string, end: string): number {
   return diff;
 }
 
+/** Minutes past midnight in India for a stored UTC timestamp ("YYYY-MM-DD HH:MM:SS"). */
+export function istMinutesOfDay(ts: string): number {
+  const d = new Date(ts.replace(" ", "T") + (ts.includes("Z") ? "" : "Z"));
+  return ((d.getUTCHours() + 5) * 60 + d.getUTCMinutes() + 30) % (24 * 60);
+}
+
+/**
+ * "Late by this much = half day" rule: true when the first punch-in of the day
+ * is at least `late_half_day_minutes` after the shift start. 0 = rule off.
+ * Not for flexible-hours staff (callers skip them, as for late marks).
+ */
+export function isLateHalfDay(punchInTs: string | null | undefined, workStartTime: string, rules: RuleValues): boolean {
+  if (!punchInTs || !(rules.late_half_day_minutes > 0) || !/^\d{1,2}:\d{2}$/.test(workStartTime)) return false;
+  return istMinutesOfDay(punchInTs) - timeToMinutes(workStartTime) >= rules.late_half_day_minutes;
+}
+
 /** Paid working minutes in a shift: shift length minus its unpaid break (never under 1 hour). */
 export function workingMinutesPerShift(shiftMinutes: number, rules: RuleValues): number {
   return Math.max(60, shiftMinutes - rules.shift_break_minutes);
@@ -124,6 +140,58 @@ export function splitLeaveDays(
   return { paid: dates.length - unpaidDates.size, unpaid: unpaidDates.size, unpaidDates };
 }
 
+/**
+ * Which approved leave days between `from` and `to` are unpaid under the leave
+ * policy (the "paid" switch per type and the yearly quota), worked out month by
+ * month exactly like the salary. Holidays never count as leave; week-offs are
+ * taken from `isWeekOff` (undefined = not known for that date → Sundays).
+ * Used by the employee's History and Timesheet so they match the payslip.
+ */
+export function unpaidLeaveDates(
+  employeeId: string,
+  from: string,
+  to: string,
+  rules: RuleValues,
+  isWeekOff: (date: string) => boolean | undefined,
+): Set<string> {
+  const unpaid = new Set<string>();
+  if (from > to) return unpaid;
+  let month = from.slice(0, 7);
+  while (month <= to.slice(0, 7)) {
+    const [y, m] = month.split("-").map(Number);
+    const monthStart = `${month}-01`;
+    const monthEnd = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+    const rows = getDb()
+      .select({ leaveType: leaveRequests.leaveType, fromDate: leaveRequests.fromDate, toDate: leaveRequests.toDate })
+      .from(leaveRequests)
+      .where(and(
+        eq(leaveRequests.employeeId, employeeId),
+        eq(leaveRequests.status, "approved"),
+        lte(leaveRequests.fromDate, monthEnd),
+        gte(leaveRequests.toDate, monthStart),
+      ))
+      .orderBy(leaveRequests.fromDate)
+      .all();
+    if (rows.length > 0) {
+      const holidays = getHolidayCalendar(monthStart, monthEnd).dates;
+      const typeByDate = new Map<string, LeaveType>();
+      for (const r of rows) {
+        for (const d of eachDate(r.fromDate > monthStart ? r.fromDate : monthStart, r.toDate < monthEnd ? r.toDate : monthEnd)) {
+          const off = isWeekOff(d) ?? dayOfWeek(d) === 0;
+          if (holidays.has(d) || off || typeByDate.has(d)) continue;
+          typeByDate.set(d, r.leaveType);
+        }
+      }
+      const used = leaveUsedBeforeMonth([employeeId], monthStart).get(employeeId)!;
+      for (const d of splitLeaveDays([...typeByDate.keys()], (d) => typeByDate.get(d)!, used, rules).unpaidDates) {
+        if (d >= from && d <= to) unpaid.add(d);
+      }
+    }
+    month = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+  }
+  return unpaid;
+}
+
 export type SalaryInput = {
   monthlySalary: number;
   daysInMonth: number;
@@ -131,6 +199,8 @@ export type SalaryInput = {
   rules: RuleValues;
   absentDays: number;
   halfDays: number;
+  /** Of the half days, how many came from the "late by this much = half day" rule */
+  lateHalfDays?: number;
   lateDays: number;
   unpaidHolidayDays: number;
   unpaidLeaveDays: number;
@@ -189,7 +259,8 @@ export function salaryLines(i: SalaryInput, b: SalaryBreakdown): SalaryLine[] {
   };
 
   dayLine("Absent days", i.absentDays, "Includes short days and missed punch-outs");
-  dayLine("Half days", b.halfDayDeductionDays, i.halfDays > 0 ? `${plural(i.halfDays, "half day")} × ${r.half_day_deduction} day` : "");
+  const lateHalf = i.lateHalfDays ? ` (${i.lateHalfDays} for coming in ${r.late_half_day_minutes}+ min late)` : "";
+  dayLine("Half days", b.halfDayDeductionDays, i.halfDays > 0 ? `${plural(i.halfDays, "half day")}${lateHalf} × ${r.half_day_deduction} day` : "");
   if (i.lateDays > 0) {
     if (r.late_to_absent_count > 0) {
       const blocks = Math.floor(i.lateDays / r.late_to_absent_count);

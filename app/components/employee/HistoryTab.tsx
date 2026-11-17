@@ -54,6 +54,8 @@ type DayData = {
   holidayName?: string;
   missedPunchOut?: boolean;
   missedPunchIn?: boolean;
+  /** Approved leave that isn't paid under the leave policy */
+  unpaidLeave?: boolean;
 };
 
 type TimesheetData = {
@@ -145,6 +147,7 @@ export default function HistoryTab({ onRequestMissPunch }: { onRequestMissPunch?
     if (s === "Half Day") return "late";
     if (s === "Paid Holiday") return "on-time";
     if (s === "Leave" || s === "UH" || s === "Holiday") return "grace";
+    if (s === "Unpaid Leave") return "absent";
     if (s === "Overtime") return "overtime";
     if (s === "Week Off") return "grace";
     return "";
@@ -270,7 +273,11 @@ export default function HistoryTab({ onRequestMissPunch }: { onRequestMissPunch?
                         No punch-in<br />Out {formatTimeIST(cell.punchOut)}
                       </div>
                     )}
-                    {cell.status === "leave" && <div className="day-times">Leave</div>}
+                    {cell.status === "leave" && (
+                      <div className="day-times" style={cell.unpaidLeave ? { color: "#c73333" } : undefined} title={cell.unpaidLeave ? "Approved leave, but not paid under the leave policy: deducted from salary" : undefined}>
+                        {cell.unpaidLeave ? <>Leave<br />Unpaid</> : "Leave"}
+                      </div>
+                    )}
                     {cell.status === "leave" && cell.punchIn && renderPunchTimes()}
                     {cell.status === "holiday" && <div className="day-times" title={cell.holidayName}>{cell.holidayName || "Holiday"}{!tsData?.isFlexible && <><br />Paid</>}</div>}
                     {cell.status === "uh" && <div className="day-times">UH</div>}

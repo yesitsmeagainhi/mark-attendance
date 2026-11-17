@@ -4,6 +4,8 @@ import { attendanceRules, employeeRuleOverrides } from "../db/schema";
 
 export type RuleValues = {
   grace_period: number;
+  /** Punch-in this many minutes after shift start = half day (0 = off) */
+  late_half_day_minutes: number;
   lunch_break_enabled: boolean;
   lunch_break_min_hours: number;
   late_to_absent_count: number;
@@ -31,6 +33,7 @@ export type RuleValues = {
 /** Defaults reproduce the salary calculation used before the payroll rules existed. */
 export const DEFAULT_RULES: RuleValues = {
   grace_period: 15,
+  late_half_day_minutes: 0,
   lunch_break_enabled: false,
   lunch_break_min_hours: 4,
   late_to_absent_count: 3,
@@ -60,6 +63,7 @@ function nonNegative(value: string, fallback: number): number {
 
 // Numeric rules where 0 means "off", "none" or "unlimited"
 const ZERO_OK_NUMBERS = [
+  "late_half_day_minutes",
   "late_to_absent_count",
   "late_penalty_days",
   "late_fine_amount",
