@@ -192,6 +192,17 @@ export function unpaidLeaveDates(
   return unpaid;
 }
 
+/**
+ * Extra pay credit for working on the week-off, by hours worked that day:
+ * a full day's work earns 1 day's pay, a half day's work ½, less than that 0.
+ * Same thresholds as ordinary attendance (minimum hours for full / half day).
+ */
+export function weekOffWorkedCredit(workedMinutes: number, rules: RuleValues): 0 | 0.5 | 1 {
+  if (workedMinutes >= rules.minimum_hours_for_full_day * 60) return 1;
+  if (workedMinutes >= rules.minimum_hours_for_half_day * 60) return 0.5;
+  return 0;
+}
+
 export type SalaryInput = {
   monthlySalary: number;
   daysInMonth: number;
@@ -204,9 +215,23 @@ export type SalaryInput = {
   lateDays: number;
   unpaidHolidayDays: number;
   unpaidLeaveDays: number;
+  /** Week-off days the employee worked (count, for display) */
   weekOffWorkedDays: number;
+  /**
+   * Days of extra pay earned on those days: 1 per full day, ½ per half day,
+   * 0 below half-day hours (see weekOffWorkedCredit). Defaults to
+   * weekOffWorkedDays (1 each) when a caller doesn't supply it.
+   */
+  weekOffWorkedCredit?: number;
+  /** Of the worked week-off days, how many earned only half a day */
+  weekOffWorkedHalfDays?: number;
   overtimeMinutes: number;
 };
+
+/** Exact per-day pay: salary ÷ calendar days in the month (week-offs included). */
+function exactDayRate(i: SalaryInput): number {
+  return i.daysInMonth > 0 ? i.monthlySalary / i.daysInMonth : 0;
+}
 
 export type SalaryBreakdown = {
   perDayRate: number;
@@ -240,6 +265,9 @@ export type SalaryLine = {
 };
 
 const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
+/** Per-day rate with paise when it isn't whole, e.g. ₹806.45 */
+const inrRate = (n: number) =>
+  `₹${n.toLocaleString("en-IN", { minimumFractionDigits: Number.isInteger(Math.round(n * 100) / 100) ? 0 : 2, maximumFractionDigits: 2 })}`;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const hm = (mins: number) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
 
@@ -250,12 +278,13 @@ const hm = (mins: number) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
  */
 export function salaryLines(i: SalaryInput, b: SalaryBreakdown): SalaryLine[] {
   const r = i.rules;
-  const rate = b.perDayRate;
+  // Exact rate (not rounded first), so each line is days × salary ÷ days-in-month
+  const rate = exactDayRate(i);
   const lines: SalaryLine[] = [
-    { label: "Monthly salary", detail: `Per-day rate ${inr(rate)} (salary ÷ ${i.daysInMonth} days)`, amount: i.monthlySalary, kind: "base" },
+    { label: "Monthly salary", detail: `Per-day rate ${inrRate(rate)} (salary ÷ ${i.daysInMonth} days)`, amount: i.monthlySalary, kind: "base" },
   ];
   const dayLine = (label: string, days: number, note: string) => {
-    if (days > 0) lines.push({ label, detail: `${note}${note ? " → " : ""}${plural(days, "day")} × ${inr(rate)}`, note: `${plural(days, "day")} × ${inr(rate)}`, amount: -Math.round(days * rate), kind: "deduction" });
+    if (days > 0) lines.push({ label, detail: `${note}${note ? " → " : ""}${plural(days, "day")} × ${inrRate(rate)}`, note: `${plural(days, "day")} × ${inrRate(rate)}`, amount: -Math.round(days * rate), kind: "deduction" });
   };
 
   dayLine("Absent days", i.absentDays, "Includes short days and missed punch-outs");
@@ -277,7 +306,20 @@ export function salaryLines(i: SalaryInput, b: SalaryBreakdown): SalaryLine[] {
   dayLine("Unpaid leave", i.unpaidLeaveDays, "Beyond the yearly quota or an unpaid leave type");
   dayLine("Unpaid holidays", i.unpaidHolidayDays, "");
   if (b.weekOffBonus > 0) {
-    lines.push({ label: "Week-off worked", detail: `${plural(i.weekOffWorkedDays, "day")} × ${inr(rate)}`, note: `${plural(i.weekOffWorkedDays, "day")} × ${inr(rate)}`, amount: b.weekOffBonus, kind: "extra" });
+    const credit = i.weekOffWorkedCredit ?? i.weekOffWorkedDays;
+    const half = i.weekOffWorkedHalfDays ?? 0;
+    const full = Math.round(credit - half * 0.5);
+    const parts = [full > 0 ? `${plural(full, "full day")}` : "", half > 0 ? `${plural(half, "half day")}` : ""].filter(Boolean).join(" + ");
+    const creditText = `${credit} ${credit === 1 ? "day" : "days"}`;
+    lines.push({
+      label: "Week-off worked",
+      detail: `${parts} on the week-off (full / half by hours worked) → ${creditText} × ${inrRate(rate)}`,
+      note: `${creditText} × ${inrRate(rate)}`,
+      amount: b.weekOffBonus,
+      kind: "extra",
+    });
+  } else if (i.weekOffWorkedDays > 0) {
+    lines.push({ label: "Week-off worked", detail: `${plural(i.weekOffWorkedDays, "day")} on the week-off, under half-day hours: no extra pay`, amount: 0, kind: "info" });
   }
   if (r.overtime_enabled) {
     if (b.overtimeMinutes > 0) {
@@ -294,8 +336,11 @@ export function salaryLines(i: SalaryInput, b: SalaryBreakdown): SalaryLine[] {
 
 export function computeMonthlySalary(i: SalaryInput): SalaryBreakdown {
   const r = i.rules;
-  // Per-day rate uses total calendar days in month (including week-offs)
-  const perDayRate = Math.round(i.monthlySalary / i.daysInMonth);
+  // Per-day rate = salary ÷ total calendar days in the month (week-offs included).
+  // Money is worked out with the exact rate and rounded only at the end; rounding
+  // the rate first was off by a few rupees (e.g. ₹25,000 / 31 = ₹806.45, not ₹806).
+  const rate = exactDayRate(i);
+  const perDayRate = Math.round(rate * 100) / 100; // for display
 
   const lateDeductionDays = r.late_to_absent_count > 0
     ? Math.floor(i.lateDays / r.late_to_absent_count) * r.late_penalty_days
@@ -304,8 +349,9 @@ export function computeMonthlySalary(i: SalaryInput): SalaryBreakdown {
   const halfDayDeductionDays = i.halfDays * r.half_day_deduction;
 
   const deductionDays = i.absentDays + halfDayDeductionDays + lateDeductionDays + i.unpaidHolidayDays + i.unpaidLeaveDays;
-  const deduction = Math.round(perDayRate * deductionDays) + lateFine;
-  const weekOffBonus = Math.round(i.weekOffWorkedDays * perDayRate);
+  const deduction = Math.round(rate * deductionDays) + lateFine;
+  // Full or half day's pay per worked week-off day, by hours worked that day
+  const weekOffBonus = Math.round((i.weekOffWorkedCredit ?? i.weekOffWorkedDays) * rate);
 
   const capMinutes = r.overtime_max_hours_month > 0 ? r.overtime_max_hours_month * 60 : Infinity;
   const overtimeMinutes = r.overtime_enabled ? Math.min(i.overtimeMinutes, capMinutes) : 0;

@@ -6,7 +6,7 @@ import { getEffectiveRulesBatch } from "../../../../lib/rules";
 import { calculateBreakDuration, calculateTotalDuration } from "../../../../lib/time-utils";
 import { getHolidayCalendar } from "../../../../lib/holidays";
 import { dayOfWeek, eachDate, resolveWeekOffs, weekBounds, type DayKind } from "../../../../lib/week-off";
-import { computeMonthlySalary, dailyOvertimeMinutes, isLateHalfDay, leaveUsedBeforeMonth, shiftLengthMinutes, splitLeaveDays, type LeaveType } from "../../../../lib/pay-rules";
+import { computeMonthlySalary, dailyOvertimeMinutes, isLateHalfDay, leaveUsedBeforeMonth, shiftLengthMinutes, splitLeaveDays, weekOffWorkedCredit as weekOffCreditFor, type LeaveType } from "../../../../lib/pay-rules";
 
 export async function GET(request: Request) {
   const auth = await requireApiRole("admin");
@@ -122,6 +122,8 @@ export async function GET(request: Request) {
     let lateDays = 0;
     let uhDays = 0;
     let weekOffWorkedDays = 0;
+    let weekOffWorkedCredit = 0; // days of extra pay (1 full / 0.5 half each)
+    let weekOffWorkedHalfDays = 0;
     let unpaidHolidayDays = 0;
     let shortDays = 0;
     let halfDays = 0;
@@ -184,6 +186,10 @@ export async function GET(request: Request) {
         if (entry) {
           const sorted = [...entry.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
           const dur = calculateTotalDuration(sorted);
+          // Extra pay: full day's pay for a full day's work, half for a half day
+          const credit = weekOffCreditFor(dur, empRules);
+          weekOffWorkedCredit += credit;
+          if (credit === 0.5) weekOffWorkedHalfDays++;
           if (emp.flexibleHours) totalMinutesWorked += dur;
           else if (dateStr < today) overtimeMinutes += dailyOvertimeMinutes(dur, calculateBreakDuration(sorted), shiftMinutes, empRules);
         }
@@ -289,6 +295,8 @@ export async function GET(request: Request) {
       unpaidHolidayDays,
       unpaidLeaveDays: leaveSplit.unpaid,
       weekOffWorkedDays,
+      weekOffWorkedCredit,
+      weekOffWorkedHalfDays,
       overtimeMinutes,
     });
 

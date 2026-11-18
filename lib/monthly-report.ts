@@ -11,7 +11,7 @@ import { getAppliedRulesBatch, getEffectiveRulesBatch } from "./rules";
 import { calculateTotalDuration, calculateBreakDuration } from "./time-utils";
 import { getHolidayCalendar } from "./holidays";
 import { dayOfWeek, eachDate, resolveWeekOffs, weekBounds, type DayKind } from "./week-off";
-import { computeMonthlySalary, salaryLines, dailyOvertimeMinutes, isLateHalfDay, leaveUsedBeforeMonth, shiftLengthMinutes, splitLeaveDays, type LeaveType } from "./pay-rules";
+import { computeMonthlySalary, salaryLines, dailyOvertimeMinutes, isLateHalfDay, leaveUsedBeforeMonth, shiftLengthMinutes, splitLeaveDays, weekOffWorkedCredit as weekOffCreditFor, type LeaveType } from "./pay-rules";
 
 type SessionInfo = { inTime: string; outTime: string | null; durationMinutes: number | null };
 
@@ -152,6 +152,8 @@ export function buildMonthlyReport(month: string) {
     let unpaidHolidayDays = 0;
     let totalWorkedMinutes = 0;
     let weekOffWorkedDays = 0;
+    let weekOffWorkedCredit = 0; // days of extra pay (1 full / 0.5 half each)
+    let weekOffWorkedHalfDays = 0;
     let shortDays = 0;
     let halfDays = 0;
     let lateHalfDays = 0;
@@ -224,6 +226,10 @@ export function buildMonthlyReport(month: string) {
         weekOffWorkedDays++;
         const sorted = [...woEntry.allPunches].sort((a, b) => a.serverTimestamp.localeCompare(b.serverTimestamp));
         const dur = calculateTotalDuration(sorted);
+        // Extra pay: full day's pay for a full day's work, half for a half day
+        const credit = weekOffCreditFor(dur, empRules);
+        weekOffWorkedCredit += credit;
+        if (credit === 0.5) weekOffWorkedHalfDays++;
         const brk = calculateBreakDuration(sorted);
         if (emp.flexibleHours && dur > 0) totalWorkedMinutes += dur;
         const woOvertime = !emp.flexibleHours && dateStr < today ? dailyOvertimeMinutes(dur, brk, shiftMinutes, empRules) : 0;
@@ -373,6 +379,8 @@ export function buildMonthlyReport(month: string) {
       unpaidHolidayDays,
       unpaidLeaveDays: leaveSplit.unpaid,
       weekOffWorkedDays,
+      weekOffWorkedCredit,
+      weekOffWorkedHalfDays,
       overtimeMinutes,
     };
     const pay = computeMonthlySalary(salaryInput);
@@ -407,6 +415,7 @@ export function buildMonthlyReport(month: string) {
       attendancePct,
       totalWorkedMinutes,
       weekOffWorkedDays,
+      weekOffWorkedCredit,
       weekOffBonus: pay.weekOffBonus,
       overtimeMinutes: pay.overtimeMinutes,
       overtimePay: pay.overtimePay,

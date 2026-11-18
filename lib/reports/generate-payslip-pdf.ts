@@ -7,9 +7,33 @@ function pdfText(s: string): string {
 }
 const rs = (n: number) => `Rs ${amountText(n)}`;
 
+type Slip = PayslipData & { publishedAt?: string };
+
+/** File name used by both the browser download and the app's PDF endpoint. */
+export function payslipFileName(slip: Slip): string {
+  const name = slip.employee.name.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "Employee";
+  return `Payslip-${name}-${slip.month}.pdf`;
+}
+
 /** One-page A4 payslip in plain black and white, downloaded in the browser. */
-export async function generatePayslipPDF(slip: PayslipData & { publishedAt?: string }) {
-  const { default: jsPDF } = await import("jspdf");
+export async function generatePayslipPDF(slip: Slip) {
+  const doc = await buildPayslipPDF(slip);
+  doc.save(payslipFileName(slip));
+}
+
+/** The same PDF as raw bytes, for the server (the mobile app downloads it). */
+export async function payslipPdfBytes(slip: Slip): Promise<ArrayBuffer> {
+  const doc = await buildPayslipPDF(slip);
+  return doc.output("arraybuffer");
+}
+
+/** Lay out the payslip. Works in the browser and on the server (Node). */
+async function buildPayslipPDF(slip: Slip) {
+  // Node loads jspdf's CommonJS build, whose default export is the module
+  // object, not the class; the browser build's default is the class.
+  // The named export works in both.
+  const jspdfModule = await import("jspdf");
+  const jsPDF = jspdfModule.jsPDF ?? jspdfModule.default;
   const { default: autoTable } = await import("jspdf-autotable");
   const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
   const pw = doc.internal.pageSize.getWidth();
@@ -123,5 +147,5 @@ export async function generatePayslipPDF(slip: PayslipData & { publishedAt?: str
   doc.setFontSize(9);
   doc.text("This is system generated payslip", cx, y + 14, { align: "center" });
 
-  doc.save(`Payslip-${slip.employee.name.replace(/\s+/g, "-")}-${slip.month}.pdf`);
+  return doc;
 }

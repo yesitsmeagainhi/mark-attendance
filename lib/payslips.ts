@@ -22,7 +22,7 @@ export type PayslipData = {
   isFlexible: boolean;
   attendance: {
     daysInMonth: number;
-    /** Present days + half days (as ½) + week-offs worked */
+    /** Present days + half days (as ½) + week-offs worked (1 full / ½ half day) */
     workedDays?: number;
     presentDays: number;
     halfDays: number;
@@ -95,7 +95,8 @@ export function buildPayslips(month: string): PayslipData[] {
       isFlexible: flex,
       attendance: {
         daysInMonth,
-        workedDays: e.presentDays + e.halfDays * 0.5 + e.weekOffWorkedDays,
+        // Week-offs worked count by hours: 1 full day, ½ half day (as their extra pay)
+        workedDays: e.presentDays + e.halfDays * 0.5 + (e.weekOffWorkedCredit ?? e.weekOffWorkedDays),
         presentDays: e.presentDays,
         halfDays: e.halfDays,
         absentDays: e.absentDays,
